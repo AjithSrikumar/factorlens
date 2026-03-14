@@ -323,6 +323,24 @@ function findFloorNav(
   return null
 }
 
+function findCeilNav(
+  sortedDates: string[],
+  navMap: Map<string, number>,
+  targetDate: string
+): number | null {
+  // Binary search: find first date >= targetDate
+  let lo = 0, hi = sortedDates.length - 1, result = -1
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (sortedDates[mid] >= targetDate) { result = mid; hi = mid - 1 }
+    else lo = mid + 1
+  }
+  if (result !== -1) return navMap.get(sortedDates[result]) ?? null
+  // All dates < targetDate: use latest available
+  if (sortedDates.length > 0) return navMap.get(sortedDates[sortedDates.length - 1]) ?? null
+  return null
+}
+
 interface FYReturn {
   fy: string
   value: number
@@ -351,7 +369,11 @@ function computeFYReturns(nav: NavPoint[], today: string): FYReturn[] {
     // but cap to the first date of the fund's history
     const effectiveStart = fyStart < firstDate ? firstDate : fyStart
 
-    const startVal = findFloorNav(sortedDates, navMap, effectiveStart)
+    // FY start: use first trading day ON OR AFTER the target (ceil).
+    // Using floor here would return March 31 when April 1 is a weekend,
+    // which is the previous FY's last day — causing a one-day overlap bug.
+    const startVal = findCeilNav(sortedDates, navMap, effectiveStart)
+    // FY end: use last trading day ON OR BEFORE the target (floor).
     const endVal = findFloorNav(sortedDates, navMap, effectiveEnd)
 
     if (startVal === null || endVal === null || startVal === 0) continue
