@@ -328,10 +328,8 @@ function findFloorNav(
     if (sortedDates[mid] <= targetDate) { result = mid; lo = mid + 1 }
     else hi = mid - 1
   }
-  if (result !== -1) return navMap.get(sortedDates[result]) ?? null
-  // All dates > targetDate: use earliest available
-  if (sortedDates.length > 0) return navMap.get(sortedDates[0]) ?? null
-  return null
+  if (result === -1) return null
+  return navMap.get(sortedDates[result]) ?? null
 }
 
 function findCeilNav(
@@ -346,10 +344,8 @@ function findCeilNav(
     if (sortedDates[mid] >= targetDate) { result = mid; hi = mid - 1 }
     else lo = mid + 1
   }
-  if (result !== -1) return navMap.get(sortedDates[result]) ?? null
-  // All dates < targetDate: use latest available
-  if (sortedDates.length > 0) return navMap.get(sortedDates[sortedDates.length - 1]) ?? null
-  return null
+  if (result === -1) return null
+  return navMap.get(sortedDates[result]) ?? null
 }
 
 interface FYReturn {
@@ -365,9 +361,13 @@ function computeFYReturns(nav: NavPoint[], today: string): FYReturn[] {
   const sortedDates = sorted.map(p => p.date)
   const firstDate = sortedDates[0]
 
+  const todayYear = parseInt(today.slice(0, 4))
+  const todayMonth = parseInt(today.slice(5, 7))
+  const currentFYYear = todayMonth >= 4 ? todayYear + 1 : todayYear
+
   const results: FYReturn[] = []
-  // FY2006 = Apr 2005 – Mar 2006, ..., FY2026 = Apr 2025 – Mar 2026
-  for (let fyYear = 2006; fyYear <= 2026; fyYear++) {
+  // FY2006 = Apr 2005 – Mar 2006, ..., current FY
+  for (let fyYear = 2006; fyYear <= currentFYYear; fyYear++) {
     const fyStart = `${fyYear - 1}-04-01`
     const fyEnd = `${fyYear}-03-31`
     // Skip if fund inception is after the end of this FY
@@ -599,10 +599,11 @@ export function FiscalYearTable({
             <TableHead className="w-8 px-2" />
             <TableHead className="text-xs font-bold uppercase tracking-wide">Fiscal Year</TableHead>
             <TableHead className="text-xs font-bold uppercase tracking-wide">Starting Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Value</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio NAV</TableHead>
             <TableHead className="text-xs font-bold uppercase tracking-wide">Ending Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Value</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio NAV</TableHead>
             <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio Return</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Return</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -634,19 +635,22 @@ export function FiscalYearTable({
                     )}
                   </TableCell>
                   <TableCell className="py-2 text-xs text-muted-foreground">
-                    {benchRow ? fmtDate(benchRow.startDate) : portRow ? fmtDate(portRow.startDate) : "—"}
+                    {portRow ? fmtDate(portRow.startDate) : benchRow ? fmtDate(benchRow.startDate) : "—"}
                   </TableCell>
                   <TableCell className="py-2 text-xs text-right font-mono">
-                    {benchRow ? fmtVal(benchRow.startValue) : "—"}
+                    {portRow ? fmtVal(portRow.startValue) : "—"}
                   </TableCell>
                   <TableCell className="py-2 text-xs text-muted-foreground">
-                    {benchRow ? fmtDate(benchRow.endDate) : portRow ? fmtDate(portRow.endDate) : "—"}
+                    {portRow ? fmtDate(portRow.endDate) : benchRow ? fmtDate(benchRow.endDate) : "—"}
                   </TableCell>
                   <TableCell className="py-2 text-xs text-right font-mono">
-                    {benchRow ? fmtVal(benchRow.endValue) : "—"}
+                    {portRow ? fmtVal(portRow.endValue) : "—"}
                   </TableCell>
                   <TableCell className="py-2 text-right">
                     {portRow ? fmtRet(portRow.returnPct) : "—"}
+                  </TableCell>
+                  <TableCell className="py-2 text-right">
+                    {benchRow ? fmtRet(benchRow.returnPct) : "—"}
                   </TableCell>
                 </TableRow>
 
@@ -677,6 +681,7 @@ export function FiscalYearTable({
                       <TableCell className="py-1.5 text-right">
                         {fmtRet(fRow.returnPct)}
                       </TableCell>
+                      <TableCell className="py-1.5" />
                     </TableRow>
                   )
                 })}

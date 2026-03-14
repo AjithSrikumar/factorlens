@@ -172,9 +172,8 @@ function _findFloorPoint(
     if (sortedDates[mid] <= targetDate) { result = mid; lo = mid + 1 }
     else hi = mid - 1
   }
-  const idx = result !== -1 ? result : (sortedDates.length > 0 ? 0 : -1)
-  if (idx === -1) return null
-  const d = sortedDates[idx]
+  if (result === -1) return null
+  const d = sortedDates[result]
   return { date: d, value: navMap.get(d)! }
 }
 
@@ -189,9 +188,8 @@ function _findCeilPoint(
     if (sortedDates[mid] >= targetDate) { result = mid; hi = mid - 1 }
     else lo = mid + 1
   }
-  const idx = result !== -1 ? result : (sortedDates.length > 0 ? sortedDates.length - 1 : -1)
-  if (idx === -1) return null
-  const d = sortedDates[idx]
+  if (result === -1) return null
+  const d = sortedDates[result]
   return { date: d, value: navMap.get(d)! }
 }
 
@@ -202,8 +200,12 @@ export function computeFYRawRows(nav: NavPoint[], today: string): FYRawRow[] {
   const sortedDates = sorted.map(p => p.date)
   const firstDate = sortedDates[0]
 
+  const todayYear = parseInt(today.slice(0, 4))
+  const todayMonth = parseInt(today.slice(5, 7))
+  const currentFYYear = todayMonth >= 4 ? todayYear + 1 : todayYear
+
   const results: FYRawRow[] = []
-  for (let fyYear = 2006; fyYear <= 2026; fyYear++) {
+  for (let fyYear = 2006; fyYear <= currentFYYear; fyYear++) {
     const fyStart = `${fyYear - 1}-04-01`
     const fyEnd   = `${fyYear}-03-31`
     if (firstDate > fyEnd) continue
