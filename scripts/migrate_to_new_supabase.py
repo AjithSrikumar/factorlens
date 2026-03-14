@@ -188,6 +188,10 @@ def migrate_nav_data(cur, id_map: dict) -> None:
 
 def migrate_mf_funds(cur) -> None:
     print("\n── Migrating mf_funds ───────────────────────────────────────────────")
+    cur.execute("SELECT to_regclass('public.mf_funds')")
+    if cur.fetchone()[0] is None:
+        print("  mf_funds table not found in source DB — skipping (run mfapi_loader.py on new DB).")
+        return
     cur.execute("""
         SELECT scheme_code, scheme_name, fund_house, scheme_type,
                scheme_category, search_name, match_ratio, created_at
@@ -216,6 +220,10 @@ def migrate_mf_funds(cur) -> None:
 
 def migrate_mf_nav_data(cur) -> None:
     print("\n── Migrating mf_nav_data ────────────────────────────────────────────")
+    cur.execute("SELECT to_regclass('public.mf_nav_data')")
+    if cur.fetchone()[0] is None:
+        print("  mf_nav_data table not found in source DB — skipping.")
+        return
     cur.execute("SELECT COUNT(*) FROM mf_nav_data")
     total = cur.fetchone()["count"]
     print(f"  Total rows: {total}")
