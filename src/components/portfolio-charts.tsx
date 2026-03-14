@@ -62,23 +62,34 @@ function formatDate(dateStr: string) {
   try { return format(parseISO(dateStr), "MMM ''yy") } catch { return dateStr }
 }
 
-// Custom tooltip
-function CustomTooltip({ active, payload, label, formatter }: TooltipProps<number, string> & { formatter?: (v: number) => string }) {
+// Premium custom tooltip
+function CustomTooltip({
+  active,
+  payload,
+  label,
+  formatter,
+}: TooltipProps<number, string> & { formatter?: (v: number) => string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-popover border rounded-lg shadow-lg px-3 py-2 text-xs">
-      <p className="text-muted-foreground mb-1">{formatDate(label)}</p>
+    <div className="bg-popover/95 border border-border/60 rounded-xl shadow-xl px-3.5 py-2.5 text-xs backdrop-blur-sm">
+      <p className="text-muted-foreground mb-1.5 font-medium">{formatDate(label)}</p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }} className="font-medium">
-          {p.name}: {formatter ? formatter(p.value as number) : (p.value as number).toFixed(2)}
-        </p>
+        <div key={p.name} className="flex items-center gap-2 py-0.5">
+          <span
+            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+            style={{ background: p.color }}
+          />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-bold font-mono ml-auto pl-2" style={{ color: p.color }}>
+            {formatter ? formatter(p.value as number) : (p.value as number).toFixed(2)}
+          </span>
+        </div>
       ))}
     </div>
   )
 }
 
-// Merge two data series by date. Uses forward-fill for unmatched dates so the
-// benchmark line always renders across the full chart range.
+// Merge two data series by date with forward-fill for unmatched benchmark dates
 function mergeSeries(data: any[], benchmarkData?: any[]): any[] {
   if (!benchmarkData || benchmarkData.length === 0) return data
 
@@ -91,7 +102,6 @@ function mergeSeries(data: any[], benchmarkData?: any[]): any[] {
     const key = String(p.date).trim()
     let val = bMap.get(key)
     if (val === undefined) {
-      // Binary-search for the last benchmark date <= key (forward-fill)
       let lo = 0, hi = bDates.length - 1, found = -1
       while (lo <= hi) {
         const mid = (lo + hi) >> 1
@@ -103,6 +113,10 @@ function mergeSeries(data: any[], benchmarkData?: any[]): any[] {
     return { ...p, benchmark: val ?? null }
   })
 }
+
+// Shared axis tick style
+const axisTick = { fontSize: 10, fill: "hsl(var(--muted-foreground))", fontFamily: "var(--font-mono)" }
+const gridStroke = "hsl(var(--border))"
 
 export function NavChart({
   data,
@@ -120,41 +134,48 @@ export function NavChart({
   const sampled = sampleData(merged, 400)
 
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <ComposedChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={300}>
+      <ComposedChart data={sampled} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
         <defs>
-          <linearGradient id="navGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.02} />
+          <linearGradient id="navGradLight" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.18} />
+            <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.01} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} strokeOpacity={0.6} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
+          minTickGap={60}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `₹${v.toFixed(0)}`}
-          width={55}
+          width={52}
         />
         <Tooltip content={<CustomTooltip formatter={(v) => `₹${v.toFixed(2)}`} />} />
-        <Legend verticalAlign="top" height={36} />
+        <Legend
+          verticalAlign="top"
+          height={32}
+          iconType="plainline"
+          iconSize={16}
+          wrapperStyle={{ fontSize: 11, paddingBottom: 4 }}
+        />
         <Area
           type="monotone"
           dataKey="value"
           name={name}
           stroke="#4f46e5"
-          strokeWidth={2}
-          fill="url(#navGrad)"
+          strokeWidth={2.5}
+          fill="url(#navGradLight)"
           dot={false}
-          activeDot={{ r: 4 }}
+          activeDot={{ r: 5, strokeWidth: 2, stroke: "#fff" }}
         />
         {hasBenchmark && (
           <Line
@@ -163,7 +184,7 @@ export function NavChart({
             name={benchmarkName}
             stroke="#94a3b8"
             strokeWidth={1.5}
-            strokeDasharray="4 4"
+            strokeDasharray="5 4"
             dot={false}
             connectNulls
           />
@@ -173,39 +194,52 @@ export function NavChart({
   )
 }
 
-export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchmarkName = "Nifty 50" }: { data: DrawdownPoint[], benchmarkData?: DrawdownPoint[], name?: string, benchmarkName?: string }) {
+export function DrawdownChart({
+  data,
+  benchmarkData,
+  name = "Portfolio",
+  benchmarkName = "Nifty 50",
+}: {
+  data: DrawdownPoint[]
+  benchmarkData?: DrawdownPoint[]
+  name?: string
+  benchmarkName?: string
+}) {
   const hasBenchmark = benchmarkData && benchmarkData.length > 0
   const merged = mergeSeries(data, benchmarkData)
   const sampled = sampleData(merged, 400)
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <ComposedChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={220}>
+      <ComposedChart data={sampled} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+            <stop offset="0%" stopColor="#ef4444" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#ef4444" stopOpacity={0.01} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} strokeOpacity={0.6} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
+          minTickGap={60}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `${v.toFixed(0)}%`}
-          width={45}
+          width={44}
         />
-        <ReferenceLine y={0} stroke="hsl(var(--border))" />
+        <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1} />
         <Tooltip content={<CustomTooltip formatter={(v) => `${v.toFixed(2)}%`} />} />
-        {hasBenchmark && <Legend verticalAlign="top" height={36} iconType="plainline" />}
+        {hasBenchmark && (
+          <Legend verticalAlign="top" height={32} iconType="plainline" wrapperStyle={{ fontSize: 11 }} />
+        )}
         <Area
           type="monotone"
           dataKey="value"
@@ -222,7 +256,7 @@ export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchma
             name={benchmarkName}
             stroke="#94a3b8"
             strokeWidth={1.5}
-            strokeDasharray="4 4"
+            strokeDasharray="5 4"
             dot={false}
             connectNulls
           />
@@ -232,33 +266,46 @@ export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchma
   )
 }
 
-export function RollingReturnChart({ data, benchmarkData, name = "Portfolio", benchmarkName = "Nifty 50" }: { data: RollingReturn[], benchmarkData?: RollingReturn[], name?: string, benchmarkName?: string }) {
+export function RollingReturnChart({
+  data,
+  benchmarkData,
+  name = "Portfolio",
+  benchmarkName = "Nifty 50",
+}: {
+  data: RollingReturn[]
+  benchmarkData?: RollingReturn[]
+  name?: string
+  benchmarkName?: string
+}) {
   const hasBenchmark = benchmarkData && benchmarkData.length > 0
   const merged = mergeSeries(data, benchmarkData)
   const sampled = sampleData(merged, 400)
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <LineChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+    <ResponsiveContainer width="100%" height={220}>
+      <LineChart data={sampled} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} strokeOpacity={0.6} vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
+          minTickGap={60}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          tick={axisTick}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `${v.toFixed(0)}%`}
-          width={45}
+          width={44}
         />
         <ReferenceLine y={0} stroke="hsl(var(--border))" strokeDasharray="4 4" />
         <Tooltip content={<CustomTooltip formatter={(v) => `${v.toFixed(2)}%`} />} />
-        {hasBenchmark && <Legend verticalAlign="top" height={36} iconType="plainline" />}
+        {hasBenchmark && (
+          <Legend verticalAlign="top" height={32} iconType="plainline" wrapperStyle={{ fontSize: 11 }} />
+        )}
         <Line
           type="monotone"
           dataKey="value"
@@ -266,7 +313,7 @@ export function RollingReturnChart({ data, benchmarkData, name = "Portfolio", be
           stroke="#0d9488"
           strokeWidth={2}
           dot={false}
-          activeDot={{ r: 4 }}
+          activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
         />
         {hasBenchmark && (
           <Line
@@ -275,7 +322,7 @@ export function RollingReturnChart({ data, benchmarkData, name = "Portfolio", be
             name={benchmarkName}
             stroke="#94a3b8"
             strokeWidth={1.5}
-            strokeDasharray="4 4"
+            strokeDasharray="5 4"
             dot={false}
             connectNulls
           />
@@ -285,29 +332,46 @@ export function RollingReturnChart({ data, benchmarkData, name = "Portfolio", be
   )
 }
 
-const PIE_COLORS = ["#4f46e5", "#0d9488", "#7c3aed", "#d97706", "#059669", "#dc2626", "#0284c7", "#9333ea", "#16a34a", "#ea580c"]
+const PIE_COLORS = [
+  "#4f46e5", "#0d9488", "#7c3aed", "#d97706",
+  "#059669", "#dc2626", "#0284c7", "#9333ea",
+  "#16a34a", "#ea580c"
+]
 
 export function AllocationPieChart({ data }: { data: { name: string; weight: number }[] }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={240}>
       <PieChart>
         <Pie
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={55}
-          outerRadius={90}
+          innerRadius={60}
+          outerRadius={95}
           dataKey="weight"
           nameKey="name"
           paddingAngle={2}
+          strokeWidth={0}
         >
           {data.map((_, i) => (
             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
           ))}
         </Pie>
-        <Tooltip formatter={(v) => [`${v}%`, "Allocation"]} />
+        <Tooltip
+          formatter={(v) => [`${v}%`, "Allocation"]}
+          contentStyle={{
+            background: "hsl(var(--popover))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: 12,
+            fontSize: 12,
+          }}
+        />
         <Legend
-          formatter={(value) => <span className="text-xs">{value.length > 20 ? value.slice(0, 20) + "…" : value}</span>}
+          formatter={(value) => (
+            <span style={{ fontSize: 11, fontFamily: "var(--font-sans)" }}>
+              {value.length > 22 ? value.slice(0, 22) + "…" : value}
+            </span>
+          )}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -321,7 +385,6 @@ function findFloorNav(
   navMap: Map<string, number>,
   targetDate: string
 ): number | null {
-  // Binary search: find last date <= targetDate
   let lo = 0, hi = sortedDates.length - 1, result = -1
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2)
@@ -337,7 +400,6 @@ function findCeilNav(
   navMap: Map<string, number>,
   targetDate: string
 ): number | null {
-  // Binary search: find first date >= targetDate
   let lo = 0, hi = sortedDates.length - 1, result = -1
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2)
@@ -366,25 +428,16 @@ function computeFYReturns(nav: NavPoint[], today: string): FYReturn[] {
   const currentFYYear = todayMonth >= 4 ? todayYear + 1 : todayYear
 
   const results: FYReturn[] = []
-  // FY2006 = Apr 2005 – Mar 2006, ..., current FY
   for (let fyYear = 2006; fyYear <= currentFYYear; fyYear++) {
     const fyStart = `${fyYear - 1}-04-01`
     const fyEnd = `${fyYear}-03-31`
-    // Skip if fund inception is after the end of this FY
     if (firstDate > fyEnd) continue
 
     const isLive = fyEnd > today
     const effectiveEnd = isLive ? today : fyEnd
-
-    // For FY start: use the nearest date at or after fyStart (ceil),
-    // but cap to the first date of the fund's history
     const effectiveStart = fyStart < firstDate ? firstDate : fyStart
 
-    // FY start: use first trading day ON OR AFTER the target (ceil).
-    // Using floor here would return March 31 when April 1 is a weekend,
-    // which is the previous FY's last day — causing a one-day overlap bug.
     const startVal = findCeilNav(sortedDates, navMap, effectiveStart)
-    // FY end: use last trading day ON OR BEFORE the target (floor).
     const endVal = findFloorNav(sortedDates, navMap, effectiveEnd)
 
     if (startVal === null || endVal === null || startVal === 0) continue
@@ -420,7 +473,6 @@ export function FiscalYearChart({
   const bMap = new Map(benchReturns.map(r => [r.fy, r]))
   const fMap = new Map(fundReturns.map(r => [r.fy, r]))
 
-  // Combine all FY years present in either series
   const allFYs = new Set([...fundReturns.map(r => r.fy), ...benchReturns.map(r => r.fy)])
   const sortedFYs = Array.from(allFYs).sort()
 
@@ -436,24 +488,26 @@ export function FiscalYearChart({
   })
 
   const hasLive = data.some(d => d.isLive)
-  // Compute current fiscal year label dynamically (FY = Apr–Mar, e.g. Apr 2025–Mar 2026 = FY26)
   const todayParts = today.split("-").map(Number)
   const liveFYYear = todayParts[1] >= 4 ? todayParts[0] + 1 : todayParts[0]
   const liveFYLabel = `FY${String(liveFYYear).slice(2)}`
-  // Height: each row ~38px for horizontal bar chart
-  const chartHeight = Math.max(320, data.length * 38 + 60)
+  const chartHeight = Math.max(320, data.length * 40 + 60)
 
   const CustomFYTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null
     const row = data.find(d => d.fy === label)
     return (
-      <div className="bg-popover border rounded-lg shadow-lg px-3 py-2 text-xs">
-        <p className="font-bold mb-1">{label}{row?.isLive ? " (live)" : ""}</p>
+      <div className="bg-popover/95 border border-border/60 rounded-xl shadow-xl px-3.5 py-2.5 text-xs backdrop-blur-sm">
+        <p className="font-bold mb-1.5">{label}{row?.isLive ? " (live)" : ""}</p>
         {payload.map((p: any) => (
           p.value !== null && (
-            <p key={p.dataKey} style={{ color: p.fill }} className="font-medium">
-              {p.name}: {p.value > 0 ? "+" : ""}{p.value?.toFixed(1)}%
-            </p>
+            <div key={p.dataKey} className="flex items-center gap-2 py-0.5">
+              <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: p.fill }} />
+              <span className="text-muted-foreground">{p.name}:</span>
+              <span className="font-bold font-mono ml-auto pl-2" style={{ color: p.fill }}>
+                {p.value > 0 ? "+" : ""}{p.value?.toFixed(1)}%
+              </span>
+            </div>
           )
         ))}
       </div>
@@ -466,16 +520,16 @@ export function FiscalYearChart({
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 4, right: 52, left: 4, bottom: 4 }}
-          barSize={13}
+          margin={{ top: 4, right: 54, left: 4, bottom: 4 }}
+          barSize={12}
           barGap={2}
-          barCategoryGap="28%"
+          barCategoryGap="30%"
         >
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} strokeOpacity={0.5} />
           <XAxis
             type="number"
             tickFormatter={(v) => `${v.toFixed(0)}%`}
-            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+            tick={{ ...axisTick, fontSize: 10 }}
             tickLine={false}
             axisLine={false}
           />
@@ -484,10 +538,9 @@ export function FiscalYearChart({
             dataKey="fy"
             tick={({ x, y, payload }) => {
               const row = data.find(d => d.fy === payload.value)
-              // Live year = amber; completed years = foreground (readable on both dark + light)
               const fill = row?.isLive ? "#f59e0b" : "hsl(var(--foreground))"
               return (
-                <text x={x} y={y} dy={4} textAnchor="end" fontSize={10} fontWeight={row?.isLive ? 600 : 500} fill={fill}>
+                <text x={x} y={y} dy={4} textAnchor="end" fontSize={10} fontWeight={row?.isLive ? 600 : 500} fill={fill} fontFamily="var(--font-mono)">
                   {payload.value}{row?.isLive ? "*" : ""}
                 </text>
               )
@@ -497,20 +550,20 @@ export function FiscalYearChart({
           <ReferenceLine x={0} stroke="hsl(var(--border))" />
           <Tooltip content={<CustomFYTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
           <Legend verticalAlign="top" height={28} iconType="square" wrapperStyle={{ fontSize: 11 }} />
-          <Bar dataKey="fund" name={fundName} fill="#4f46e5" radius={[0, 2, 2, 0]}>
+          <Bar dataKey="fund" name={fundName} fill="#4f46e5" radius={[0, 3, 3, 0]}>
             <LabelList
               dataKey="fund"
               position="right"
               formatter={(v: number | null) => v !== null ? `${v > 0 ? "+" : ""}${v?.toFixed(0)}%` : ""}
-              style={{ fontSize: 9, fill: "#4f46e5" }}
+              style={{ fontSize: 9, fill: "#6366f1", fontFamily: "var(--font-mono)" }}
             />
           </Bar>
-          <Bar dataKey="benchmark" name={benchmarkName} fill="#94a3b8" radius={[0, 2, 2, 0]}>
+          <Bar dataKey="benchmark" name={benchmarkName} fill="#94a3b8" radius={[0, 3, 3, 0]}>
             <LabelList
               dataKey="benchmark"
               position="right"
               formatter={(v: number | null) => v !== null ? `${v > 0 ? "+" : ""}${v?.toFixed(0)}%` : ""}
-              style={{ fontSize: 9, fill: "#64748b" }}
+              style={{ fontSize: 9, fill: "#64748b", fontFamily: "var(--font-mono)" }}
             />
           </Bar>
         </BarChart>
@@ -524,7 +577,7 @@ export function FiscalYearChart({
   )
 }
 
-// ── Fiscal Year Detail Table ───────────────────────────────────────────────
+// ── Fiscal Year Detail Cards ───────────────────────────────────────────────
 
 interface FYTableFund {
   id: number
@@ -547,12 +600,10 @@ function fmtDate(d: string): string {
 
 function fmtRet(v: number): React.ReactNode {
   const cls = v >= 0
-    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
-    : "text-red-600 dark:text-red-400 font-semibold"
+    ? "text-emerald-600 dark:text-emerald-400 font-bold"
+    : "text-red-600 dark:text-red-400 font-bold"
   return <span className={cls}>{v >= 0 ? "+" : ""}{v.toFixed(2)}%</span>
 }
-
-// ── Fiscal Year Detail Cards (mobile-first) ───────────────────────────────
 
 export function FiscalYearDetailCards({
   fyTableData,
@@ -609,20 +660,18 @@ export function FiscalYearDetailCards({
           <div
             key={fy}
             className={`rounded-xl border overflow-hidden ${
-              isLive
-                ? "border-amber-200 dark:border-amber-800/50"
-                : "border-border/60"
+              isLive ? "border-amber-300/60 dark:border-amber-700/40" : "border-border/60"
             }`}
           >
             {/* Card Header */}
             <div
               className={`flex items-center justify-between px-4 py-2.5 ${
-                isLive ? "bg-amber-50/60 dark:bg-amber-900/10" : "bg-muted/30"
-              } ${isClickable ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+                isLive ? "bg-amber-50/60 dark:bg-amber-900/10" : "bg-muted/25"
+              } ${isClickable ? "cursor-pointer hover:bg-muted/40 transition-colors" : ""}`}
               onClick={isClickable ? () => toggleRow(fy) : undefined}
             >
               <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                <span className={`text-sm font-bold font-mono ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
                   {fy}
                 </span>
                 {isLive && (
@@ -633,7 +682,7 @@ export function FiscalYearDetailCards({
               </div>
               <div className="flex items-center gap-2">
                 {(portRow || benchRow) && (
-                  <span className="text-[11px] text-muted-foreground hidden sm:block">
+                  <span className="text-[11px] text-muted-foreground hidden sm:block font-mono">
                     {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
                   </span>
                 )}
@@ -647,12 +696,12 @@ export function FiscalYearDetailCards({
 
             {/* Date range — mobile only */}
             {(portRow || benchRow) && (
-              <div className="sm:hidden px-4 pt-2 text-[11px] text-muted-foreground">
+              <div className="sm:hidden px-4 pt-2 text-[10px] text-muted-foreground font-mono">
                 {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
               </div>
             )}
 
-            {/* Card Body: 2×2 on mobile, 4-col on sm+ */}
+            {/* Card Body */}
             <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">Start NAV</p>
@@ -668,14 +717,14 @@ export function FiscalYearDetailCards({
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{primaryLabel} Return</p>
-                <p className="text-base font-bold">
+                <p className="text-base">
                   {portRow ? fmtRet(portRow.returnPct) : "—"}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{benchmarkName} Return</p>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-base font-bold">
+                  <p className="text-base">
                     {benchRow ? fmtRet(benchRow.returnPct) : "—"}
                   </p>
                   {outperformance !== null && (
@@ -711,7 +760,7 @@ export function FiscalYearDetailCards({
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground mb-0.5">Return</p>
-                    <p className="text-sm font-bold">{fmtRet(fRow.returnPct)}</p>
+                    <p className="text-sm">{fmtRet(fRow.returnPct)}</p>
                   </div>
                   <div className="sm:hidden">
                     <p className="text-[10px] text-muted-foreground mb-0.5">NAV</p>
@@ -748,17 +797,14 @@ export function FiscalYearTable({
   const liveFYYear = todayParts[1] >= 4 ? todayParts[0] + 1 : todayParts[0]
   const liveFYLabel = `FY${String(liveFYYear).slice(2)}`
 
-  // Build a map of portfolio FY → row for quick lookup
   const portfolioMap = new Map(fyTableData.portfolio.map(r => [r.fy, r]))
   const benchmarkMap = new Map(fyTableData.benchmark.map(r => [r.fy, r]))
 
-  // Collect all FY labels that appear in portfolio or any fund
   const allFYs = new Set<string>()
   fyTableData.portfolio.forEach(r => allFYs.add(r.fy))
   Object.values(fyTableData.funds).forEach(rows => rows.forEach(r => allFYs.add(r.fy)))
   const sortedFYs = Array.from(allFYs).sort()
 
-  // Per-fund maps
   const fundMaps = Object.fromEntries(
     funds.map(f => [f.id, new Map((fyTableData.funds[f.id] ?? []).map(r => [r.fy, r]))])
   )
@@ -772,110 +818,105 @@ export function FiscalYearTable({
   }
 
   return (
-    <div className="rounded-lg border border-border/60 overflow-hidden">
+    <div className="rounded-xl border border-border/60 overflow-hidden">
       <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-8 px-2 sticky left-0 z-20 bg-muted/40" />
-            <TableHead className="text-xs font-bold uppercase tracking-wide sticky left-8 z-20 bg-muted/40 whitespace-nowrap">Fiscal Year</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide whitespace-nowrap">Starting Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio NAV</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide whitespace-nowrap">Ending Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio NAV</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio Return</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">{benchmarkName} Return</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedFYs.map(fy => {
-            const portRow = portfolioMap.get(fy)
-            const benchRow = benchmarkMap.get(fy)
-            const isLive = portRow?.isLive || false
-            const isOpen = expanded.has(fy)
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="w-8 px-2 sticky left-0 z-20 bg-muted/30" />
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest sticky left-8 z-20 bg-muted/30 whitespace-nowrap">FY</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">Start Date</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-right whitespace-nowrap">Start NAV</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap">End Date</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-right whitespace-nowrap">End NAV</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-right whitespace-nowrap">Portfolio</TableHead>
+              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-right whitespace-nowrap">{benchmarkName}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedFYs.map(fy => {
+              const portRow = portfolioMap.get(fy)
+              const benchRow = benchmarkMap.get(fy)
+              const isLive = portRow?.isLive || false
+              const isOpen = expanded.has(fy)
 
-            return (
-              <>
-                {/* Main FY row */}
-                <TableRow
-                  key={fy}
-                  className={`cursor-pointer hover:bg-muted/30 transition-colors ${isLive ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}
-                  onClick={() => toggleRow(fy)}
-                >
-                  <TableCell className="px-2 py-2 sticky left-0 z-10 bg-background">
-                    {isOpen
-                      ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                      : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                  </TableCell>
-                  <TableCell className="py-2 sticky left-8 z-10 bg-background whitespace-nowrap">
-                    <span className={`text-sm font-bold ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
-                      {fy}{isLive ? " *" : ""}
-                    </span>
-                    {isLive && (
-                      <span className="ml-1.5 text-[10px] text-amber-500 font-medium">(live)</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="py-2 text-xs text-muted-foreground">
-                    {portRow ? fmtDate(portRow.startDate) : benchRow ? fmtDate(benchRow.startDate) : "—"}
-                  </TableCell>
-                  <TableCell className="py-2 text-xs text-right font-mono">
-                    {portRow ? fmtVal(portRow.startValue) : "—"}
-                  </TableCell>
-                  <TableCell className="py-2 text-xs text-muted-foreground">
-                    {portRow ? fmtDate(portRow.endDate) : benchRow ? fmtDate(benchRow.endDate) : "—"}
-                  </TableCell>
-                  <TableCell className="py-2 text-xs text-right font-mono">
-                    {portRow ? fmtVal(portRow.endValue) : "—"}
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    {portRow ? fmtRet(portRow.returnPct) : "—"}
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    {benchRow ? fmtRet(benchRow.returnPct) : "—"}
-                  </TableCell>
-                </TableRow>
+              return (
+                <>
+                  <TableRow
+                    key={fy}
+                    className={`cursor-pointer hover:bg-muted/20 transition-colors ${isLive ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}
+                    onClick={() => toggleRow(fy)}
+                  >
+                    <TableCell className="px-2 py-2 sticky left-0 z-10 bg-background">
+                      {isOpen
+                        ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </TableCell>
+                    <TableCell className="py-2.5 sticky left-8 z-10 bg-background whitespace-nowrap">
+                      <span className={`text-sm font-bold font-mono ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                        {fy}{isLive ? " *" : ""}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-2.5 text-xs text-muted-foreground font-mono">
+                      {portRow ? fmtDate(portRow.startDate) : benchRow ? fmtDate(benchRow.startDate) : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-xs text-right font-mono">
+                      {portRow ? fmtVal(portRow.startValue) : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-xs text-muted-foreground font-mono">
+                      {portRow ? fmtDate(portRow.endDate) : benchRow ? fmtDate(benchRow.endDate) : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-xs text-right font-mono">
+                      {portRow ? fmtVal(portRow.endValue) : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-right">
+                      {portRow ? fmtRet(portRow.returnPct) : "—"}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-right">
+                      {benchRow ? fmtRet(benchRow.returnPct) : "—"}
+                    </TableCell>
+                  </TableRow>
 
-                {/* Expanded: one sub-row per selected fund */}
-                {isOpen && funds.map(fund => {
-                  const fRow = fundMaps[fund.id]?.get(fy)
-                  if (!fRow) return null
-                  return (
-                    <TableRow key={`${fy}-${fund.id}`} className="bg-muted/10 hover:bg-muted/20">
-                      <TableCell className="px-2 py-1.5" />
-                      <TableCell className="py-1.5">
-                        <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 pl-3">
-                          ↳ {fund.name}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-1.5 text-[11px] text-muted-foreground">
-                        {fmtDate(fRow.startDate)}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-[11px] text-right font-mono">
-                        {fmtVal(fRow.startValue)}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-[11px] text-muted-foreground">
-                        {fmtDate(fRow.endDate)}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-[11px] text-right font-mono">
-                        {fmtVal(fRow.endValue)}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-right">
-                        {fmtRet(fRow.returnPct)}
-                      </TableCell>
-                      <TableCell className="py-1.5" />
-                    </TableRow>
-                  )
-                })}
-              </>
-            )
-          })}
-        </TableBody>
-      </Table>
-      {sortedFYs.some(fy => portfolioMap.get(fy)?.isLive) && (
-        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center py-2 border-t border-border/40 font-medium">
-          * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
-        </p>
-      )}
+                  {isOpen && funds.map(fund => {
+                    const fRow = fundMaps[fund.id]?.get(fy)
+                    if (!fRow) return null
+                    return (
+                      <TableRow key={`${fy}-${fund.id}`} className="bg-muted/10 hover:bg-muted/20">
+                        <TableCell className="px-2 py-1.5" />
+                        <TableCell className="py-1.5">
+                          <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 pl-3">
+                            ↳ {fund.name}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1.5 text-[11px] text-muted-foreground font-mono">
+                          {fmtDate(fRow.startDate)}
+                        </TableCell>
+                        <TableCell className="py-1.5 text-[11px] text-right font-mono">
+                          {fmtVal(fRow.startValue)}
+                        </TableCell>
+                        <TableCell className="py-1.5 text-[11px] text-muted-foreground font-mono">
+                          {fmtDate(fRow.endDate)}
+                        </TableCell>
+                        <TableCell className="py-1.5 text-[11px] text-right font-mono">
+                          {fmtVal(fRow.endValue)}
+                        </TableCell>
+                        <TableCell className="py-1.5 text-right">
+                          {fmtRet(fRow.returnPct)}
+                        </TableCell>
+                        <TableCell className="py-1.5" />
+                      </TableRow>
+                    )
+                  })}
+                </>
+              )
+            })}
+          </TableBody>
+        </Table>
+        {sortedFYs.some(fy => portfolioMap.get(fy)?.isLive) && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center py-2 border-t border-border/40 font-medium">
+            * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
+          </p>
+        )}
       </div>
     </div>
   )
