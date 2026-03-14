@@ -208,7 +208,154 @@ def compute_metrics(nav: list) -> dict:
     return dict(cagr=cagr, vol=vol, max_dd=max_dd, sharpe=sharpe,
                 calmar=calmar, avg3y=avg3y)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── mfapi.in EOD update ────────────────────────────────────────────────────────
+
+MFAPI_BASE = "https://api.mfapi.in/mf"
+MF_FETCH_DELAY = 0.25   # seconds between mfapi requests
+
+MF_MONTHS = {
+    "Jan":"01","Feb":"02","Mar":"03","Apr":"04","May":"05","Jun":"06",
+    "Jul":"07","Aug":"08","Sep":"09","Oct":"10","Nov":"11","Dec":"12",
+}
+
+def mfapi_date_to_iso(s: str) -> str:
+    """'13-Mar-2026' → '2026-03-13'"""
+    parts = s.strip().split("-")
+    if len(parts) != 3:
+        return ""
+    dd, mon, yyyy = parts
+    mm = MF_MONTHS.get(mon, "")
+    if not mm:
+        return ""
+    return f"{yyyy}-{mm}-{dd.zfill(2)}"
+
+def fetch_mf_latest(scheme_code: int, retries: int = 3):
+    """Return (date_iso, nav_float) for the latest NAV, or None on failure."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                f"{MFAPI_BASE}/{scheme_code}/latest",
+                timeout=10,
+                verify=False,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") != "SUCCESS" or not data.get("data"):
+                return None
+            row = data["data"][0]
+            date_iso = mfapi_date_to_iso(row.get("date", ""))
+            try:
+                nav = float(row.get("nav", "0"))
+            except (ValueError, TypeError):
+                return None
+            if not date_iso or nav <= 0:
+                return None
+            return (date_iso, nav)
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return None
+
+def fetch_mf_since(scheme_code: int, after_date: str, retries: int = 3):
+    """Fetch full history and return rows with date > after_date."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                f"{MFAPI_BASE}/{scheme_code}",
+                timeout=30,
+                verify=False,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") != "SUCCESS" or not data.get("data"):
+                return []
+            rows = []
+            for row in data["data"]:
+                date_iso = mfapi_date_to_iso(row.get("date", ""))
+                try:
+                    nav = float(row.get("nav", "0"))
+                except (ValueError, TypeError):
+                    continue
+                if date_iso and nav > 0 and date_iso > after_date:
+                    rows.append((date_iso, nav))
+            return rows
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return []
+
+def update_mf_nav(conn, cur) -> None:
+    """Fetch latest NAV for all funds in mf_funds and upsert into mf_nav_data."""
+    today = today_ist()
+    print(f"\n=== MF NAV UPDATE (mfapi.in) — {today} ===")
+
+    # Load all scheme codes
+    cur.execute("SELECT scheme_code, scheme_name FROM mf_funds ORDER BY scheme_code")
+    mf_funds = cur.fetchall()
+    if not mf_funds:
+        print("  No funds in mf_funds table — run mfapi_loader.py first")
+        return
+
+    print(f"  {len(mf_funds)} funds in mf_funds")
+
+    # Get latest date per scheme from mf_nav_data
+    cur.execute("""
+        SELECT DISTINCT ON (scheme_code) scheme_code, date
+        FROM mf_nav_data
+        ORDER BY scheme_code, date DESC
+    """)
+    latest_by_scheme = {row[0]: row[1].strftime("%Y-%m-%d") for row in cur.fetchall()}
+
+    to_insert = []   # (scheme_code, date, nav)
+    skipped   = 0
+    errors    = 0
+
+    for scheme_code, scheme_name in mf_funds:
+        last_date = latest_by_scheme.get(scheme_code, "2000-01-01")
+
+        result = fetch_mf_latest(scheme_code)
+        time.sleep(MF_FETCH_DELAY)
+
+        if not result:
+            errors += 1
+            continue
+
+        latest_date, latest_nav = result
+
+        if latest_date <= last_date:
+            skipped += 1
+            continue
+
+        # Missed multiple days — backfill from full history
+        day_gap = (
+            datetime.strptime(latest_date, "%Y-%m-%d") -
+            datetime.strptime(last_date,   "%Y-%m-%d")
+        ).days
+
+        if day_gap > 3:
+            rows = fetch_mf_since(scheme_code, last_date)
+            time.sleep(MF_FETCH_DELAY)
+            to_insert.extend((scheme_code, d, v) for d, v in rows)
+            print(f"  [{scheme_code}] backfill {len(rows)} rows (gap={day_gap}d) → {latest_date}")
+        else:
+            to_insert.append((scheme_code, latest_date, latest_nav))
+
+    # Upsert collected rows
+    if to_insert:
+        execute_values(
+            cur,
+            """
+            INSERT INTO mf_nav_data (scheme_code, date, nav)
+            VALUES %s
+            ON CONFLICT (scheme_code, date) DO UPDATE SET nav = EXCLUDED.nav
+            """,
+            to_insert,
+        )
+        conn.commit()
+
+    inserted = len(to_insert)
+    print(f"  Inserted {inserted} rows | skipped {skipped} (up to date) | errors {errors}")
+
 
 def main():
     today = today_ist()
@@ -337,9 +484,13 @@ def main():
 
         conn.commit()
 
+    # ── mfapi.in NAV update ──────────────────────────────────────────────────
+    update_mf_nav(conn, cur)
+
     cur.close()
     conn.close()
     print("\nDone!")
+
 
 if __name__ == "__main__":
     main()
