@@ -307,6 +307,28 @@ FUND_NAMES = [
     "Groww Nifty PSU Bank Index Fund-Reg(G)",
 ]
 
+# ── Manual overrides for funds the fuzzy search can't resolve ────────────────
+# Maps user-provided fund name → mfapi scheme_code
+MANUAL_OVERRIDES: dict[str, int] = {
+    "HDFC Gold ETF FoF(G)":                                    115934,
+    "UTI Nifty200 Momentum 30 Index Fund-Reg(G)":              148704,
+    "HDFC Silver ETF FoF-Reg(G)":                              150736,
+    "Nippon India Index Fund-Nifty 50 Plan(G)":                113296,
+    "UTI Gold ETF FoF-Reg(G)":                                 150715,
+    "Axis Silver FoF-Reg(G)":                                  150617,
+    "Kotak Silver ETF FoF-Reg(G)":                             151602,
+    "Nippon India Index Fund-BSE Sensex Plan(G)":              113269,
+    "LIC MF Gold ETF FoF(G)":                                  151973,
+    "UTI Nifty200 Quality 30 Index Fund-Reg(G)":               152858,
+    "DSP Gold ETF FoF-Reg(G)":                                 152182,
+    "Invesco India Gold ETF FoF-Reg(G)":                       116077,
+    "Edelweiss NIFTY Large Mid Cap 250 Index Fund-Reg(G)":     149341,
+    "Navi Nifty 500 Multicap 50:25:25 Index Fund-Reg(G)":      152750,
+    "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund-Reg(G)": 153363,
+    "Union Gold ETF FoF-Reg(G)":                                   153338,
+    # "Groww Nifty PSU Bank Index Fund-Reg(G)" — not present on mfapi.in
+}
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def normalize(name: str) -> str:
@@ -532,12 +554,19 @@ def main():
 
         print(f"{prefix} {fund_name}")
 
-        # ── Search ──────────────────────────────────────────────────────────
-        query   = build_search_query(fund_name)
-        results = search_fund(query)
-        time.sleep(SEARCH_DELAY)
+        # ── Manual override (known hard-to-match funds) ──────────────────────
+        match = None
+        if fund_name in MANUAL_OVERRIDES:
+            scheme_code = MANUAL_OVERRIDES[fund_name]
+            match = {"schemeCode": scheme_code, "schemeName": f"(override) {fund_name}", "match_ratio": 1.0}
+            print(f"  ✓ [{scheme_code}] via manual override")
 
-        match = best_match(fund_name, results)
+        # ── Search ──────────────────────────────────────────────────────────
+        if not match:
+            query   = build_search_query(fund_name)
+            results = search_fund(query)
+            time.sleep(SEARCH_DELAY)
+            match = best_match(fund_name, results)
 
         # Fallback 1: expand abbreviations (e.g. ICICI Pru → ICICI Prudential)
         if not match:
