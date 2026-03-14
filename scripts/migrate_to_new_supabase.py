@@ -70,6 +70,26 @@ def rest_upsert(table: str, rows: list[dict], on_conflict: str = "") -> None:
         print(f"  Upserted rows {i+1}–{min(i+BATCH_SIZE, len(rows))} / {len(rows)}")
 
 
+def clear_destination() -> None:
+    """Delete all rows from destination tables before migrating (clean slate)."""
+    print("Clearing destination tables…")
+    # Order matters: child tables first (foreign key constraints)
+    for table, filter_col in [
+        ("nav_data",    "fund_id"),
+        ("funds",       "id"),
+        ("mf_nav_data", "scheme_code"),
+        ("mf_funds",    "scheme_code"),
+    ]:
+        url = f"{NEW_SUPABASE_URL}/rest/v1/{table}?{filter_col}=gte.0"
+        r = requests.delete(url, headers=HEADERS)
+        if r.status_code in (200, 204):
+            print(f"  ✓ Cleared {table}")
+        else:
+            print(f"  ✗ Could not clear {table}: {r.status_code} {r.text[:200]}")
+            sys.exit(1)
+    print()
+
+
 def verify_schema() -> None:
     """Check that the target tables exist in the new Supabase."""
     print("\nVerifying schema in new Supabase…")
@@ -241,6 +261,8 @@ def main():
 
     cur = conn.cursor()
     print("Connected.\n")
+
+    clear_destination()
 
     start = time.time()
 
