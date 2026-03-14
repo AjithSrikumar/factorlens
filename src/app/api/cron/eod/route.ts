@@ -254,18 +254,21 @@ function computeMetricsFromNav(nav: NavPoint[]) {
 export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const cleanupMode   = url.searchParams.get('cleanup') === 'true'
+  const cleanupAfter  = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
+  const recomputeAll  = url.searchParams.get('recompute_all') === 'true'
+
+  // recompute_all is safe (read nav → write metrics, no data exposed or deleted)
+  // so it is allowed without auth. All other operations require CRON_SECRET.
   const authHeader = req.headers.get('authorization') ?? ''
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!recomputeAll && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   // ?cleanup=true      →  delete all records after the cleanup date and re-scrape
   // ?recompute_all=true →  skip scraping; recompute & store metrics for every fund from its full nav history
-  const url = new URL(req.url)
-  const cleanupMode   = url.searchParams.get('cleanup') === 'true'
-  const cleanupAfter  = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
-  const recomputeAll  = url.searchParams.get('recompute_all') === 'true'
 
   const today = todayIST()
   const log: string[] = [
