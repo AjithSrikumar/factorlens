@@ -144,14 +144,18 @@ def migrate_nav_data(cur, id_map: dict) -> None:
         if not rows:
             break
 
-        payload = [
-            {
-                "fund_id":   id_map.get(r["fund_id"], r["fund_id"]),
-                "date":      str(r["date"]),
+        seen = set()
+        payload = []
+        for r in rows:
+            key = (id_map.get(r["fund_id"], r["fund_id"]), str(r["date"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            payload.append({
+                "fund_id":   key[0],
+                "date":      key[1],
                 "nav_value": float(r["nav_value"]),
-            }
-            for r in rows
-        ]
+            })
         rest_upsert("nav_data", payload)
         migrated += len(rows)
         print(f"  Progress: {migrated}/{total}")
