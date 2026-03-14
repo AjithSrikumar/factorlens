@@ -15,6 +15,8 @@ Flags:
   --resume       Skip funds that already have NAV data in mf_nav_data
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import time
