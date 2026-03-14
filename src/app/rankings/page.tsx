@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { NavChart, DrawdownChart } from "@/components/portfolio-charts"
+import { NavChart, DrawdownChart, FiscalYearTable } from "@/components/portfolio-charts"
 
 interface Fund {
   id: number
@@ -26,11 +26,26 @@ interface Fund {
   final_rank: number
 }
 
+interface FYRawRow {
+  fy: string
+  startDate: string
+  startValue: number
+  endDate: string
+  endValue: number
+  returnPct: number
+  isLive: boolean
+}
+
 interface ChartData {
   portfolioNav: { date: string; value: number }[]
   drawdownSeries: { date: string; value: number }[]
   benchmarkNav?: { date: string; value: number }[]
   benchmarkDrawdown?: { date: string; value: number }[]
+  fyTableData?: {
+    portfolio: FYRawRow[]
+    funds: Record<number, FYRawRow[]>
+    benchmark: FYRawRow[]
+  }
 }
 
 type SortKey = keyof Fund
@@ -179,6 +194,17 @@ export default function RankingsPage() {
             benchmarkName="Nifty 50"
           />
         </div>
+        {data.fyTableData && (
+          <div>
+            <p className="text-sm font-semibold mb-1">Fiscal Year Returns</p>
+            <p className="text-xs text-muted-foreground mb-3">Annual returns (Apr – Mar) with NIFTY 50 comparison</p>
+            <FiscalYearTable
+              fyTableData={data.fyTableData}
+              funds={[]}
+              benchmarkName="NIFTY 50"
+            />
+          </div>
+        )}
       </div>
     )
   }

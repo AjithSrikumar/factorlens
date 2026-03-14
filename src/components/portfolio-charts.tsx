@@ -59,7 +59,7 @@ function sampleData<T>(data: T[], targetPoints: number): T[] {
 }
 
 function formatDate(dateStr: string) {
-  try { return format(parseISO(dateStr), "MMM yyyy") } catch { return dateStr }
+  try { return format(parseISO(dateStr), "MMM ''yy") } catch { return dateStr }
 }
 
 // Custom tooltip
@@ -592,18 +592,19 @@ export function FiscalYearTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border/60">
+    <div className="rounded-lg border border-border/60 overflow-hidden">
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-8 px-2" />
-            <TableHead className="text-xs font-bold uppercase tracking-wide">Fiscal Year</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide">Starting Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio NAV</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide">Ending Date</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio NAV</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio Return</TableHead>
-            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Return</TableHead>
+            <TableHead className="w-8 px-2 sticky left-0 z-20 bg-muted/40" />
+            <TableHead className="text-xs font-bold uppercase tracking-wide sticky left-8 z-20 bg-muted/40 whitespace-nowrap">Fiscal Year</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide whitespace-nowrap">Starting Date</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio NAV</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide whitespace-nowrap">Ending Date</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio NAV</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">Portfolio Return</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right whitespace-nowrap">{benchmarkName} Return</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -621,12 +622,12 @@ export function FiscalYearTable({
                   className={`cursor-pointer hover:bg-muted/30 transition-colors ${isLive ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}
                   onClick={() => toggleRow(fy)}
                 >
-                  <TableCell className="px-2 py-2">
+                  <TableCell className="px-2 py-2 sticky left-0 z-10 bg-background">
                     {isOpen
                       ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                       : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                   </TableCell>
-                  <TableCell className="py-2">
+                  <TableCell className="py-2 sticky left-8 z-10 bg-background whitespace-nowrap">
                     <span className={`text-sm font-bold ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
                       {fy}{isLive ? " *" : ""}
                     </span>
@@ -695,6 +696,7 @@ export function FiscalYearTable({
           * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
         </p>
       )}
+      </div>
     </div>
   )
 }
