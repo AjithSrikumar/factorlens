@@ -114,7 +114,7 @@ export function MetricsGrid({ metrics, benchmark }: Props) {
         benchmarkValue={benchmark ? fixed(benchmark.sharpe) : undefined}
         sub="Return per risk"
         icon={BarChart3}
-        positive={metrics.sharpe > 0.8}
+        positive={metrics.sharpe > 0.5}
       />
       <MetricCard
         label="Max Drawdown"

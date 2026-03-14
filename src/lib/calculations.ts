@@ -90,7 +90,7 @@ export function computeVolatility(navSeries: NavPoint[]): number {
     dailyReturns.push(ret)
   }
   const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-  const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / dailyReturns.length
+  const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (dailyReturns.length - 1)
   return Math.sqrt(variance) * Math.sqrt(252)
 }
 
@@ -154,7 +154,7 @@ export function computeAllMetrics(navSeries: NavPoint[]): PortfolioMetrics {
   const cagr = computeCAGR(navSeries)
   const vol = computeVolatility(navSeries)
   const maxDD = computeMaxDrawdown(navSeries)
-  const sharpe = vol > 0 ? cagr / vol : 0
+  const sharpe = vol > 0 ? (cagr - 0.06) / vol : 0
   const calmar = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0
   const sortino = computeSortino(navSeries)
   const totalReturn = navSeries.length > 1

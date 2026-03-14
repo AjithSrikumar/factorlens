@@ -425,6 +425,10 @@ export function FiscalYearChart({
   })
 
   const hasLive = data.some(d => d.isLive)
+  // Compute current fiscal year label dynamically (FY = Apr–Mar, e.g. Apr 2025–Mar 2026 = FY26)
+  const todayParts = today.split("-").map(Number)
+  const liveFYYear = todayParts[1] >= 4 ? todayParts[0] + 1 : todayParts[0]
+  const liveFYLabel = `FY${String(liveFYYear).slice(2)}`
   // Height: each row ~38px for horizontal bar chart
   const chartHeight = Math.max(320, data.length * 38 + 60)
 
@@ -500,7 +504,7 @@ export function FiscalYearChart({
       </ResponsiveContainer>
       {hasLive && (
         <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1 font-medium">
-          * FY26 is live (year-to-date through {today})
+          * {liveFYLabel} is live (year-to-date through {today})
         </p>
       )}
     </div>

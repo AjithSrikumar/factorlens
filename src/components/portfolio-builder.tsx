@@ -62,12 +62,13 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
 
   const addFund = useCallback((fund: Fund) => {
     if (allocations.length >= 10) return
-    const remaining = 100 - totalWeight
-    const newWeight = Math.max(5, Math.min(remaining, Math.round(remaining / (allocations.length + 1))))
-    onChange([...allocations, { fund, weight: newWeight }])
+    const newAllocations = [...allocations, { fund, weight: 0 }]
+    const equal = Math.floor(100 / newAllocations.length)
+    const remainder = 100 - equal * newAllocations.length
+    onChange(newAllocations.map((a, i) => ({ ...a, weight: equal + (i === 0 ? remainder : 0) })))
     setOpen(false)
     setSearch("")
-  }, [allocations, onChange, totalWeight])
+  }, [allocations, onChange])
 
   const removeFund = useCallback((id: number) => {
     onChange(allocations.filter((a) => a.fund.id !== id))
