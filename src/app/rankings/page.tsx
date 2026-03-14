@@ -331,7 +331,7 @@ export default function RankingsPage() {
                             <td className="px-4 py-4 tabular-nums whitespace-nowrap text-muted-foreground">
                               {pct(fund.avg_3y_rolling_return)}
                             </td>
-                            <td className={cn("px-4 py-4 tabular-nums whitespace-nowrap", fund.sharpe_ratio > 0.9 ? "text-teal-600 font-semibold" : "text-foreground")}>
+                            <td className={cn("px-4 py-4 tabular-nums whitespace-nowrap", fund.sharpe_ratio > 0.6 ? "text-teal-600 font-semibold" : "text-foreground")}>
                               {fixed(fund.sharpe_ratio)}
                               {nifty50 && fund.id !== nifty50.id && (
                                 <div className={cn("text-[9px] font-bold", fund.sharpe_ratio > nifty50.sharpe_ratio ? "text-teal-600" : "text-red-400")}>

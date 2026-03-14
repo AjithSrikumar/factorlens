@@ -238,7 +238,8 @@ function computeMetricsFromNav(nav: NavPoint[]) {
   const cagr    = computeCAGR(nav)
   const vol     = computeVolatility(nav)
   const maxDD   = computeMaxDrawdown(nav)
-  const sharpe  = vol > 0 ? cagr / vol : 0
+  // Sharpe = (CAGR - Rf) / Volatility  (Rf = 6%, matching calculations.ts)
+  const sharpe  = vol > 0 ? (cagr - 0.06) / vol : 0
   const calmar  = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0
   const sortino = computeSortino(nav)
   const rolling = computeRolling3YCAGR(nav)
@@ -259,10 +260,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // ?cleanup=true  →  delete all records after the cleanup date and re-scrape
+  // ?cleanup=true      →  delete all records after the cleanup date and re-scrape
+  // ?recompute_all=true →  skip scraping; recompute & store metrics for every fund from its full nav history
   const url = new URL(req.url)
-  const cleanupMode  = url.searchParams.get('cleanup') === 'true'
-  const cleanupAfter = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
+  const cleanupMode   = url.searchParams.get('cleanup') === 'true'
+  const cleanupAfter  = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
+  const recomputeAll  = url.searchParams.get('recompute_all') === 'true'
 
   const today = todayIST()
   const log: string[] = [
@@ -322,13 +325,18 @@ export async function GET(req: NextRequest) {
     const OVERLAP_DAYS = 20
 
     // ── 4. Fetch NSE indices sequentially (avoid rate limiting) ──────────────
+    // Skipped in recompute_all mode (no new data needed, only metrics refresh).
     const nseResults: Array<{
       code: string; fundId?: number
       rows: { date: string; value: number }[]
       error: string | null; skipped?: boolean
     }> = []
 
-    for (const { code, indexName } of NSE_INDICES) {
+    if (recomputeAll) {
+      log.push('[recompute_all] skipping NAV scraping — will recompute metrics for all funds')
+    }
+
+    for (const { code, indexName } of recomputeAll ? [] : NSE_INDICES) {
       const fundId = codeToId.get(code)
       if (!fundId) { nseResults.push({ code, rows: [], error: 'Fund not found in DB' }); continue }
 
@@ -361,7 +369,7 @@ export async function GET(req: NextRequest) {
 
     // ── 5. Fetch Yahoo Finance (SPX, GOLD) ───────────────────────────────────
     const yahooResults = await Promise.all(
-      YAHOO_FUNDS.map(async ({ code, symbol }) => {
+      (recomputeAll ? [] : YAHOO_FUNDS).map(async ({ code, symbol }) => {
         const fundId = codeToId.get(code)
         if (!fundId) return { code, rows: [] as { date: string; value: number }[], error: 'Fund not found in DB' }
 
@@ -437,11 +445,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 7. Recompute metrics for updated funds ───────────────────────────────
+    // ── 7. Recompute metrics for updated funds (or all funds if recompute_all) ─
     let metricsUpdated = 0
 
-    if (fundsWithNewData.size > 0) {
-      const updatedFundIds = Array.from(fundsWithNewData)
+    // recompute_all=true: re-derive every fund's metrics from nav_data so that
+    // formula changes (e.g. Sharpe RF correction) take effect across the board.
+    if (recomputeAll) {
+      log.push('[recompute_all] recomputing metrics for all funds from nav history…')
+    }
+
+    if (recomputeAll || fundsWithNewData.size > 0) {
+      const updatedFundIds = recomputeAll ? fundIds : Array.from(fundsWithNewData)
       const PAGE = 1000
       let navRows: { fund_id: number; date: string; nav_value: number }[] = []
       let from = 0
