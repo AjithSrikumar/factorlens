@@ -14,6 +14,8 @@ IMPORTANT: Run scripts/schema.sql in the new Supabase SQL Editor FIRST:
     https://supabase.com/dashboard/project/lerpchldswooqrfscuig/editor
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import time
