@@ -149,6 +149,88 @@ export function computeSortino(navSeries: NavPoint[], riskFreeRate = 0.06): numb
   return downsideDevAnnualized > 0 ? (cagr - riskFreeRate) / downsideDevAnnualized : 0
 }
 
+// ── Fiscal Year raw-data rows ──────────────────────────────────────────────
+
+export interface FYRawRow {
+  fy: string         // e.g. "FY24"
+  startDate: string  // actual first trading day on/after Apr 1
+  startValue: number // raw index value on startDate
+  endDate: string    // actual last trading day on/before Mar 31 (or today if live)
+  endValue: number   // raw index value on endDate
+  returnPct: number  // (endValue/startValue - 1) * 100
+  isLive: boolean    // FY not yet complete
+}
+
+function _findFloorPoint(
+  sortedDates: string[],
+  navMap: Map<string, number>,
+  targetDate: string
+): { date: string; value: number } | null {
+  let lo = 0, hi = sortedDates.length - 1, result = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (sortedDates[mid] <= targetDate) { result = mid; lo = mid + 1 }
+    else hi = mid - 1
+  }
+  const idx = result !== -1 ? result : (sortedDates.length > 0 ? 0 : -1)
+  if (idx === -1) return null
+  const d = sortedDates[idx]
+  return { date: d, value: navMap.get(d)! }
+}
+
+function _findCeilPoint(
+  sortedDates: string[],
+  navMap: Map<string, number>,
+  targetDate: string
+): { date: string; value: number } | null {
+  let lo = 0, hi = sortedDates.length - 1, result = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (sortedDates[mid] >= targetDate) { result = mid; hi = mid - 1 }
+    else lo = mid + 1
+  }
+  const idx = result !== -1 ? result : (sortedDates.length > 0 ? sortedDates.length - 1 : -1)
+  if (idx === -1) return null
+  const d = sortedDates[idx]
+  return { date: d, value: navMap.get(d)! }
+}
+
+export function computeFYRawRows(nav: NavPoint[], today: string): FYRawRow[] {
+  if (nav.length === 0) return []
+  const sorted = [...nav].sort((a, b) => a.date.localeCompare(b.date))
+  const navMap = new Map(sorted.map(p => [p.date, p.value]))
+  const sortedDates = sorted.map(p => p.date)
+  const firstDate = sortedDates[0]
+
+  const results: FYRawRow[] = []
+  for (let fyYear = 2006; fyYear <= 2026; fyYear++) {
+    const fyStart = `${fyYear - 1}-04-01`
+    const fyEnd   = `${fyYear}-03-31`
+    if (firstDate > fyEnd) continue
+
+    const isLive = fyEnd > today
+    const effectiveEnd   = isLive ? today : fyEnd
+    const effectiveStart = fyStart < firstDate ? firstDate : fyStart
+
+    const startPoint = _findCeilPoint(sortedDates, navMap, effectiveStart)
+    const endPoint   = _findFloorPoint(sortedDates, navMap, effectiveEnd)
+
+    if (!startPoint || !endPoint || startPoint.value === 0) continue
+
+    const returnPct = ((endPoint.value / startPoint.value) - 1) * 100
+    results.push({
+      fy: `FY${String(fyYear).slice(2)}`,
+      startDate:  startPoint.date,
+      startValue: startPoint.value,
+      endDate:    endPoint.date,
+      endValue:   endPoint.value,
+      returnPct:  parseFloat(returnPct.toFixed(2)),
+      isLive,
+    })
+  }
+  return results
+}
+
 // Full metrics computation
 export function computeAllMetrics(navSeries: NavPoint[]): PortfolioMetrics {
   const cagr = computeCAGR(navSeries)

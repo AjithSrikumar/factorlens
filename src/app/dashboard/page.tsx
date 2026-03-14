@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { PortfolioBuilder, Fund } from "@/components/portfolio-builder"
-import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart } from "@/components/portfolio-charts"
+import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart, FiscalYearTable } from "@/components/portfolio-charts"
 import { MetricsGrid } from "@/components/metrics-grid"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -31,6 +31,16 @@ interface PortfolioMetrics {
   endDate: string
 }
 
+interface FYRawRow {
+  fy: string
+  startDate: string
+  startValue: number
+  endDate: string
+  endValue: number
+  returnPct: number
+  isLive: boolean
+}
+
 interface PortfolioResult {
   portfolioNav: { date: string; value: number }[]
   metrics: PortfolioMetrics
@@ -40,6 +50,11 @@ interface PortfolioResult {
   benchmarkMetrics?: PortfolioMetrics
   benchmarkDrawdown?: { date: string; value: number }[]
   benchmarkRolling?: { date: string; value: number }[]
+  fyTableData?: {
+    portfolio: FYRawRow[]
+    funds: Record<number, FYRawRow[]>
+    benchmark: FYRawRow[]
+  }
 }
 
 export default function DashboardPage() {
@@ -254,6 +269,7 @@ export default function DashboardPage() {
                         <TabsTrigger value="drawdown" className="text-xs h-7">Drawdown</TabsTrigger>
                         <TabsTrigger value="rolling" className="text-xs h-7">Rolling</TabsTrigger>
                         <TabsTrigger value="fiscal" className="text-xs h-7">Fiscal Year</TabsTrigger>
+                        <TabsTrigger value="fy-table" className="text-xs h-7">FY Table</TabsTrigger>
                         <TabsTrigger value="allocation" className="text-xs h-7">Weights</TabsTrigger>
                       </TabsList>
                     </div>
@@ -319,6 +335,31 @@ export default function DashboardPage() {
                           ) : (
                             <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
                               Benchmark data unavailable.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="fy-table" className="m-0">
+                      <Card className="overflow-hidden border-border/60">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-indigo-500" /> Fiscal Year Detail Table
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Raw index values at FY start/end. Click any row to expand individual index data.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-2 sm:px-4 pb-4">
+                          {result.fyTableData ? (
+                            <FiscalYearTable
+                              fyTableData={result.fyTableData}
+                              funds={allocations.map(a => ({ id: a.fund.id, name: a.fund.name }))}
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+                              No fiscal year data available.
                             </div>
                           )}
                         </CardContent>

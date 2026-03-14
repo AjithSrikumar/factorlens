@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   ComposedChart,
   LineChart,
@@ -21,6 +22,16 @@ import {
   LabelList,
 } from "recharts"
 import { format, parseISO } from "date-fns"
+import { ChevronDown, ChevronRight } from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import type { FYRawRow } from "@/lib/calculations"
 
 interface NavPoint {
   date: string
@@ -473,8 +484,10 @@ export function FiscalYearChart({
             dataKey="fy"
             tick={({ x, y, payload }) => {
               const row = data.find(d => d.fy === payload.value)
+              // Live year = amber; completed years = foreground (readable on both dark + light)
+              const fill = row?.isLive ? "#f59e0b" : "hsl(var(--foreground))"
               return (
-                <text x={x} y={y} dy={4} textAnchor="end" fontSize={10} fill={row?.isLive ? "#f59e0b" : "hsl(var(--muted-foreground))"}>
+                <text x={x} y={y} dy={4} textAnchor="end" fontSize={10} fontWeight={row?.isLive ? 600 : 500} fill={fill}>
                   {payload.value}{row?.isLive ? "*" : ""}
                 </text>
               )
@@ -505,6 +518,176 @@ export function FiscalYearChart({
       {hasLive && (
         <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1 font-medium">
           * {liveFYLabel} is live (year-to-date through {today})
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Fiscal Year Detail Table ───────────────────────────────────────────────
+
+interface FYTableFund {
+  id: number
+  name: string
+}
+
+interface FYTableData {
+  portfolio: FYRawRow[]
+  funds: Record<number, FYRawRow[]>
+  benchmark: FYRawRow[]
+}
+
+function fmtVal(v: number): string {
+  return v.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+}
+
+function fmtDate(d: string): string {
+  try { return format(parseISO(d), "dd MMM yyyy") } catch { return d }
+}
+
+function fmtRet(v: number): React.ReactNode {
+  const cls = v >= 0
+    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+    : "text-red-600 dark:text-red-400 font-semibold"
+  return <span className={cls}>{v >= 0 ? "+" : ""}{v.toFixed(2)}%</span>
+}
+
+export function FiscalYearTable({
+  fyTableData,
+  funds,
+  benchmarkName = "NIFTY 50",
+}: {
+  fyTableData: FYTableData
+  funds: FYTableFund[]
+  benchmarkName?: string
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const today = new Date().toISOString().slice(0, 10)
+  const todayParts = today.split("-").map(Number)
+  const liveFYYear = todayParts[1] >= 4 ? todayParts[0] + 1 : todayParts[0]
+  const liveFYLabel = `FY${String(liveFYYear).slice(2)}`
+
+  // Build a map of portfolio FY → row for quick lookup
+  const portfolioMap = new Map(fyTableData.portfolio.map(r => [r.fy, r]))
+  const benchmarkMap = new Map(fyTableData.benchmark.map(r => [r.fy, r]))
+
+  // Collect all FY labels that appear in portfolio or any fund
+  const allFYs = new Set<string>()
+  fyTableData.portfolio.forEach(r => allFYs.add(r.fy))
+  Object.values(fyTableData.funds).forEach(rows => rows.forEach(r => allFYs.add(r.fy)))
+  const sortedFYs = Array.from(allFYs).sort()
+
+  // Per-fund maps
+  const fundMaps = Object.fromEntries(
+    funds.map(f => [f.id, new Map((fyTableData.funds[f.id] ?? []).map(r => [r.fy, r]))])
+  )
+
+  const toggleRow = (fy: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(fy) ? next.delete(fy) : next.add(fy)
+      return next
+    })
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border/60">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className="w-8 px-2" />
+            <TableHead className="text-xs font-bold uppercase tracking-wide">Fiscal Year</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide">Starting Date</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Value</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide">Ending Date</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">{benchmarkName} Value</TableHead>
+            <TableHead className="text-xs font-bold uppercase tracking-wide text-right">Portfolio Return</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedFYs.map(fy => {
+            const portRow = portfolioMap.get(fy)
+            const benchRow = benchmarkMap.get(fy)
+            const isLive = portRow?.isLive || false
+            const isOpen = expanded.has(fy)
+
+            return (
+              <>
+                {/* Main FY row */}
+                <TableRow
+                  key={fy}
+                  className={`cursor-pointer hover:bg-muted/30 transition-colors ${isLive ? "bg-amber-50/30 dark:bg-amber-900/10" : ""}`}
+                  onClick={() => toggleRow(fy)}
+                >
+                  <TableCell className="px-2 py-2">
+                    {isOpen
+                      ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </TableCell>
+                  <TableCell className="py-2">
+                    <span className={`text-sm font-bold ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                      {fy}{isLive ? " *" : ""}
+                    </span>
+                    {isLive && (
+                      <span className="ml-1.5 text-[10px] text-amber-500 font-medium">(live)</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-muted-foreground">
+                    {benchRow ? fmtDate(benchRow.startDate) : portRow ? fmtDate(portRow.startDate) : "—"}
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-right font-mono">
+                    {benchRow ? fmtVal(benchRow.startValue) : "—"}
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-muted-foreground">
+                    {benchRow ? fmtDate(benchRow.endDate) : portRow ? fmtDate(portRow.endDate) : "—"}
+                  </TableCell>
+                  <TableCell className="py-2 text-xs text-right font-mono">
+                    {benchRow ? fmtVal(benchRow.endValue) : "—"}
+                  </TableCell>
+                  <TableCell className="py-2 text-right">
+                    {portRow ? fmtRet(portRow.returnPct) : "—"}
+                  </TableCell>
+                </TableRow>
+
+                {/* Expanded: one sub-row per selected fund */}
+                {isOpen && funds.map(fund => {
+                  const fRow = fundMaps[fund.id]?.get(fy)
+                  if (!fRow) return null
+                  return (
+                    <TableRow key={`${fy}-${fund.id}`} className="bg-muted/10 hover:bg-muted/20">
+                      <TableCell className="px-2 py-1.5" />
+                      <TableCell className="py-1.5">
+                        <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 pl-3">
+                          ↳ {fund.name}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-1.5 text-[11px] text-muted-foreground">
+                        {fmtDate(fRow.startDate)}
+                      </TableCell>
+                      <TableCell className="py-1.5 text-[11px] text-right font-mono">
+                        {fmtVal(fRow.startValue)}
+                      </TableCell>
+                      <TableCell className="py-1.5 text-[11px] text-muted-foreground">
+                        {fmtDate(fRow.endDate)}
+                      </TableCell>
+                      <TableCell className="py-1.5 text-[11px] text-right font-mono">
+                        {fmtVal(fRow.endValue)}
+                      </TableCell>
+                      <TableCell className="py-1.5 text-right">
+                        {fmtRet(fRow.returnPct)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </>
+            )
+          })}
+        </TableBody>
+      </Table>
+      {sortedFYs.some(fy => portfolioMap.get(fy)?.isLive) && (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center py-2 border-t border-border/40 font-medium">
+          * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
         </p>
       )}
     </div>

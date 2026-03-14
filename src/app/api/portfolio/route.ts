@@ -5,6 +5,8 @@ import {
   computeAllMetrics,
   computeDrawdownSeries,
   computeRolling3YCAGR,
+  computeFYRawRows,
+  type FYRawRow,
 } from '@/lib/calculations'
 
 const supabase = createClient(
@@ -95,6 +97,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Compute FY raw data for the detail table (done server-side to keep response small)
+    const today = new Date().toISOString().slice(0, 10)
+    const fyTableFunds: Record<number, FYRawRow[]> = {}
+    for (const alloc of allocations) {
+      const raw = navByFund.get(alloc.fundId) ?? []
+      fyTableFunds[alloc.fundId] = computeFYRawRows(raw, today)
+    }
+    const fyTableBenchmark = computeFYRawRows(nifty50NavRaw, today)
+    // Portfolio FY rows (computed from rebased portfolio NAV)
+    const fyTablePortfolio = computeFYRawRows(portfolioNav, today)
+
     return NextResponse.json({
       portfolioNav,
       metrics,
@@ -104,6 +117,11 @@ export async function POST(req: NextRequest) {
       benchmarkMetrics,
       benchmarkDrawdown,
       benchmarkRolling,
+      fyTableData: {
+        portfolio:  fyTablePortfolio,
+        funds:      fyTableFunds,
+        benchmark:  fyTableBenchmark,
+      },
     })
   } catch (e) {
     console.error(e)
