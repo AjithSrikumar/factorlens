@@ -54,11 +54,13 @@ BATCH_SIZE = 500
 
 # ── REST API helpers ───────────────────────────────────────────────────────────
 
-def rest_upsert(table: str, rows: list[dict]) -> None:
+def rest_upsert(table: str, rows: list[dict], on_conflict: str = "") -> None:
     """Upsert a batch of rows into the new Supabase via REST API."""
     if not rows:
         return
     url = f"{NEW_SUPABASE_URL}/rest/v1/{table}"
+    if on_conflict:
+        url += f"?on_conflict={on_conflict}"
     for i in range(0, len(rows), BATCH_SIZE):
         batch = rows[i : i + BATCH_SIZE]
         resp = requests.post(url, headers=HEADERS, data=json.dumps(batch, default=str))
@@ -107,7 +109,7 @@ def migrate_funds(cur) -> dict:
         {k: v for k, v in r.items() if k != "id"}   # drop old PK
         for r in rows
     ]
-    rest_upsert("funds", payload)
+    rest_upsert("funds", payload, on_conflict="code")
 
     # Fetch newly assigned ids from new DB
     resp = requests.get(
@@ -156,7 +158,7 @@ def migrate_nav_data(cur, id_map: dict) -> None:
                 "date":      key[1],
                 "nav_value": float(r["nav_value"]),
             })
-        rest_upsert("nav_data", payload)
+        rest_upsert("nav_data", payload, on_conflict="fund_id,date")
         migrated += len(rows)
         print(f"  Progress: {migrated}/{total}")
         offset += BATCH_SIZE
@@ -188,7 +190,7 @@ def migrate_mf_funds(cur) -> None:
         }
         for r in rows
     ]
-    rest_upsert("mf_funds", payload)
+    rest_upsert("mf_funds", payload, on_conflict="scheme_code")
     print(f"  Migrated {len(payload)} mf_funds rows.")
 
 
@@ -217,7 +219,7 @@ def migrate_mf_nav_data(cur) -> None:
             }
             for r in rows
         ]
-        rest_upsert("mf_nav_data", payload)
+        rest_upsert("mf_nav_data", payload, on_conflict="scheme_code,date")
         migrated += len(rows)
         print(f"  Progress: {migrated}/{total}")
         offset += BATCH_SIZE
