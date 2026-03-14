@@ -1,9 +1,9 @@
 "use client"
 
 import {
+  ComposedChart,
   LineChart,
   Line,
-  AreaChart,
   Area,
   XAxis,
   YAxis,
@@ -66,17 +66,31 @@ function CustomTooltip({ active, payload, label, formatter }: TooltipProps<numbe
   )
 }
 
-// Merge two data series by date. Uses null (not undefined) so Recharts connectNulls works.
+// Merge two data series by date. Uses forward-fill for unmatched dates so the
+// benchmark line always renders across the full chart range.
 function mergeSeries(data: any[], benchmarkData?: any[]): any[] {
   if (!benchmarkData || benchmarkData.length === 0) return data
 
+  const sorted = [...benchmarkData].sort((a, b) => String(a.date).localeCompare(String(b.date)))
   const bMap = new Map<string, number>()
-  benchmarkData.forEach(p => bMap.set(String(p.date).trim(), p.value))
+  sorted.forEach(p => bMap.set(String(p.date).trim(), p.value))
+  const bDates = sorted.map(p => String(p.date).trim())
 
-  return data.map(p => ({
-    ...p,
-    benchmark: bMap.get(String(p.date).trim()) ?? null,
-  }))
+  return data.map(p => {
+    const key = String(p.date).trim()
+    let val = bMap.get(key)
+    if (val === undefined) {
+      // Binary-search for the last benchmark date <= key (forward-fill)
+      let lo = 0, hi = bDates.length - 1, found = -1
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        if (bDates[mid] <= key) { found = mid; lo = mid + 1 }
+        else hi = mid - 1
+      }
+      val = found >= 0 ? sorted[found].value : sorted[0]?.value
+    }
+    return { ...p, benchmark: val ?? null }
+  })
 }
 
 export function NavChart({
@@ -96,7 +110,7 @@ export function NavChart({
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <AreaChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <ComposedChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="navGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
@@ -107,13 +121,13 @@ export function NavChart({
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `₹${v.toFixed(0)}`}
@@ -143,7 +157,7 @@ export function NavChart({
             connectNulls
           />
         )}
-      </AreaChart>
+      </ComposedChart>
     </ResponsiveContainer>
   )
 }
@@ -155,7 +169,7 @@ export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchma
 
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <ComposedChart data={sampled} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
@@ -166,13 +180,13 @@ export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchma
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `${v.toFixed(0)}%`}
@@ -202,7 +216,7 @@ export function DrawdownChart({ data, benchmarkData, name = "Portfolio", benchma
             connectNulls
           />
         )}
-      </AreaChart>
+      </ComposedChart>
     </ResponsiveContainer>
   )
 }
@@ -219,13 +233,13 @@ export function RollingReturnChart({ data, benchmarkData, name = "Portfolio", be
         <XAxis
           dataKey="date"
           tickFormatter={formatDate}
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
           tickLine={false}
           axisLine={false}
           tickFormatter={(v) => `${v.toFixed(0)}%`}
@@ -424,7 +438,7 @@ export function FiscalYearChart({
           <XAxis
             type="number"
             tickFormatter={(v) => `${v.toFixed(0)}%`}
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
             tickLine={false}
             axisLine={false}
           />

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { PortfolioBuilder, Fund } from "@/components/portfolio-builder"
-import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart } from "@/components/portfolio-charts"
+import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart } from "@/components/portfolio-charts"
 import { MetricsGrid } from "@/components/metrics-grid"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Info, Sparkles, SlidersHorizontal } from "lucide-react"
+import { Info, Sparkles, SlidersHorizontal, CalendarDays } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 
@@ -253,6 +253,7 @@ export default function DashboardPage() {
                         <TabsTrigger value="nav" className="text-xs h-7">Growth</TabsTrigger>
                         <TabsTrigger value="drawdown" className="text-xs h-7">Drawdown</TabsTrigger>
                         <TabsTrigger value="rolling" className="text-xs h-7">Rolling</TabsTrigger>
+                        <TabsTrigger value="fiscal" className="text-xs h-7">Fiscal Year</TabsTrigger>
                         <TabsTrigger value="allocation" className="text-xs h-7">Weights</TabsTrigger>
                       </TabsList>
                     </div>
@@ -293,6 +294,31 @@ export default function DashboardPage() {
                           ) : (
                             <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
                               Insufficient data for rolling analysis.
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+
+                    <TabsContent value="fiscal" className="m-0">
+                      <Card className="overflow-hidden border-border/60">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-indigo-500" /> Fiscal Year Returns vs NIFTY 50
+                          </CardTitle>
+                          <CardDescription className="text-xs">Annual returns (Apr – Mar) since portfolio inception</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-2 sm:px-6">
+                          {result.benchmarkNav && result.benchmarkNav.length > 0 ? (
+                            <FiscalYearChart
+                              fundNav={result.portfolioNav}
+                              benchmarkNav={result.benchmarkNav}
+                              fundName="Portfolio"
+                              benchmarkName="NIFTY 50"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+                              Benchmark data unavailable.
                             </div>
                           )}
                         </CardContent>
