@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { PortfolioBuilder, Fund } from "@/components/portfolio-builder"
-import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart, FiscalYearTable } from "@/components/portfolio-charts"
+import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
 import { MetricsGrid } from "@/components/metrics-grid"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -358,8 +358,8 @@ export default function DashboardPage() {
                     Portfolio NAV at FY start/end with return vs NIFTY 50. Tap a row to expand individual funds.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="px-0 sm:px-2 pb-4">
-                  <FiscalYearTable
+                <CardContent className="px-2 sm:px-4 pb-4">
+                  <FiscalYearDetailCards
                     fyTableData={result.fyTableData}
                     funds={allocations.map(a => ({ id: a.fund.id, name: a.fund.name }))}
                   />

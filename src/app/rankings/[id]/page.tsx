@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MetricsGrid } from "@/components/metrics-grid"
-import { NavChart, DrawdownChart, RollingReturnChart, FiscalYearChart } from "@/components/portfolio-charts"
-import { computeAllMetrics, computeDrawdownSeries, computeRolling3YCAGR } from "@/lib/calculations"
+import { NavChart, DrawdownChart, RollingReturnChart, FiscalYearChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
+import { computeAllMetrics, computeDrawdownSeries, computeRolling3YCAGR, computeFYRawRows } from "@/lib/calculations"
+import type { FYRawRow } from "@/lib/calculations"
 import Link from "next/link"
 
 interface Fund {
@@ -46,6 +47,8 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
   const [benchmarkDrawdown, setBenchmarkDrawdown] = useState<any[]>([])
   const [rollingReturns, setRollingReturns] = useState<any[]>([])
   const [benchmarkRolling, setBenchmarkRolling] = useState<any[]>([])
+  const [fyRows, setFyRows] = useState<FYRawRow[]>([])
+  const [benchFyRows, setBenchFyRows] = useState<FYRawRow[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -70,6 +73,11 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
         // Store raw nav for the fiscal year chart (full benchmark history, no filtering)
         setRawFundNav(fundNavRaw)
         setRawBenchmarkNav(benchNavRaw)
+
+        // Compute FY raw rows for detail cards
+        const today = new Date().toISOString().slice(0, 10)
+        setFyRows(computeFYRawRows(fundNavRaw, today))
+        setBenchFyRows(computeFYRawRows(benchNavRaw, today))
 
         if (fundNavRaw.length > 0 && benchNavRaw.length > 0) {
           const startDate = fundNavRaw[0].date
@@ -235,6 +243,28 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
                     fundNav={rawFundNav}
                     benchmarkNav={rawBenchmarkNav}
                     fundName={fund.code}
+                    benchmarkName="NIFTY 50"
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Fiscal Year Detail Cards */}
+            {fyRows.length > 0 && (
+              <Card className="shadow-sm border-border/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-teal-500" /> Fiscal Year Detail
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    NAV at FY start/end with {fund.code} return vs NIFTY 50. Outperformance shown as badge.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-2 sm:px-6 pb-4">
+                  <FiscalYearDetailCards
+                    fyTableData={{ portfolio: fyRows, funds: {}, benchmark: benchFyRows }}
+                    funds={[]}
+                    primaryLabel={fund.code}
                     benchmarkName="NIFTY 50"
                   />
                 </CardContent>

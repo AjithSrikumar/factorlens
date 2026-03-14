@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { NavChart, DrawdownChart, FiscalYearTable } from "@/components/portfolio-charts"
+import { NavChart, DrawdownChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
 
 interface Fund {
   id: number
@@ -196,12 +196,13 @@ export default function RankingsPage() {
         </div>
         {data.fyTableData && (
           <div>
-            <p className="text-sm font-semibold mb-1">Fiscal Year Returns</p>
-            <p className="text-xs text-muted-foreground mb-3">Annual returns (Apr – Mar) with NIFTY 50 comparison</p>
-            <FiscalYearTable
+            <p className="text-sm font-semibold mb-1">Fiscal Year Detail</p>
+            <p className="text-xs text-muted-foreground mb-3">Portfolio NAV at FY start/end with return vs NIFTY 50</p>
+            <FiscalYearDetailCards
               fyTableData={data.fyTableData}
               funds={[]}
               benchmarkName="NIFTY 50"
+              primaryLabel={fund.code}
             />
           </div>
         )}

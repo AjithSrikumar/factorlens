@@ -552,6 +552,186 @@ function fmtRet(v: number): React.ReactNode {
   return <span className={cls}>{v >= 0 ? "+" : ""}{v.toFixed(2)}%</span>
 }
 
+// ── Fiscal Year Detail Cards (mobile-first) ───────────────────────────────
+
+export function FiscalYearDetailCards({
+  fyTableData,
+  funds,
+  benchmarkName = "NIFTY 50",
+  primaryLabel = "Portfolio",
+}: {
+  fyTableData: FYTableData
+  funds: FYTableFund[]
+  benchmarkName?: string
+  primaryLabel?: string
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const today = new Date().toISOString().slice(0, 10)
+  const todayParts = today.split("-").map(Number)
+  const liveFYYear = todayParts[1] >= 4 ? todayParts[0] + 1 : todayParts[0]
+  const liveFYLabel = `FY${String(liveFYYear).slice(2)}`
+
+  const primaryMap = new Map(fyTableData.portfolio.map(r => [r.fy, r]))
+  const benchmarkMap = new Map(fyTableData.benchmark.map(r => [r.fy, r]))
+  const fundMaps = Object.fromEntries(
+    funds.map(f => [f.id, new Map((fyTableData.funds[f.id] ?? []).map(r => [r.fy, r]))])
+  )
+
+  const allFYs = new Set<string>()
+  fyTableData.portfolio.forEach(r => allFYs.add(r.fy))
+  fyTableData.benchmark.forEach(r => allFYs.add(r.fy))
+  Object.values(fyTableData.funds).forEach(rows => rows.forEach(r => allFYs.add(r.fy)))
+  const sortedFYs = Array.from(allFYs).sort().reverse()
+
+  const hasSubFunds = funds.length > 0
+
+  const toggleRow = (fy: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(fy) ? next.delete(fy) : next.add(fy)
+      return next
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      {sortedFYs.map(fy => {
+        const portRow = primaryMap.get(fy)
+        const benchRow = benchmarkMap.get(fy)
+        const isLive = portRow?.isLive || benchRow?.isLive || false
+        const isOpen = expanded.has(fy)
+        const hasFundData = hasSubFunds && funds.some(f => fundMaps[f.id]?.has(fy))
+        const outperformance = portRow && benchRow ? portRow.returnPct - benchRow.returnPct : null
+        const isClickable = hasSubFunds && hasFundData
+
+        return (
+          <div
+            key={fy}
+            className={`rounded-xl border overflow-hidden ${
+              isLive
+                ? "border-amber-200 dark:border-amber-800/50"
+                : "border-border/60"
+            }`}
+          >
+            {/* Card Header */}
+            <div
+              className={`flex items-center justify-between px-4 py-2.5 ${
+                isLive ? "bg-amber-50/60 dark:bg-amber-900/10" : "bg-muted/30"
+              } ${isClickable ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+              onClick={isClickable ? () => toggleRow(fy) : undefined}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-bold ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                  {fy}
+                </span>
+                {isLive && (
+                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
+                    live
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {(portRow || benchRow) && (
+                  <span className="text-[11px] text-muted-foreground hidden sm:block">
+                    {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
+                  </span>
+                )}
+                {isClickable && (
+                  isOpen
+                    ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
+              </div>
+            </div>
+
+            {/* Date range — mobile only */}
+            {(portRow || benchRow) && (
+              <div className="sm:hidden px-4 pt-2 text-[11px] text-muted-foreground">
+                {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
+              </div>
+            )}
+
+            {/* Card Body: 2×2 on mobile, 4-col on sm+ */}
+            <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">Start NAV</p>
+                <p className="text-sm font-mono font-semibold">
+                  {portRow ? fmtVal(portRow.startValue) : benchRow ? fmtVal(benchRow.startValue) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">End NAV</p>
+                <p className="text-sm font-mono font-semibold">
+                  {portRow ? fmtVal(portRow.endValue) : benchRow ? fmtVal(benchRow.endValue) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{primaryLabel} Return</p>
+                <p className="text-base font-bold">
+                  {portRow ? fmtRet(portRow.returnPct) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{benchmarkName} Return</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-base font-bold">
+                    {benchRow ? fmtRet(benchRow.returnPct) : "—"}
+                  </p>
+                  {outperformance !== null && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      outperformance >= 0
+                        ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                    }`}>
+                      {outperformance >= 0 ? "+" : ""}{outperformance.toFixed(1)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Expanded: individual fund sub-rows */}
+            {isOpen && funds.map(fund => {
+              const fRow = fundMaps[fund.id]?.get(fy)
+              if (!fRow) return null
+              return (
+                <div
+                  key={fund.id}
+                  className="border-t border-border/40 px-4 py-2.5 bg-muted/10 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2"
+                >
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                      ↳ {fund.name}
+                    </p>
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Start → End NAV</p>
+                    <p className="text-xs font-mono">{fmtVal(fRow.startValue)} → {fmtVal(fRow.endValue)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-0.5">Return</p>
+                    <p className="text-sm font-bold">{fmtRet(fRow.returnPct)}</p>
+                  </div>
+                  <div className="sm:hidden">
+                    <p className="text-[10px] text-muted-foreground mb-0.5">NAV</p>
+                    <p className="text-xs font-mono">{fmtVal(fRow.startValue)} → {fmtVal(fRow.endValue)}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      {sortedFYs.some(fy => primaryMap.get(fy)?.isLive || benchmarkMap.get(fy)?.isLive) && (
+        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center font-medium pt-1">
+          * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function FiscalYearTable({
   fyTableData,
   funds,
