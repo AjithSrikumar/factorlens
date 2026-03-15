@@ -32,7 +32,17 @@ function cagrPct(navStart: number, navEnd: number, years: number): number | null
 
 interface NavPoint { date: string; nav: number }
 
-/** Find closest NAV to targetDate within ±20 days */
+interface FYRow {
+  fy: string
+  startDate: string
+  startNav: number
+  endDate: string
+  endNav: number
+  returnPct: number
+  isLive: boolean
+}
+
+/** Find closest NAV to targetDate within ±25 days */
 function findNavAround(history: NavPoint[], targetDate: string): NavPoint | null {
   const targetMs = new Date(targetDate).getTime()
   let closest: NavPoint | null = null
@@ -41,7 +51,41 @@ function findNavAround(history: NavPoint[], targetDate: string): NavPoint | null
     const diff = Math.abs(new Date(row.date).getTime() - targetMs)
     if (diff < minDiff) { minDiff = diff; closest = row }
   }
-  return minDiff <= 20 * 86400000 ? closest : null
+  return minDiff <= 25 * 86400000 ? closest : null
+}
+
+/** Compute Indian fiscal year (Apr→Mar) returns for all available years */
+function computeFiscalYears(history: NavPoint[]): FYRow[] {
+  if (history.length < 5) return []
+  try {
+    const oldest = new Date(history[0].date)
+    const latest = new Date(history[history.length - 1].date)
+    // FY year X = April 1 (X-1) to March 31 (X)
+    const startFY = oldest.getMonth() >= 3 ? oldest.getFullYear() + 1 : oldest.getFullYear()
+    const endFY   = latest.getMonth() >= 3 ? latest.getFullYear() + 1 : latest.getFullYear()
+    const rows: FYRow[] = []
+    for (let fy = startFY; fy <= endFY; fy++) {
+      const fyStartStr = `${fy - 1}-04-01`
+      const fyEndStr   = `${fy}-03-31`
+      const isLive = new Date(fyEndStr) > latest
+      const startPt = findNavAround(history, fyStartStr)
+      if (!startPt) continue
+      const endPt = isLive ? history[history.length - 1] : findNavAround(history, fyEndStr)
+      if (!endPt) continue
+      rows.push({
+        fy: `FY${String(fy).slice(2)}`,
+        startDate: startPt.date,
+        startNav:  startPt.nav,
+        endDate:   endPt.date,
+        endNav:    endPt.nav,
+        returnPct: ((endPt.nav - startPt.nav) / startPt.nav) * 100,
+        isLive,
+      })
+    }
+    return rows.reverse() // most recent first
+  } catch {
+    return []
+  }
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -132,6 +176,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       ? (cagr_inception - 6) / volatility
       : null
 
+    // Fiscal year returns
+    const fy_data = computeFiscalYears(history)
+
     return NextResponse.json({
       fund: {
         scheme_code:     schemeCode,
@@ -153,6 +200,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         max_drawdown: maxDrawdown,
         sharpe,
       },
+      fy_data,
       nav_history: history,
     }, {
       headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },

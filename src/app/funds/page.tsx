@@ -19,19 +19,64 @@ interface MFFund {
 type SortKey = "scheme_name" | "scheme_category" | "nav" | "return_1y" | "return_3y" | "return_5y"
 type SortDir = "asc" | "desc"
 
-/** Map AMFI category names to human-readable labels */
-const CATEGORY_LABEL: Record<string, string> = {
-  "Other Scheme - Index Funds": "Index Fund",
-  "Other Scheme - Other ETFs": "ETF",
-  "Other ETFs": "ETF",
-  "Equity Scheme - Index Funds": "Equity Index",
-  "Equity Scheme - Sectoral/ Thematic": "Thematic",
-  "Other Scheme - Fund of Funds (Domestic)": "FoF",
-  "Other Scheme - Fund of Funds (Overseas)": "FoF (Global)",
+/**
+ * Derive a meaningful category from the fund name.
+ * Order matters: multi-keyword combos before single-keyword checks.
+ */
+function deriveCategory(name: string, rawCat?: string | null): string {
+  const n = name.toLowerCase()
+  // Commodity
+  if (n.includes("gold")) return "Gold"
+  if (n.includes("silver")) return "Silver"
+  // International
+  if (n.includes("nasdaq") || n.includes("s&p 500") || n.includes("s&p500") ||
+      n.includes("global") || n.includes("international") || n.includes("world") ||
+      n.includes("us equity") || n.includes("hangseng") || n.includes("nifty us"))
+    return "Global"
+  // Multi-factor (must come before single-factor checks)
+  if ((n.includes("alpha") && n.includes("low vol")) ||
+      (n.includes("quality") && n.includes("low vol")) ||
+      (n.includes("alpha") && n.includes("quality")) ||
+      n.includes("multi-factor") || n.includes("multifactor"))
+    return "Multi-Factor"
+  // Single factor strategies
+  if (n.includes("momentum")) return "Momentum"
+  if (n.includes("alpha")) return "Alpha"
+  if (n.includes("low vol") || n.includes("low-vol") || n.includes("low volatility"))
+    return "Low Vol"
+  if (n.includes("quality")) return "Quality"
+  if (n.includes("value")) return "Value"
+  if (n.includes("dividend")) return "Dividend"
+  // Sectoral / Thematic
+  if (n.includes("defence") || n.includes("defense") || n.includes("infra") ||
+      n.includes("infrastructure") || n.includes("energy") || n.includes("pharma") ||
+      n.includes("healthcare") || n.includes("health care") || n.includes("bank") ||
+      n.includes("financial") || n.includes("it index") || n.includes("technology") ||
+      n.includes("consumption") || n.includes("auto") || n.includes("realty") ||
+      n.includes("media") || n.includes("psu") || n.includes("cpse") ||
+      n.includes("housing") || n.includes("mfg") || n.includes("manufacturing"))
+    return "Thematic"
+  // Broad market indices
+  if (n.includes("nifty 50") || n.includes("nifty50") || n.includes("sensex") ||
+      n.includes("nifty 100") || n.includes("nifty100") || n.includes("bse 100") ||
+      n.includes("nifty 200") || n.includes("nifty200") || n.includes("nifty 500") ||
+      n.includes("nifty500") || n.includes("bse 500") || n.includes("next 50") ||
+      n.includes("next50") || n.includes("midcap") || n.includes("mid cap") ||
+      n.includes("smallcap") || n.includes("small cap") || n.includes("largecap") ||
+      n.includes("large cap") || n.includes("large & mid") || n.includes("microcap") ||
+      n.includes("equal weight") || n.includes("nifty india") || n.includes("bse 200"))
+    return "Broad Market"
+  // Fallback to cleaned-up AMFI category
+  if (!rawCat) return "Other"
+  if (rawCat.includes("Index Funds")) return "Index Fund"
+  if (rawCat.includes("ETF")) return "ETF"
+  if (rawCat.includes("Fund of Funds")) return "FoF"
+  if (rawCat.includes("Thematic")) return "Thematic"
+  return rawCat
 }
-function catLabel(raw: string | null | undefined): string {
-  if (!raw) return "—"
-  return CATEGORY_LABEL[raw] ?? raw
+
+function catLabel(name: string, rawCat?: string | null): string {
+  return deriveCategory(name, rawCat)
 }
 
 function ReturnBadge({ value }: { value: number | null }) {
@@ -87,7 +132,7 @@ export default function FundsPage() {
   const [error,          setError]          = useState<string | null>(null)
   const [search,         setSearch]         = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
-  const [sortKey,        setSortKey]        = useState<SortKey>("return_1y")
+  const [sortKey,        setSortKey]        = useState<SortKey>("return_3y")
   const [sortDir,        setSortDir]        = useState<SortDir>("desc")
 
   useEffect(() => {
@@ -107,7 +152,7 @@ export default function FundsPage() {
   }, [])
 
   const categories = useMemo(() => {
-    const cats = Array.from(new Set(funds.map(f => f.scheme_category).filter(Boolean)))
+    const cats = Array.from(new Set(funds.map(f => deriveCategory(f.scheme_name, f.scheme_category)).filter(Boolean)))
     return ["All", ...cats.sort()]
   }, [funds])
 
@@ -121,7 +166,7 @@ export default function FundsPage() {
       )
     }
     if (categoryFilter !== "All") {
-      list = list.filter(f => f.scheme_category === categoryFilter)
+      list = list.filter(f => deriveCategory(f.scheme_name, f.scheme_category) === categoryFilter)
     }
     list = [...list].sort((a, b) => {
       let av: string | number | null = a[sortKey]
@@ -225,7 +270,7 @@ export default function FundsPage() {
                         borderColor: categoryFilter === c ? "#0C0E13" : "rgba(12,14,19,.15)",
                       }}
                     >
-                      {c === "All" ? "All" : catLabel(c)}
+                      {c}
                     </button>
                   ))}
                 </div>
@@ -323,7 +368,7 @@ export default function FundsPage() {
                               fontSize: 11, fontWeight: 600,
                               color: "rgba(12,14,19,.55)",
                             }}>
-                              {catLabel(fund.scheme_category)}
+                              {catLabel(fund.scheme_name, fund.scheme_category)}
                             </span>
                           </td>
                           <td style={{ padding: "13px 16px", textAlign: "right" }}>
@@ -418,7 +463,7 @@ export default function FundsPage() {
                           borderRadius: 5, background: "rgba(12,14,19,.06)",
                           fontSize: 10.5, fontWeight: 600, color: "rgba(12,14,19,.5)",
                         }}>
-                          {catLabel(fund.scheme_category)}
+                          {catLabel(fund.scheme_name, fund.scheme_category)}
                         </span>
                       </div>
 
