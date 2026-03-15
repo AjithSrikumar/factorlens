@@ -213,3 +213,141 @@
 nextjs-portal {
   display: none !important;
 }
+
+/* ─────────────────────────────────────────
+   LANDING PAGE STYLES
+───────────────────────────────────────── */
+
+/* Hero pulsing green dot */
+.hero-pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #22D3A0; flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(34,211,160,.4);
+  animation: hero-pulse 2.2s ease infinite;
+  display: inline-block;
+}
+@keyframes hero-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(34,211,160,.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,211,160,0); }
+  100% { box-shadow: 0 0 0 0   rgba(34,211,160,0); }
+}
+
+/* CTA button row — stack on mobile, row on ≥480px */
+.hero-actions-wrap { flex-direction: column !important; align-items: center !important; }
+@media (min-width: 480px) {
+  .hero-actions-wrap { flex-direction: row !important; justify-content: center !important; }
+}
+
+/* Hero stats grid — 2-col on very small screens */
+@media (max-width: 460px) {
+  .hero-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Feature cards grid — 4 → 2 → 1 col */
+.feat-grid-landing {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .feat-grid-landing { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .feat-grid-landing { grid-template-columns: 1fr; gap: 12px; }
+}
+
+/* Feature card */
+.feat-card-landing {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px 24px;
+  transition: box-shadow .22s, transform .22s;
+}
+.feat-card-landing:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+  transform: translateY(-3px);
+}
+
+/* Steps grid — 4 → 2 → 1 col */
+.steps-grid-landing {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+@media (max-width: 860px) {
+  .steps-grid-landing { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .steps-grid-landing { grid-template-columns: 1fr; gap: 16px; }
+}
+
+/* Why section — 2-col layout */
+.why-grid-landing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 52px;
+  align-items: center;
+}
+@media (max-width: 800px) {
+  .why-grid-landing { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* Why cards 2×2 */
+.why-cards-landing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.why-card-landing {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: box-shadow .18s;
+}
+.why-card-landing:hover {
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+
+/* Diversification banner stats grid — 3 → 1 col */
+.div-stats-landing {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 36px 0 44px;
+  position: relative;
+  z-index: 1;
+}
+@media (max-width: 480px) {
+  .div-stats-landing { grid-template-columns: 1fr; }
+}
+
+/* Responsive horizontal padding for landing sections */
+@media (max-width: 767px) {
+  .landing-pw { padding: 0 16px !important; }
+}
+
+/* Banner border-radius + padding on small screens */
+@media (max-width: 600px) {
+  .div-banner-landing { padding: 44px 22px !important; border-radius: 20px !important; }
+}
+
+/* Footer — stack on mobile */
+@media (max-width: 640px) {
+  .footer-inner-landing { flex-direction: column !important; text-align: center !important; }
+}
+
+/* Footer link hover */
+.footer-link-landing:hover { color: var(--foreground) !important; }
+
+/* Learn button hover */
+.learn-btn-landing:hover {
+  background: var(--secondary) !important;
+  border-color: var(--primary) !important;
+}
+
+/* Hero primary button hover */
+.hbtn-main:hover { opacity: 0.9; transform: translateY(-1px); }
+/* Hero secondary button hover */
+.hbtn-sec:hover { background: rgba(255,255,255,.12) !important; }
