@@ -5,7 +5,7 @@ const MFAPI_BASE = 'https://api.mfapi.in/mf'
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
-/** '13-Mar-2026' → '2026-03-13'. Returns '' on failure. */
+/** '13-Mar-2026' or '13-03-2026' → '2026-03-13'. Returns '' on failure. */
 function mfapiDateToISO(s: string): string {
   const MONTHS: Record<string, string> = {
     Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
@@ -14,6 +14,9 @@ function mfapiDateToISO(s: string): string {
   const parts = s.trim().split('-')
   if (parts.length !== 3) return ''
   const [dd, mon, yyyy] = parts
+  // Numeric month e.g. "13-03-2026"
+  if (/^\d+$/.test(mon)) return `${yyyy}-${mon.padStart(2, '0')}-${dd.padStart(2, '0')}`
+  // Abbreviated month name e.g. "13-Mar-2026"
   const mm = MONTHS[mon]
   if (!mm) return ''
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
