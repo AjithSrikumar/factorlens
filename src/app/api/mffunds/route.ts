@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
+import { fetchViaProxy } from '@/lib/fetch-proxy'
 
 const MFAPI_BASE = 'https://api.mfapi.in/mf'
+
+// Module-level NAV cache keyed by scheme code — refreshes after 1 hour
+const _navCache = new Map<number, { data: LiveNav; ts: number }>()
+const NAV_CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 
 // Supabase — used ONLY for optional historical return calculations.
 // If tables don't exist or returns an error, we still show live NAV.
@@ -14,11 +19,15 @@ const supabase = createClient(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function mfapiDateToISO(s: string): string {
+  // mfapi.in returns either "13-03-2026" (numeric) or "13-Mar-2026" (abbreviated)
   const M: Record<string, string> = {
     Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
     Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12',
   }
   const [dd, mon, yyyy] = s.trim().split('-')
+  // Numeric month (e.g. "03")
+  if (/^\d+$/.test(mon)) return `${yyyy}-${mon.padStart(2, '0')}-${dd.padStart(2, '0')}`
+  // Abbreviated month name (e.g. "Mar")
   const mm = M[mon] ?? ''
   if (!mm) return ''
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
@@ -54,16 +63,25 @@ interface LiveNav {
 
 async function fetchLiveNavBatch(codes: number[]): Promise<Map<number, LiveNav>> {
   const map = new Map<number, LiveNav>()
-  const BATCH = 40
+  const BATCH = 20   // 20 parallel max to avoid proxy saturation
+  const now = Date.now()
 
   for (let i = 0; i < codes.length; i += BATCH) {
     const batch = codes.slice(i, i + BATCH)
     const settled = await Promise.allSettled(
       batch.map(async (code) => {
-        const res = await fetch(`${MFAPI_BASE}/${code}/latest`, {
-          signal: AbortSignal.timeout(10_000),
-          next: { revalidate: 3600 },
-        })
+        // Return from in-memory cache if still fresh
+        const cached = _navCache.get(code)
+        if (cached && now - cached.ts < NAV_CACHE_TTL_MS) return cached.data
+
+        let res: Response
+        try {
+          res = await fetchViaProxy(`${MFAPI_BASE}/${code}/latest`, {
+            signal: AbortSignal.timeout(20_000),
+          })
+        } catch {
+          return null
+        }
         if (!res.ok) return null
         const json = await res.json() as {
           status: string
@@ -85,7 +103,10 @@ async function fetchLiveNavBatch(codes: number[]): Promise<Map<number, LiveNav>>
       })
     )
     for (const r of settled) {
-      if (r.status === 'fulfilled' && r.value) map.set(r.value.schemeCode, r.value)
+      if (r.status === 'fulfilled' && r.value) {
+        map.set(r.value.schemeCode, r.value)
+        _navCache.set(r.value.schemeCode, { data: r.value, ts: now })
+      }
     }
   }
   return map
