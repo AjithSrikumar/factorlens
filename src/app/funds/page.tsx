@@ -70,10 +70,6 @@ export default function FundsPage() {
   const [funds,          setFunds]          = useState<MFFund[]>([])
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState<string | null>(null)
-  const [noData,         setNoData]         = useState(false)
-  const [seeding,        setSeeding]        = useState(false)
-  const [seedMsg,        setSeedMsg]        = useState("")
-  const [seedProgress,   setSeedProgress]   = useState(0)   // 0–100
   const [search,         setSearch]         = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
   const [sortKey,        setSortKey]        = useState<SortKey>("return_1y")
@@ -85,60 +81,15 @@ export default function FundsPage() {
       .then((data: unknown) => {
         if (Array.isArray(data)) {
           setFunds(data as MFFund[])
-        } else if (data && typeof data === "object") {
-          const d = data as Record<string, unknown>
-          if (d.error === "no_data" || (Array.isArray(d.funds) && d.funds.length === 0)) {
-            setNoData(true)
-          } else if (typeof d.error === "string") {
-            setError(d.error as string)
-          } else {
-            setError("Unexpected response")
-          }
+        } else if (data && typeof data === "object" && "error" in (data as object)) {
+          setError(String((data as Record<string, unknown>).error))
+        } else {
+          setError("Unexpected response from server")
         }
         setLoading(false)
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
-
-  // Trigger the admin seed loader in batches of 20 until all funds are loaded
-  async function triggerSeed() {
-    setSeeding(true)
-    setSeedProgress(0)
-    setSeedMsg("Starting… fetching fund list from mfapi.in")
-
-    const BATCH = 20
-    let offset  = 0
-    let total   = 282  // will be updated from first response
-
-    try {
-      while (true) {
-        setSeedMsg(`Loading funds ${offset + 1}–${Math.min(offset + BATCH, total)} of ${total}…`)
-        const res  = await fetch(`/api/admin/mf-load?offset=${offset}&limit=${BATCH}`)
-        const json = await res.json() as Record<string, unknown>
-
-        if (!json.ok) {
-          setSeedMsg(`Error on batch ${offset}: ${String(json.error ?? "Unknown")}`)
-          setSeeding(false)
-          return
-        }
-
-        // Update total from first response
-        if (typeof json.total === "number") total = json.total
-        offset += BATCH
-        setSeedProgress(Math.min(Math.round((offset / total) * 100), 99))
-
-        // All batches done
-        if (!json.hasMore) break
-      }
-
-      setSeedProgress(100)
-      setSeedMsg("All funds loaded! Reloading page…")
-      setTimeout(() => window.location.reload(), 1500)
-    } catch (e) {
-      setSeedMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`)
-      setSeeding(false)
-    }
-  }
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(funds.map(f => f.scheme_category).filter(Boolean)))
@@ -204,94 +155,13 @@ export default function FundsPage() {
           <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: 0 }}>
             {loading
               ? "Loading live data from mfapi.in…"
-              : noData
-              ? "Database not seeded yet"
               : `${funds.length} funds · NAV as of ${navDate ?? "—"} · ${withReturns} with return history`
             }
           </p>
         </div>
 
-        {/* ── No-data state: guide user to seed ── */}
-        {!loading && noData && (
-          <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
-            borderRadius: 18, padding: "32px 28px",
-            textAlign: "center", maxWidth: 560, margin: "0 auto",
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12,
-              background: "rgba(26,86,219,.1)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px",
-            }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#1A56DB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0C0E13", margin: "0 0 8px" }}>
-              Fund data not loaded yet
-            </h3>
-            <p style={{ color: "rgba(12,14,19,.5)", fontSize: 13.5, lineHeight: 1.65, margin: "0 0 24px" }}>
-              The fund database is empty. Click below to fetch all funds from mfapi.in and seed the database. This is a one-time setup that takes 2–5 minutes.
-            </p>
-            <button
-              onClick={triggerSeed}
-              disabled={seeding}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 8,
-                padding: "11px 24px", borderRadius: 10,
-                background: seeding ? "rgba(12,14,19,.08)" : "#0C0E13",
-                color: seeding ? "rgba(12,14,19,.4)" : "#ffffff",
-                border: "none", cursor: seeding ? "not-allowed" : "pointer",
-                fontSize: 14, fontWeight: 600, transition: "all .2s",
-              }}
-            >
-              {seeding ? (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" style={{ width: 14, height: 14, animation: "spin .8s linear infinite" }}>
-                    <circle cx="8" cy="8" r="6" stroke="rgba(12,14,19,.4)" strokeWidth="2" strokeDasharray="28" strokeDashoffset="10" />
-                  </svg>
-                  Loading funds…
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ width: 14, height: 14 }}>
-                    <path d="M8 1v8M5 6l3 3 3-3" /><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" />
-                  </svg>
-                  Load All Funds from mfapi.in
-                </>
-              )}
-            </button>
-
-            {/* Progress bar */}
-            {seeding && (
-              <div style={{ width: "100%", maxWidth: 360, margin: "14px auto 0" }}>
-                <div style={{
-                  height: 6, borderRadius: 99,
-                  background: "rgba(12,14,19,.08)", overflow: "hidden",
-                }}>
-                  <div style={{
-                    height: "100%", borderRadius: 99,
-                    background: "linear-gradient(90deg, #1A56DB, #0A7C4E)",
-                    width: `${seedProgress}%`,
-                    transition: "width .5s ease",
-                  }} />
-                </div>
-                <p style={{ color: "rgba(12,14,19,.4)", fontSize: 12, marginTop: 6, textAlign: "center" }}>
-                  {seedProgress}% — {seedMsg}
-                </p>
-              </div>
-            )}
-            {!seeding && seedMsg && (
-              <p style={{ color: "rgba(12,14,19,.5)", fontSize: 12.5, marginTop: 10 }}>{seedMsg}</p>
-            )}
-          </div>
-        )}
-
         {/* ── Error ── */}
-        {error && !noData && (
+        {error && (
           <div style={{
             background: "rgba(197,39,30,.05)", border: "1px solid rgba(197,39,30,.2)",
             borderRadius: 12, padding: "14px 18px", marginBottom: 20,
@@ -300,9 +170,7 @@ export default function FundsPage() {
           </div>
         )}
 
-        {!noData && (
-          <>
-            {/* ── Search + Filter bar ── */}
+        {/* ── Search + Filter bar ── */}
             <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
               {/* Search input */}
               <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
@@ -581,8 +449,6 @@ export default function FundsPage() {
                 </p>
               </div>
             )}
-          </>
-        )}
       </div>
     </div>
   )
