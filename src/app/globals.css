@@ -351,3 +351,127 @@ nextjs-portal {
 .hbtn-main:hover { opacity: 0.9; transform: translateY(-1px); }
 /* Hero secondary button hover */
 .hbtn-sec:hover { background: rgba(255,255,255,.12) !important; }
+
+/* ─────────────────────────────────────────
+   DASHBOARD — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Portfolio Snapshot — 3-tile grid */
+.snap-3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 600px) {
+  .snap-3-grid { grid-template-columns: 1fr; gap: 10px; }
+}
+
+/* Portfolio Snapshot — 6-mini metrics */
+.snap-6-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 600px) {
+  .snap-6-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+
+/* Drawdown + Composition side-by-side */
+.side2-resp {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 700px) {
+  .side2-resp { grid-template-columns: 1fr; }
+}
+
+/* Dashboard wrapper padding */
+@media (max-width: 767px) {
+  .dash-wrap-resp { padding: 0 12px !important; }
+  .ccard-body-resp { padding: 14px 14px !important; }
+  .bld-body-resp { padding: 16px 14px !important; }
+}
+
+/* ─────────────────────────────────────────
+   RANKINGS — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Leader grid — 3 → 1 col */
+.leader-grid-resp {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 700px) {
+  .leader-grid-resp { grid-template-columns: 1fr; gap: 10px; }
+}
+
+/* Rankings wrapper padding */
+@media (max-width: 767px) {
+  .rank-wrap-resp { padding: 0 12px !important; }
+}
+
+/* Filter bar responsive */
+@media (max-width: 600px) {
+  .rfilt-resp { flex-direction: column !important; }
+}
+
+/* Category pills scrollable on mobile */
+.rcats-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rcats-scroll::-webkit-scrollbar { display: none; }
+
+/* Mobile rank cards — 2×2 metric grid */
+.mrc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ─────────────────────────────────────────
+   ACADEMY — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Factor grid — 2 → 1 col */
+.fgrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 500px) {
+  .fgrid2 { grid-template-columns: 1fr; }
+}
+
+/* Active vs passive comparison — 2 → 1 col */
+.cmp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .cmp-grid { grid-template-columns: 1fr; }
+}
+
+/* Backtest highlights — 2 → 1 col */
+.hl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .hl-grid { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────────────────────────────
+   ANIMATIONS
+───────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

@@ -582,6 +582,8 @@ export function FiscalYearChart({
 interface FYTableFund {
   id: number
   name: string
+  code?: string
+  weight?: number
 }
 
 interface FYTableData {
@@ -617,6 +619,7 @@ export function FiscalYearDetailCards({
   primaryLabel?: string
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [showAll, setShowAll] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
   const todayParts = today.split("-").map(Number)
@@ -635,6 +638,13 @@ export function FiscalYearDetailCards({
   Object.values(fyTableData.funds).forEach(rows => rows.forEach(r => allFYs.add(r.fy)))
   const sortedFYs = Array.from(allFYs).sort().reverse()
 
+  // Show FY20 and newer by default; older behind "Load more"
+  const CUTOFF = 20
+  const visibleFYs = showAll
+    ? sortedFYs
+    : sortedFYs.filter(fy => parseInt(fy.slice(2)) >= CUTOFF)
+  const hiddenFYs = sortedFYs.filter(fy => parseInt(fy.slice(2)) < CUTOFF)
+
   const hasSubFunds = funds.length > 0
 
   const toggleRow = (fy: string) => {
@@ -645,135 +655,216 @@ export function FiscalYearDetailCards({
     })
   }
 
+  // v4 fyc-val color helper
+  function retColor(v: number | null | undefined) {
+    if (v == null) return "var(--foreground)"
+    return v >= 0 ? "#0A7C4E" : "#C5271E"
+  }
+
   return (
-    <div className="space-y-2">
-      {sortedFYs.map(fy => {
-        const portRow = primaryMap.get(fy)
-        const benchRow = benchmarkMap.get(fy)
-        const isLive = portRow?.isLive || benchRow?.isLive || false
-        const isOpen = expanded.has(fy)
-        const hasFundData = hasSubFunds && funds.some(f => fundMaps[f.id]?.has(fy))
-        const outperformance = portRow && benchRow ? portRow.returnPct - benchRow.returnPct : null
-        const isClickable = hasSubFunds && hasFundData
+    <div>
+      {/* fyc-list */}
+      <div style={{ borderTop: "1px solid rgba(12,14,19,.06)" }}>
+        {visibleFYs.map(fy => {
+          const portRow = primaryMap.get(fy)
+          const benchRow = benchmarkMap.get(fy)
+          const isLive = portRow?.isLive || benchRow?.isLive || false
+          const isOpen = expanded.has(fy)
+          const hasFundData = hasSubFunds && funds.some(f => fundMaps[f.id]?.has(fy))
+          const isClickable = hasSubFunds && hasFundData
+          const alpha = portRow && benchRow ? portRow.returnPct - benchRow.returnPct : null
+          const beat = alpha !== null && alpha >= 0
+          const loss = alpha !== null && alpha < 0
 
-        return (
-          <div
-            key={fy}
-            className={`rounded-xl border overflow-hidden ${
-              isLive ? "border-amber-300/60 dark:border-amber-700/40" : "border-border/60"
-            }`}
-          >
-            {/* Card Header */}
+          return (
             <div
-              className={`flex items-center justify-between px-4 py-2.5 ${
-                isLive ? "bg-amber-50/60 dark:bg-amber-900/10" : "bg-muted/25"
-              } ${isClickable ? "cursor-pointer hover:bg-muted/40 transition-colors" : ""}`}
-              onClick={isClickable ? () => toggleRow(fy) : undefined}
+              key={fy}
+              style={{
+                borderBottom: "1px solid rgba(12,14,19,.06)",
+                background: beat ? "rgba(10,124,78,.025)" : loss ? "rgba(197,39,30,.018)" : undefined,
+              }}
             >
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-bold font-mono ${isLive ? "text-amber-600 dark:text-amber-400" : ""}`}>
-                  {fy}
+              {/* fyc-hdr — grid: year | portfolio | nifty 50 | alpha | chev */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "80px 1fr 1fr 1fr auto",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "14px 20px",
+                  cursor: isClickable ? "pointer" : "default",
+                  transition: "background .12s",
+                }}
+                className={isClickable ? "hover:bg-black/5" : ""}
+                onClick={isClickable ? () => toggleRow(fy) : undefined}
+              >
+                {/* Year */}
+                <span style={{
+                  fontFamily: "var(--font-mono, 'DM Mono', monospace)",
+                  fontSize: 13, fontWeight: 700,
+                  color: isLive ? "#B45309" : "rgba(12,14,19,.5)",
+                  letterSpacing: ".3px",
+                }}>
+                  {fy}{isLive ? " *" : ""}
                 </span>
-                {isLive && (
-                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full px-2 py-0.5 font-semibold">
-                    live
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {(portRow || benchRow) && (
-                  <span className="text-[11px] text-muted-foreground hidden sm:block font-mono">
-                    {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
-                  </span>
-                )}
-                {isClickable && (
-                  isOpen
-                    ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                    : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                )}
-              </div>
-            </div>
 
-            {/* Date range — mobile only */}
-            {(portRow || benchRow) && (
-              <div className="sm:hidden px-4 pt-2 text-[10px] text-muted-foreground font-mono">
-                {fmtDate((portRow ?? benchRow)!.startDate)} – {fmtDate((portRow ?? benchRow)!.endDate)}
-              </div>
-            )}
+                {/* Portfolio column */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "rgba(12,14,19,.3)", marginBottom: 2 }}>{primaryLabel}</div>
+                  <div style={{
+                    fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                    fontSize: 20, fontWeight: 400, letterSpacing: "-.3px", lineHeight: 1.1,
+                    color: retColor(portRow?.returnPct),
+                  }}>
+                    {portRow ? `${portRow.returnPct >= 0 ? "+" : ""}${portRow.returnPct.toFixed(1)}%` : "—"}
+                  </div>
+                  {portRow && (
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                      {fmtVal(portRow.startValue)} → {fmtVal(portRow.endValue)}
+                    </div>
+                  )}
+                </div>
 
-            {/* Card Body */}
-            <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">Start NAV</p>
-                <p className="text-sm font-mono font-semibold">
-                  {portRow ? fmtVal(portRow.startValue) : benchRow ? fmtVal(benchRow.startValue) : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">End NAV</p>
-                <p className="text-sm font-mono font-semibold">
-                  {portRow ? fmtVal(portRow.endValue) : benchRow ? fmtVal(benchRow.endValue) : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{primaryLabel} Return</p>
-                <p className="text-base">
-                  {portRow ? fmtRet(portRow.returnPct) : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide mb-1">{benchmarkName} Return</p>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-base">
-                    {benchRow ? fmtRet(benchRow.returnPct) : "—"}
-                  </p>
-                  {outperformance !== null && (
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                      outperformance >= 0
-                        ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                        : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                    }`}>
-                      {outperformance >= 0 ? "+" : ""}{outperformance.toFixed(1)}%
+                {/* NIFTY 50 column */}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase", color: "rgba(12,14,19,.3)", marginBottom: 2 }}>{benchmarkName}</div>
+                  <div style={{
+                    fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                    fontSize: 20, fontWeight: 400, letterSpacing: "-.3px", lineHeight: 1.1,
+                    color: retColor(benchRow?.returnPct),
+                  }}>
+                    {benchRow ? `${benchRow.returnPct >= 0 ? "+" : ""}${benchRow.returnPct.toFixed(1)}%` : "—"}
+                  </div>
+                  {benchRow && (
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                      {fmtDate(benchRow.startDate).slice(7)} – {fmtDate(benchRow.endDate).slice(7)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Alpha pill */}
+                <div className="hidden sm:block">
+                  {alpha !== null && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center",
+                      padding: "3px 9px", borderRadius: 100,
+                      fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 700,
+                      background: alpha >= 0 ? "#E6F4EE" : "#FCE8E7",
+                      color: alpha >= 0 ? "#0A7C4E" : "#C5271E",
+                    }}>
+                      {alpha >= 0 ? "+" : ""}{alpha.toFixed(1)}%
                     </span>
                   )}
                 </div>
-              </div>
-            </div>
 
-            {/* Expanded: individual fund sub-rows */}
-            {isOpen && funds.map(fund => {
-              const fRow = fundMaps[fund.id]?.get(fy)
-              if (!fRow) return null
-              return (
-                <div
-                  key={fund.id}
-                  className="border-t border-border/40 px-4 py-2.5 bg-muted/10 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2"
-                >
-                  <div className="col-span-2 sm:col-span-1">
-                    <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 truncate">
-                      ↳ {fund.name}
-                    </p>
+                {/* Chevron */}
+                {isClickable && (
+                  <svg
+                    style={{
+                      width: 18, height: 18, color: "rgba(12,14,19,.3)",
+                      transition: "transform .22s ease",
+                      transform: isOpen ? "rotate(180deg)" : "none",
+                      flexShrink: 0,
+                    }}
+                    viewBox="0 0 18 18" fill="none"
+                  >
+                    <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Expanded fund breakdown */}
+              {isOpen && hasFundData && (
+                <div style={{ borderTop: "1px solid rgba(12,14,19,.06)", background: "#F5F5F3", padding: "12px 20px 16px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.2px", textTransform: "uppercase", color: "rgba(12,14,19,.3)", marginBottom: 10, paddingLeft: 2 }}>
+                    Fund Breakdown
                   </div>
-                  <div className="hidden sm:block">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Start → End NAV</p>
-                    <p className="text-xs font-mono">{fmtVal(fRow.startValue)} → {fmtVal(fRow.endValue)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-0.5">Return</p>
-                    <p className="text-sm">{fmtRet(fRow.returnPct)}</p>
-                  </div>
-                  <div className="sm:hidden">
-                    <p className="text-[10px] text-muted-foreground mb-0.5">NAV</p>
-                    <p className="text-xs font-mono">{fmtVal(fRow.startValue)} → {fmtVal(fRow.endValue)}</p>
-                  </div>
+                  {funds.map(fund => {
+                    const fRow = fundMaps[fund.id]?.get(fy)
+                    if (!fRow) return null
+                    return (
+                      <div
+                        key={fund.id}
+                        style={{
+                          display: "grid", gridTemplateColumns: "1fr auto auto",
+                          alignItems: "center", gap: 12, padding: "9px 14px",
+                          background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+                          borderRadius: 9, marginBottom: 6,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "-.1px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {fund.name}
+                          </div>
+                          {fund.code && (
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                              {fund.code}
+                            </div>
+                          )}
+                        </div>
+                        {fund.weight != null && (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center",
+                            padding: "2px 7px", borderRadius: 100,
+                            background: "rgba(12,14,19,.06)", fontFamily: "var(--font-mono)",
+                            fontSize: 10.5, color: "rgba(12,14,19,.5)", flexShrink: 0,
+                          }}>
+                            {fund.weight.toFixed(0)}%
+                          </span>
+                        )}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{
+                            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                            fontSize: 18, fontWeight: 400, letterSpacing: "-.2px",
+                            color: retColor(fRow.returnPct),
+                          }}>
+                            {fRow.returnPct >= 0 ? "+" : ""}{fRow.returnPct.toFixed(1)}%
+                          </div>
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                            {fmtVal(fRow.startValue)} → {fmtVal(fRow.endValue)}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
-          </div>
-        )
-      })}
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Load more / collapse older years */}
+      {hiddenFYs.length > 0 && (
+        <div style={{ padding: "14px 20px", textAlign: "center", borderTop: showAll ? "1px solid rgba(12,14,19,.06)" : undefined }}>
+          <button
+            onClick={() => setShowAll(s => !s)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "9px 20px", borderRadius: 9,
+              border: "1.5px solid rgba(12,14,19,.12)",
+              background: "#ffffff", fontSize: 13.5, fontWeight: 600,
+              cursor: "pointer", color: "rgba(12,14,19,.7)",
+              transition: "all .15s", fontFamily: "inherit",
+            }}
+            className="hover:border-[rgba(12,14,19,.3)]"
+          >
+            {showAll
+              ? "Show less"
+              : `Load ${hiddenFYs.length} more year${hiddenFYs.length > 1 ? "s" : ""}`}
+            <svg
+              style={{ width: 14, height: 14, transition: "transform .22s", transform: showAll ? "rotate(180deg)" : "none" }}
+              viewBox="0 0 14 14" fill="none"
+            >
+              <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Live note */}
       {sortedFYs.some(fy => primaryMap.get(fy)?.isLive || benchmarkMap.get(fy)?.isLive) && (
-        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center font-medium pt-1">
+        <p style={{ fontSize: 10, color: "#B45309", textAlign: "center", padding: "8px 20px 14px", fontWeight: 500 }}>
           * {liveFYLabel} is live — year-to-date through {fmtDate(today)}
         </p>
       )}

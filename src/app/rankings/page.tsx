@@ -1,10 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { NavChart, DrawdownChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
@@ -50,15 +46,19 @@ interface ChartData {
 type SortKey = keyof Fund
 type SortDir = "asc" | "desc"
 
-const CATEGORY_COLORS: Record<string, string> = {
-  "Broad Market": "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  "Momentum": "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
-  "Multi-Factor": "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
-  "Quality": "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300",
-  "Low Vol": "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  "Alpha": "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
-  "Value": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  "Global/Other": "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
+const CAT_STYLE: Record<string, { bg: string; color: string }> = {
+  "Broad Market": { bg: "#EBF0FF", color: "#1A56DB" },
+  "Momentum": { bg: "#FFF3E6", color: "#B45309" },
+  "Multi-Factor": { bg: "#F3F0FF", color: "#6D28D9" },
+  "Quality": { bg: "#E6F4EE", color: "#0A7C4E" },
+  "Low Vol": { bg: "#E6F4EE", color: "#0A7C4E" },
+  "Alpha": { bg: "#FDE8F4", color: "#9D1769" },
+  "Value": { bg: "#FEF5E6", color: "#92400E" },
+  "Global/Other": { bg: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" },
+}
+
+function catStyle(cat: string) {
+  return CAT_STYLE[cat] ?? { bg: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }
 }
 
 function pct(v: number | null) {
@@ -72,15 +72,22 @@ function fixed(v: number | null, d = 2) {
 }
 
 function RankBadge({ rank }: { rank: number }) {
+  const style = rank === 1
+    ? { background: "#FEF3C7", color: "#92400E" }
+    : rank === 2
+    ? { background: "#F1F5F9", color: "#475569" }
+    : rank === 3
+    ? { background: "#FFF7ED", color: "#C2410C" }
+    : { background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }
+
   return (
-    <span className={cn(
-      "inline-flex items-center justify-center w-8 h-8 rounded-xl text-xs font-bold flex-shrink-0",
-      rank === 1 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-800/60" :
-      rank === 2 ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700" :
-      rank === 3 ? "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-300 ring-1 ring-orange-200 dark:ring-orange-800/60" :
-      "bg-muted text-muted-foreground"
-    )}>
-      {rank <= 3 ? ["🥇","🥈","🥉"][rank-1] : rank}
+    <span style={{
+      width: 28, height: 28, borderRadius: 8, display: "inline-flex",
+      alignItems: "center", justifyContent: "center",
+      fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
+      ...style, flexShrink: 0,
+    }}>
+      {rank}
     </span>
   )
 }
@@ -138,6 +145,9 @@ export default function RankingsPage() {
     return filtered
   }, [funds, search, catFilter, sortKey, sortDir])
 
+  // Top 3 funds for leader grid
+  const top3 = useMemo(() => [...funds].sort((a, b) => a.final_rank - b.final_rank).slice(0, 3), [funds])
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc")
     else { setSortKey(key); setSortDir("asc") }
@@ -145,40 +155,38 @@ export default function RankingsPage() {
 
   const handleToggleExpand = (id: number) => setExpandedId(expandedId === id ? null : id)
 
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) return <ArrowUpDown className="h-3 w-3 text-muted-foreground/60" />
-    return sortDir === "asc"
-      ? <ArrowUp className="h-3 w-3 text-primary" />
-      : <ArrowDown className="h-3 w-3 text-primary" />
+  function SortArrow({ col }: { col: SortKey }) {
+    if (sortKey !== col) return <span style={{ color: "rgba(12,14,19,.25)", fontSize: 9 }}>↕</span>
+    return <span style={{ color: "#1A56DB", fontSize: 9 }}>{sortDir === "asc" ? "↑" : "↓"}</span>
   }
 
   function FundCharts({ fund }: { fund: Fund }) {
     const data = chartCache[fund.id]
     if (chartLoading && expandedId === fund.id && !data) {
       return (
-        <div className="flex items-center justify-center py-12 gap-3">
-          <div className="h-6 w-6 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-          <span className="text-sm text-muted-foreground">Loading charts…</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0", gap: 12 }}>
+          <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2.5px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
+          <span style={{ fontSize: 14, color: "rgba(12,14,19,.5)" }}>Loading charts…</span>
         </div>
       )
     }
     if (!data) return null
     return (
-      <div className="space-y-6 pt-2">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 8 }}>
         <div>
-          <p className="text-sm font-semibold mb-1">Cumulative Growth</p>
-          <p className="text-[11px] text-muted-foreground mb-3">₹100 invested at inception vs Nifty 50</p>
+          <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Performance vs Nifty 50</p>
+          <p style={{ fontSize: 11, color: "rgba(12,14,19,.5)", marginBottom: 12 }}>₹100 invested at inception</p>
           <NavChart data={data.portfolioNav} benchmarkData={data.benchmarkNav} name={fund.code} benchmarkName="Nifty 50" />
         </div>
         <div>
-          <p className="text-sm font-semibold mb-1">Drawdown Risk</p>
-          <p className="text-[11px] text-muted-foreground mb-3">% decline from previous peak vs Nifty 50</p>
+          <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Drawdown Risk</p>
+          <p style={{ fontSize: 11, color: "rgba(12,14,19,.5)", marginBottom: 12 }}>% decline from previous peak</p>
           <DrawdownChart data={data.drawdownSeries} benchmarkData={data.benchmarkDrawdown} name={fund.code} benchmarkName="Nifty 50" />
         </div>
         {data.fyTableData && (
           <div>
-            <p className="text-sm font-semibold mb-1">Fiscal Year Detail</p>
-            <p className="text-[11px] text-muted-foreground mb-3">Annual returns vs NIFTY 50</p>
+            <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Fiscal Year Detail</p>
+            <p style={{ fontSize: 11, color: "rgba(12,14,19,.5)", marginBottom: 8 }}>Annual returns vs NIFTY 50</p>
             <FiscalYearDetailCards fyTableData={data.fyTableData} funds={[]} benchmarkName="NIFTY 50" primaryLabel={fund.code} />
           </div>
         )}
@@ -186,71 +194,167 @@ export default function RankingsPage() {
     )
   }
 
-  const tableColumns = [
-    { key: "final_rank" as SortKey, label: "Rank" },
-    { key: "name" as SortKey, label: "Fund" },
-    { key: "category" as SortKey, label: "Category" },
-    { key: "cagr" as SortKey, label: "CAGR" },
-    { key: "avg_3y_rolling_return" as SortKey, label: "Avg 3Y" },
-    { key: "sharpe_ratio" as SortKey, label: "Sharpe" },
-    { key: "max_drawdown" as SortKey, label: "Max DD" },
-    { key: "volatility" as SortKey, label: "Volatility" },
-    { key: "score" as SortKey, label: "Score" },
+  const tableColumns: { key: SortKey; label: string }[] = [
+    { key: "final_rank", label: "Rank" },
+    { key: "name", label: "Fund" },
+    { key: "category", label: "Category" },
+    { key: "cagr", label: "CAGR" },
+    { key: "avg_3y_rolling_return", label: "Avg 3Y" },
+    { key: "sharpe_ratio", label: "Sharpe" },
+    { key: "max_drawdown", label: "Max DD" },
   ]
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+      <div style={{ maxWidth: 1160, margin: "0 auto", padding: "32px 32px 64px" }} className="rank-wrap-resp">
 
-        {/* Page header */}
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Fund Rankings</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              28 NSE factor & broad-market funds ranked by composite score
-            </p>
-          </div>
-          <Link href="/dashboard">
-            <Button
-              size="sm"
-              className="bg-gradient-to-r from-indigo-600 to-teal-500 hover:from-indigo-700 hover:to-teal-600 text-white border-0 font-semibold shadow-sm h-9 px-5"
+        {/* Desktop page header */}
+        <div style={{ marginBottom: 28 }} className="hidden md:block">
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h1 style={{
+                fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                fontSize: 30, fontWeight: 400, letterSpacing: "-.5px", marginBottom: 4,
+              }}>
+                Fund Rankings
+              </h1>
+              <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
+                28 NSE factor & broad-market funds ranked by composite score.
+              </p>
+            </div>
+            <Link
+              href="/dashboard"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 7,
+                padding: "8px 16px", borderRadius: 9,
+                background: "#0C0E13", color: "#ffffff",
+                fontSize: 13, fontWeight: 600,
+                textDecoration: "none", transition: "all .18s",
+              }}
+              className="hover:opacity-85 hover:-translate-y-px"
             >
               Build Portfolio
-            </Button>
-          </Link>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </div>
         </div>
 
-        {/* Score explanation */}
-        <div className="mb-5 rounded-2xl border border-indigo-200/60 dark:border-indigo-800/40 bg-indigo-50/60 dark:bg-indigo-950/20 px-4 py-3.5 flex gap-3 items-start">
-          <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-black flex-shrink-0 mt-0.5">i</div>
-          <p className="text-xs sm:text-sm text-indigo-800 dark:text-indigo-200 leading-relaxed">
-            <strong>Composite Score</strong> weights CAGR, 3-year rolling returns, outperformance vs Nifty 50, Sharpe ratio, and drawdown protection.
-            Rank #1 is the highest-scoring fund. <strong>Tap any row</strong> to compare growth & drawdown vs Nifty 50.
+        {/* Leader grid — top 3 funds */}
+        {!loading && top3.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 }}
+            className="leader-grid-resp">
+            {top3.map(f => {
+              const cs = catStyle(f.category)
+              return (
+                <div
+                  key={f.id}
+                  style={{
+                    background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+                    borderRadius: 16, padding: 20, cursor: "pointer",
+                    transition: "all .18s",
+                  }}
+                  className="hover:shadow-[0_4px_16px_rgba(0,0,0,.08)] hover:border-[rgba(12,14,19,.3)] hover:-translate-y-0.5"
+                  onClick={() => handleToggleExpand(f.id)}
+                >
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 10 }}>
+                    #{f.final_rank} · {f.category}
+                  </div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "-.1px", marginBottom: 10, lineHeight: 1.35 }}>
+                    {f.name}
+                  </div>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" as const }}>
+                    <div>
+                      <div style={{
+                        fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                        fontSize: 20, fontWeight: 400, color: "#0A7C4E", letterSpacing: "-.3px",
+                      }}>
+                        {pct(f.cagr)}
+                      </div>
+                      <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase" as const, marginTop: 1 }}>
+                        CAGR
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{
+                        fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                        fontSize: 20, fontWeight: 400, color: "#0C0E13", letterSpacing: "-.3px",
+                      }}>
+                        {fixed(f.sharpe_ratio)}
+                      </div>
+                      <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase" as const, marginTop: 1 }}>
+                        Sharpe
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Info banner */}
+        <div style={{
+          background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+          borderRadius: 10, padding: "13px 17px",
+          display: "flex", gap: 11, alignItems: "flex-start", marginBottom: 20,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, background: "#EBF0FF",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#1A56DB" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="7" cy="7" r="6" /><line x1="7" y1="5" x2="7" y2="7" /><line x1="7" y1="9" x2="7.01" y2="9" />
+            </svg>
+          </div>
+          <p style={{ fontSize: 13, color: "rgba(12,14,19,.5)", lineHeight: 1.6 }}>
+            <strong style={{ color: "#0C0E13" }}>Ranking Strength Bar</strong> visualises composite score — CAGR, 3Y rolling, Sharpe, and drawdown protection.{" "}
+            <strong style={{ color: "#0C0E13" }}>Tap any row</strong> to expand.{" "}
+            <strong style={{ color: "#0C0E13" }}>Fund name →</strong> opens full detail page.
           </p>
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-            <Input
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 20 }}
+          className="rfilt-resp">
+          {/* Search */}
+          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 290 }}>
+            <svg viewBox="0 0 20 20" fill="none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "rgba(12,14,19,.3)", pointerEvents: "none" }}>
+              <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M14 14l-3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <input
+              type="text"
               placeholder="Search funds…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-10 rounded-xl bg-card border-border/60"
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: "100%", padding: "10px 13px 10px 36px",
+                border: "1.5px solid rgba(12,14,19,.12)", borderRadius: 9,
+                background: "#ffffff", fontFamily: "inherit",
+                fontSize: 13.5, color: "#0C0E13", outline: "none",
+                transition: "border-color .15s",
+              }}
+              onFocus={e => (e.target.style.borderColor = "#1A56DB")}
+              onBlur={e => (e.target.style.borderColor = "rgba(12,14,19,.12)")}
             />
           </div>
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          {/* Category pills */}
+          <div style={{ display: "flex", gap: 6, overflow: "hidden" }} className="rcats-scroll">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCatFilter(cat)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap flex-shrink-0 transition-all border",
-                  catFilter === cat
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-card text-muted-foreground hover:bg-accent border-border/60"
-                )}
+                style={{
+                  padding: "6px 13px", borderRadius: 100, fontSize: 12, fontWeight: 600,
+                  border: "1.5px solid",
+                  borderColor: catFilter === cat ? "#0C0E13" : "rgba(12,14,19,.12)",
+                  background: catFilter === cat ? "#0C0E13" : "#ffffff",
+                  color: catFilter === cat ? "#ffffff" : "rgba(12,14,19,.5)",
+                  cursor: "pointer", transition: "all .14s", whiteSpace: "nowrap" as const,
+                  flexShrink: 0, fontFamily: "inherit",
+                }}
               >
                 {cat}
               </button>
@@ -260,122 +364,158 @@ export default function RankingsPage() {
 
         {/* Desktop Table */}
         <div className="hidden md:block">
-          <div className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
+          <div style={{
+            background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+            borderRadius: 20, overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(0,0,0,.05)",
+          }}>
             {loading ? (
-              <div className="flex items-center justify-center py-24">
-                <div className="h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "96px 0" }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr className="border-b border-border/60 bg-muted/20">
-                      {tableColumns.map((col) => (
+                    <tr style={{ background: "#F5F5F3" }}>
+                      {tableColumns.map(col => (
                         <th
                           key={col.key}
-                          className="px-4 py-3.5 text-left font-bold text-[10px] uppercase tracking-widest text-muted-foreground cursor-pointer hover:text-foreground select-none whitespace-nowrap"
                           onClick={() => handleSort(col.key)}
+                          style={{
+                            padding: "10px 16px", textAlign: "left",
+                            fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+                            textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)",
+                            borderBottom: "1px solid rgba(12,14,19,.12)",
+                            whiteSpace: "nowrap" as const, cursor: "pointer",
+                            userSelect: "none" as const, transition: "color .14s",
+                          }}
+                          className="hover:!text-[#0C0E13]"
                         >
-                          <span className="flex items-center gap-1.5">
-                            {col.label}
-                            <SortIcon col={col.key} />
-                          </span>
+                          {col.label} <SortArrow col={col.key} />
                         </th>
                       ))}
-                      <th className="px-4 py-3.5 w-8" />
+                      {/* Strength col */}
+                      <th style={{
+                        padding: "10px 16px", textAlign: "left",
+                        fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+                        textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)",
+                        borderBottom: "1px solid rgba(12,14,19,.12)",
+                      }}>
+                        Score
+                      </th>
+                      <th style={{ padding: "10px 16px", borderBottom: "1px solid rgba(12,14,19,.12)", width: 32 }} />
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((fund, i) => (
+                    {sorted.map((fund) => (
                       <>
                         <tr
                           key={fund.id}
-                          className={cn(
-                            "border-b border-border/40 transition-colors group cursor-pointer",
-                            expandedId === fund.id
-                              ? "bg-indigo-50/50 dark:bg-indigo-950/15"
-                              : i % 2 === 0
-                              ? "hover:bg-muted/20"
-                              : "bg-muted/5 hover:bg-muted/25"
-                          )}
+                          style={{
+                            borderBottom: "1px solid rgba(12,14,19,.06)",
+                            cursor: "pointer",
+                            background: expandedId === fund.id ? "#EBF0FF" : undefined,
+                            transition: "background .12s",
+                          }}
+                          className={expandedId !== fund.id ? "hover:bg-[#F5F5F3]" : ""}
                           onClick={() => handleToggleExpand(fund.id)}
                         >
-                          <td className="px-4 py-4">
+                          <td style={{ padding: "13px 16px" }}>
                             <RankBadge rank={fund.final_rank} />
                           </td>
-                          <td className="px-4 py-4 max-w-[220px]">
+                          <td style={{ padding: "13px 16px", maxWidth: 220, fontSize: 13.5, verticalAlign: "middle" }}>
                             <Link
                               href={`/rankings/${fund.id}`}
-                              className="font-semibold hover:text-primary transition-colors flex items-center gap-1.5 truncate"
-                              onClick={(e) => e.stopPropagation()}
+                              style={{ fontWeight: 600, letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none" }}
+                              className="hover:!text-[#1A56DB]"
+                              onClick={e => e.stopPropagation()}
                             >
-                              <span className="truncate">{fund.name}</span>
-                              <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 flex-shrink-0 transition-opacity" />
+                              <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>
+                                {fund.name}
+                              </span>
                             </Link>
-                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{fund.code}</div>
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                              {fund.code}
+                            </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <Badge variant="secondary" className={cn("text-[9px] whitespace-nowrap font-bold", CATEGORY_COLORS[fund.category])}>
+                          <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
+                            <span style={{
+                              display: "inline-flex", alignItems: "center",
+                              padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
+                              ...catStyle(fund.category),
+                            }}>
                               {fund.category}
-                            </Badge>
+                            </span>
                           </td>
-                          <td className="px-4 py-4 font-mono whitespace-nowrap">
-                            <span className={cn("font-bold", fund.cagr > 0.18 ? "text-emerald-600 dark:text-emerald-400" : "")}>
+                          <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
+                            <span style={{
+                              fontFamily: "var(--font-mono)", fontSize: 13.5, fontWeight: 700,
+                              color: fund.cagr > 0.18 ? "#0A7C4E" : "#0C0E13",
+                            }}>
                               {pct(fund.cagr)}
                             </span>
                             {nifty50 && fund.id !== nifty50.id && (
-                              <div className={cn("text-[9px] font-bold font-mono", fund.cagr > nifty50.cagr ? "text-emerald-600" : "text-red-400")}>
+                              <div style={{
+                                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
+                                color: fund.cagr > nifty50.cagr ? "#0A7C4E" : "#C5271E",
+                                marginTop: 1,
+                              }}>
                                 {fund.cagr > nifty50.cagr ? "+" : ""}{((fund.cagr - nifty50.cagr) * 100).toFixed(1)}% vs N50
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-4 font-mono whitespace-nowrap text-muted-foreground">
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>
                             {pct(fund.avg_3y_rolling_return)}
                           </td>
-                          <td className="px-4 py-4 font-mono whitespace-nowrap">
-                            <span className={cn(fund.sharpe_ratio > 0.6 ? "text-indigo-600 dark:text-indigo-400 font-bold" : "")}>
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, verticalAlign: "middle" }}>
+                            <span style={{ color: fund.sharpe_ratio > 0.6 ? "#1A56DB" : "#0C0E13", fontWeight: fund.sharpe_ratio > 0.6 ? 700 : 400 }}>
                               {fixed(fund.sharpe_ratio)}
                             </span>
                           </td>
-                          <td className="px-4 py-4 font-mono whitespace-nowrap text-red-500 dark:text-red-400">
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, color: "#C5271E", verticalAlign: "middle" }}>
                             {pct(fund.max_drawdown)}
                           </td>
-                          <td className="px-4 py-4 font-mono whitespace-nowrap text-muted-foreground">
-                            {pct(fund.volatility)}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center gap-2 min-w-[72px]">
-                              <div className="flex-1 h-1.5 bg-muted rounded-full">
-                                <div
-                                  className="h-full bg-gradient-to-r from-indigo-500 to-teal-500 rounded-full"
-                                  style={{ width: `${Math.min((fund.score / 50) * 100, 100)}%` }}
-                                />
+                          {/* Score bar */}
+                          <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 80 }}>
+                              <div style={{ flex: 1, height: 5, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{
+                                  height: "100%",
+                                  background: "linear-gradient(90deg, #1A56DB, #22c55e)",
+                                  borderRadius: 3,
+                                  width: `${Math.min((fund.score / 50) * 100, 100)}%`,
+                                }} />
                               </div>
-                              <span className="text-xs font-bold font-mono text-foreground tabular-nums">
+                              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "#0C0E13", width: 30 }}>
                                 {fund.score?.toFixed(1)}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-4 text-muted-foreground">
-                            {expandedId === fund.id
-                              ? <ChevronUp className="h-4 w-4" />
-                              : <ChevronDown className="h-4 w-4" />
-                            }
+                          <td style={{ padding: "13px 16px", color: "rgba(12,14,19,.3)", verticalAlign: "middle" }}>
+                            <svg style={{ width: 18, height: 18, transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                              <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                           </td>
                         </tr>
 
                         {expandedId === fund.id && (
-                          <tr key={`${fund.id}-charts`} className="border-b border-indigo-200/50 dark:border-indigo-800/30 bg-indigo-50/30 dark:bg-indigo-950/10">
-                            <td colSpan={10} className="px-6 py-5">
-                              <div className="rounded-2xl border border-indigo-200/60 dark:border-indigo-800/30 bg-card overflow-hidden">
-                                <div className="px-5 pt-4 pb-2 border-b border-border/40">
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-bold text-sm">{fund.name}</h4>
-                                    <Badge variant="secondary" className="text-[9px] font-bold">vs Nifty 50</Badge>
-                                  </div>
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">Growth & drawdown comparison</p>
+                          <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
+                            <td colSpan={9} style={{ padding: "22px 24px" }}>
+                              <div style={{
+                                background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+                                borderRadius: 16, overflow: "hidden",
+                              }}>
+                                <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                  <span style={{ fontWeight: 700, fontSize: 14 }}>{fund.name}</span>
+                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>
+                                    {fund.category}
+                                  </span>
+                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }}>
+                                    vs Nifty 50
+                                  </span>
                                 </div>
-                                <div className="px-5 py-5">
+                                <div style={{ padding: "20px" }}>
                                   <FundCharts fund={fund} />
                                 </div>
                               </div>
@@ -392,114 +532,134 @@ export default function RankingsPage() {
         </div>
 
         {/* Mobile Cards */}
-        <div className="md:hidden space-y-3">
+        <div className="md:hidden" style={{ border: "1px solid rgba(12,14,19,.12)", borderRadius: 20, overflow: "hidden", background: "#ffffff" }}>
           {loading ? (
-            <div className="space-y-3">
-              {[1,2,3,4,5].map(i => (
-                <div key={i} className="h-24 w-full rounded-2xl bg-muted/30 animate-pulse" />
-              ))}
+            <div style={{ padding: "48px 0", display: "flex", justifyContent: "center" }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
             </div>
           ) : (
             sorted.map((fund) => (
               <div
                 key={fund.id}
-                className={cn(
-                  "bg-card border rounded-2xl overflow-hidden transition-all",
-                  expandedId === fund.id
-                    ? "border-primary/30 shadow-lg ring-1 ring-primary/10"
-                    : "border-border/60"
-                )}
+                style={{
+                  borderBottom: "1px solid rgba(12,14,19,.12)",
+                  overflow: "hidden", transition: "all .18s",
+                }}
               >
                 {/* Card header */}
                 <div
-                  className="px-4 py-4 flex items-center gap-3 cursor-pointer active:bg-muted/20 transition-colors"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "16px 20px", cursor: "pointer", minHeight: 72,
+                    background: expandedId === fund.id ? "#F5F5F3" : undefined,
+                  }}
                   onClick={() => handleToggleExpand(fund.id)}
                 >
                   <RankBadge rank={fund.final_rank} />
 
-                  <div className="flex-1 min-w-0">
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <Link
                       href={`/rankings/${fund.id}`}
-                      className="font-semibold text-sm hover:text-primary transition-colors leading-tight line-clamp-1"
-                      onClick={(e) => e.stopPropagation()}
+                      style={{ fontSize: 14, fontWeight: 700, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none" }}
+                      onClick={e => e.stopPropagation()}
                     >
                       {fund.name}
                     </Link>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Badge variant="secondary" className={cn("text-[9px] h-4 py-0 px-1.5 uppercase font-bold", CATEGORY_COLORS[fund.category])}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+                      <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>
                         {fund.category}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 px-1 rounded">{fund.code}</span>
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", background: "rgba(12,14,19,.06)", padding: "1px 6px", borderRadius: 4 }}>
+                        {fund.code}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="text-lg font-bold metric-value text-emerald-600 dark:text-emerald-400 tabular-nums leading-none">
-                        {pct(fund.cagr)}
-                      </div>
-                      {nifty50 && fund.id !== nifty50.id && (
-                        <div className={cn("text-[9px] font-bold font-mono", fund.cagr > nifty50.cagr ? "text-emerald-600" : "text-red-400")}>
-                          {fund.cagr > nifty50.cagr ? "+" : ""}{((fund.cagr - nifty50.cagr) * 100).toFixed(0)}% vs N50
-                        </div>
-                      )}
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{
+                      fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                      fontSize: 22, fontWeight: 400, color: "#0A7C4E", letterSpacing: "-.3px",
+                    }}>
+                      {pct(fund.cagr)}
                     </div>
-                    <ChevronDown className={cn("h-4 w-4 text-muted-foreground/60 transition-transform duration-200", expandedId === fund.id && "rotate-180")} />
+                    {nifty50 && fund.id !== nifty50.id && (
+                      <div style={{
+                        fontSize: 10.5, fontWeight: 700, marginTop: 1,
+                        color: fund.cagr > nifty50.cagr ? "#0A7C4E" : "#C5271E",
+                      }}>
+                        {fund.cagr > nifty50.cagr ? "+" : ""}{((fund.cagr - nifty50.cagr) * 100).toFixed(0)}% vs N50
+                      </div>
+                    )}
                   </div>
+
+                  <svg
+                    style={{ width: 18, height: 18, color: "rgba(12,14,19,.3)", transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none", flexShrink: 0 }}
+                    viewBox="0 0 18 18" fill="none"
+                  >
+                    <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </div>
 
                 {/* Expanded content */}
                 {expandedId === fund.id && (
-                  <div className="border-t border-border/40 bg-muted/5">
-                    {/* Quick metrics grid */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 py-4">
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">3Y Avg Rolling</p>
-                        <p className="text-sm font-bold font-mono">{pct(fund.avg_3y_rolling_return)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Sharpe Ratio</p>
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-bold font-mono">{fixed(fund.sharpe_ratio)}</p>
-                          {nifty50 && fund.id !== nifty50.id && (
-                            <span className={cn("text-[10px] font-bold px-1 rounded", fund.sharpe_ratio > nifty50.sharpe_ratio ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600" : "bg-red-50 dark:bg-red-950/30 text-red-400")}>
-                              {fund.sharpe_ratio > nifty50.sharpe_ratio ? "↑" : "↓"}
-                            </span>
-                          )}
+                  <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", background: "#F5F5F3" }}>
+                    {/* 2×2 metrics grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", margin: "14px 20px", background: "#ffffff" }}>
+                      {[
+                        { label: "3Y Avg Rolling", value: pct(fund.avg_3y_rolling_return) },
+                        { label: "Sharpe Ratio", value: fixed(fund.sharpe_ratio) },
+                        { label: "Max Drawdown", value: pct(fund.max_drawdown), red: true },
+                        { label: "Volatility", value: pct(fund.volatility) },
+                      ].map((m, i) => (
+                        <div key={m.label} style={{
+                          padding: "13px 15px",
+                          borderRight: i % 2 === 0 ? "1px solid rgba(12,14,19,.12)" : undefined,
+                          borderBottom: i < 2 ? "1px solid rgba(12,14,19,.12)" : undefined,
+                        }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 5 }}>
+                            {m.label}
+                          </div>
+                          <div style={{
+                            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+                            fontSize: 20, fontWeight: 400, letterSpacing: "-.2px",
+                            color: m.red ? "#C5271E" : "#0C0E13",
+                          }}>
+                            {m.value}
+                          </div>
                         </div>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-red-500 uppercase font-bold tracking-widest mb-1">Max Drawdown</p>
-                        <p className="text-sm font-bold font-mono text-red-500">{pct(fund.max_drawdown)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Volatility</p>
-                        <p className="text-sm font-bold font-mono">{pct(fund.volatility)}</p>
-                      </div>
+                      ))}
                     </div>
 
                     {/* Score bar */}
-                    <div className="px-4 pb-4">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest">Composite Score</span>
-                        <span className="text-sm font-bold text-primary font-mono">{fund.score?.toFixed(1)}</span>
+                    <div style={{ padding: "0 20px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)" }}>Composite Score</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#1A56DB" }}>{fund.score?.toFixed(1)}</span>
                       </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-indigo-500 to-teal-500 rounded-full"
-                          style={{ width: `${Math.min((fund.score / 50) * 100, 100)}%` }}
-                        />
+                      <div style={{ height: 6, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", background: "linear-gradient(90deg, #1A56DB, #22c55e)",
+                          borderRadius: 3, width: `${Math.min((fund.score / 50) * 100, 100)}%`,
+                        }} />
                       </div>
                     </div>
 
-                    {/* Charts section */}
-                    <div className="border-t border-dashed border-border/50 px-4 py-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Performance vs Nifty 50</p>
-                        <Link href={`/rankings/${fund.id}`} onClick={(e) => e.stopPropagation()}>
-                          <Button size="sm" className="h-8 px-3 text-xs font-bold gap-1 rounded-xl bg-primary hover:bg-primary/90 shadow-sm">
-                            Details <ExternalLink className="h-3 w-3" />
-                          </Button>
+                    {/* Charts */}
+                    <div style={{ borderTop: "1px dashed rgba(12,14,19,.12)", padding: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)" }}>Performance vs Nifty 50</p>
+                        <Link
+                          href={`/rankings/${fund.id}`}
+                          onClick={e => e.stopPropagation()}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                            padding: "6px 12px", borderRadius: 8,
+                            background: "#0C0E13", color: "#ffffff",
+                            fontSize: 12, fontWeight: 600, textDecoration: "none",
+                          }}
+                        >
+                          Details
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M6 2h4v4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </Link>
                       </div>
                       <FundCharts fund={fund} />
@@ -512,7 +672,7 @@ export default function RankingsPage() {
         </div>
 
         {/* Footer note */}
-        <p className="text-[10px] text-muted-foreground text-center mt-6 leading-relaxed">
+        <p style={{ fontSize: 11.5, color: "rgba(12,14,19,.3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
           {sorted.length} of {funds.length} funds shown · NSE India data (Apr 2005 – Feb 2026) · Past performance is not a guarantee of future returns.
         </p>
 
