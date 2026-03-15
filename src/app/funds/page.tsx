@@ -348,7 +348,7 @@ export default function FundsPage() {
             </div>
 
             {/* ── Mobile Cards ── */}
-            <div className="md:hidden" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="flex flex-col md:hidden" style={{ gap: 8 }}>
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} style={{

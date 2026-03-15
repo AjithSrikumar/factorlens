@@ -124,7 +124,8 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 20px" }}>
           <div style={{ height: 28, width: 80, borderRadius: 8, background: "rgba(12,14,19,.08)", marginBottom: 20, animation: "mf-pulse 1.4s ease infinite" }} />
           <div style={{ height: 100, borderRadius: 16, background: "rgba(12,14,19,.06)", marginBottom: 16, animation: "mf-pulse 1.4s ease infinite" }} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 16 }}
+               className="sm:grid-cols-4">
             {[1,2,3,4].map(i => <div key={i} style={{ height: 90, borderRadius: 14, background: "rgba(12,14,19,.06)", animation: "mf-pulse 1.4s ease infinite" }} />)}
           </div>
           <div style={{ height: 280, borderRadius: 16, background: "rgba(12,14,19,.06)", animation: "mf-pulse 1.4s ease infinite" }} />

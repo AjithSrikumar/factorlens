@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { fetchViaProxy } from '@/lib/fetch-proxy'
 
 const MFAPI_BASE = 'https://api.mfapi.in/mf'
 
@@ -52,10 +53,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   try {
-    // Fetch full NAV history directly from mfapi.in — always real-time
-    const res = await fetch(`${MFAPI_BASE}/${schemeCode}`, {
+    // Fetch full NAV history from mfapi.in — proxy-aware for dev environments
+    const res = await fetchViaProxy(`${MFAPI_BASE}/${schemeCode}`, {
       signal: AbortSignal.timeout(30_000),
-      next: { revalidate: 3600 }, // Next.js server-side cache for 1 hour
+      next: { revalidate: 3600 }, // Next.js server-side cache (used in prod without proxy)
     })
 
     if (!res.ok) {
