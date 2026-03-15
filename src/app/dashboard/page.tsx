@@ -154,7 +154,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* Big 3 tiles */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
         className="snap-3-grid">
         {[
           {
@@ -234,7 +234,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* 6 mini metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
         className="snap-6-grid">
         {[
           { label: "Volatility", info: "Annualised standard deviation of daily returns.", value: pct(metrics.volatility), benchV: benchmark ? pct(benchmark.volatility) : null },
@@ -484,7 +484,88 @@ export default function DashboardPage() {
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 32px 64px" }} className="dash-wrap-resp">
 
-        {/* Results section comes first */}
+        {/* Builder section — collapsed by default, at top */}
+        <div style={{ marginBottom: 20 }} id="builder-section">
+          <div style={{
+            background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+            borderRadius: 20, overflow: "hidden",
+          }}>
+            {/* Builder header — collapsible */}
+            <div
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "18px 26px", cursor: "pointer", transition: "background .14s",
+                minHeight: 56,
+              }}
+              className="hover:bg-[rgba(12,14,19,.03)]"
+              onClick={() => setBuilderOpen(o => !o)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 9, background: "#0C0E13",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <svg viewBox="0 0 17 17" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                    <rect x="2" y="2" width="5.5" height="5.5" rx=".8" />
+                    <rect x="9.5" y="2" width="5.5" height="5.5" rx=".8" />
+                    <rect x="2" y="9.5" width="5.5" height="5.5" rx=".8" />
+                    <rect x="9.5" y="9.5" width="5.5" height="5.5" rx=".8" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px" }}>Build Your Portfolio</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 2 }}>
+                    {!builderOpen && allocations.length > 0
+                      ? allocations.map(a => `${a.fund.code} ${a.weight.toFixed(0)}%`).join(" · ")
+                      : "Select funds · Set weights · Generate"}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {allocations.length > 0 && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
+                    background: "#EBF0FF", color: "#1A56DB",
+                  }}>
+                    {allocations.length} selected
+                  </span>
+                )}
+                <svg
+                  style={{
+                    width: 18, height: 18, color: "rgba(12,14,19,.3)",
+                    transition: "transform .25s ease",
+                    transform: builderOpen ? "rotate(180deg)" : "none",
+                  }}
+                  viewBox="0 0 18 18" fill="none"
+                >
+                  <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Builder body */}
+            {builderOpen && (
+              <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", padding: "22px 26px" }} className="bld-body-resp">
+                {fundsLoading ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
+                  </div>
+                ) : (
+                  <PortfolioBuilder
+                    funds={funds}
+                    allocations={allocations}
+                    onChange={handleAllocationsChange}
+                    onGenerate={handleGenerate}
+                    loading={loading}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Results section */}
         <div>
 
           {/* Empty state */}
@@ -575,7 +656,7 @@ export default function DashboardPage() {
               )}
 
               {/* Side-by-side: Drawdown + Composition */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}
+              <div style={{ marginBottom: 20 }}
                 className="side2-resp">
                 {/* Drawdown */}
                 <div style={{
@@ -602,7 +683,7 @@ export default function DashboardPage() {
                   </div>
                   <div style={{ padding: "24px 28px 0" }} className="ccard-body-resp">
                     <AllocationPieChart
-                      data={allocations.map((a) => ({ name: a.fund.name, weight: a.weight }))}
+                      data={allocations.map((a) => ({ name: a.fund.name, code: a.fund.code, weight: a.weight }))}
                     />
                   </div>
                 </div>
@@ -648,86 +729,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Builder section */}
-        <div style={{ marginTop: 20 }} id="builder-section">
-          <div style={{
-            background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-            borderRadius: 20, overflow: "hidden",
-          }}>
-            {/* Builder header — collapsible */}
-            <div
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "18px 26px", cursor: "pointer", transition: "background .14s",
-                minHeight: 56,
-              }}
-              className="hover:bg-[rgba(12,14,19,.03)]"
-              onClick={() => setBuilderOpen(o => !o)}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 9, background: "#0C0E13",
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }}>
-                  <svg viewBox="0 0 17 17" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-                    <rect x="2" y="2" width="5.5" height="5.5" rx=".8" />
-                    <rect x="9.5" y="2" width="5.5" height="5.5" rx=".8" />
-                    <rect x="2" y="9.5" width="5.5" height="5.5" rx=".8" />
-                    <rect x="9.5" y="9.5" width="5.5" height="5.5" rx=".8" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px" }}>Build Your Portfolio</div>
-                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 2 }}>
-                    {!builderOpen && allocations.length > 0
-                      ? allocations.map(a => `${a.fund.code} ${a.weight.toFixed(0)}%`).join(" · ")
-                      : "Select funds · Set weights · Generate"}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {allocations.length > 0 && (
-                  <span style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-                    background: "#EBF0FF", color: "#1A56DB",
-                  }}>
-                    {allocations.length} selected
-                  </span>
-                )}
-                <svg
-                  style={{
-                    width: 18, height: 18, color: "rgba(12,14,19,.3)",
-                    transition: "transform .25s ease",
-                    transform: builderOpen ? "rotate(180deg)" : "none",
-                  }}
-                  viewBox="0 0 18 18" fill="none"
-                >
-                  <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Builder body */}
-            {builderOpen && (
-              <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", padding: "22px 26px" }} className="bld-body-resp">
-                {fundsLoading ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
-                  </div>
-                ) : (
-                  <PortfolioBuilder
-                    funds={funds}
-                    allocations={allocations}
-                    onChange={handleAllocationsChange}
-                    onGenerate={handleGenerate}
-                    loading={loading}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
 
       </div>
 

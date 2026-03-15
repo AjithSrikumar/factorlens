@@ -43,8 +43,8 @@ export default function RootLayout({
       <body className={`${dmSans.variable} ${dmMono.variable} ${instrumentSerif.variable} font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <Navbar />
-          {/* pb-[72px] on mobile for bottom nav bar */}
-          <main className="pb-[72px] md:pb-0">{children}</main>
+          {/* pt-[52px] on mobile for top bar; pb-[72px] for bottom nav */}
+          <main className="pt-[52px] md:pt-0 pb-[72px] md:pb-0">{children}</main>
         </ThemeProvider>
         <VisualEditsMessenger />
       </body>

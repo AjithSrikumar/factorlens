@@ -362,34 +362,32 @@ nextjs-portal {
 ───────────────────────────────────────── */
 
 /* Portfolio Snapshot — 3-tile grid */
-.snap-3-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-@media (max-width: 600px) {
-  .snap-3-grid { grid-template-columns: 1fr; gap: 10px; }
+.snap-3-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) {
+  .snap-3-grid { grid-template-columns: 1fr; }
+  .snap-tile-resp { padding: 18px 16px !important; border-right: none !important; border-bottom: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-tile-resp:last-child { border-bottom: none !important; }
 }
 
-/* Portfolio Snapshot — 6-mini metrics */
-.snap-6-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+/* Portfolio Snapshot — 6-mini metrics strip */
+.snap-6-grid { display: grid; grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 767px) {
+  .snap-6-grid { grid-template-columns: repeat(3, 1fr); }
+  .snap-mini-resp { border-right: 1px solid rgba(12,14,19,.08) !important; border-bottom: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-mini-resp:nth-child(3n) { border-right: none !important; }
+  .snap-mini-resp:nth-last-child(-n+3) { border-bottom: none !important; }
 }
-@media (max-width: 600px) {
-  .snap-6-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (max-width: 420px) {
+  .snap-6-grid { grid-template-columns: repeat(2, 1fr); }
+  .snap-mini-resp:nth-child(2n) { border-right: none !important; }
+  .snap-mini-resp:nth-child(3n) { border-right: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-mini-resp:nth-last-child(-n+2) { border-bottom: none !important; }
+  .snap-mini-resp:nth-last-child(-n+3) { border-bottom: 1px solid rgba(12,14,19,.08) !important; }
 }
 
 /* Drawdown + Composition side-by-side */
-.side2-resp {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-@media (max-width: 700px) {
-  .side2-resp { grid-template-columns: 1fr; }
-}
+.side2-resp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 768px) { .side2-resp { grid-template-columns: 1fr; } }
 
 /* Dashboard wrapper padding */
 @media (max-width: 767px) {
@@ -402,7 +400,7 @@ nextjs-portal {
    RANKINGS — RESPONSIVE GRIDS
 ───────────────────────────────────────── */
 
-/* Leader grid — 3 → 1 col */
+/* Leader grid — 3 → 1 col (medalled cards) */
 .leader-grid-resp {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -420,6 +418,7 @@ nextjs-portal {
 /* Filter bar responsive */
 @media (max-width: 600px) {
   .rfilt-resp { flex-direction: column !important; }
+  .rfilt-search { max-width: none !important; width: 100% !important; }
 }
 
 /* Category pills scrollable on mobile */

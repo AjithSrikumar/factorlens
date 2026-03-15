@@ -126,6 +126,36 @@ export function Navbar() {
         </div>
       </nav>
 
+      {/* ── Mobile Top Bar — logo only, no page links ── */}
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
+        height: 52,
+        background: "rgba(245,245,243,.95)",
+        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+        borderBottom: "1px solid rgba(12,14,19,.10)",
+        display: "flex", alignItems: "center", padding: "0 18px",
+      }} className="md:hidden">
+        <Link href="/" style={{
+          display: "flex", alignItems: "center", gap: 9,
+          textDecoration: "none", flexShrink: 0,
+        }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 8, background: "#0C0E13",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg viewBox="0 0 15 15" fill="none" style={{ width: 14, height: 14 }}>
+              <rect x="1" y="9" width="3" height="5" rx=".8" fill="rgba(255,255,255,.45)" />
+              <rect x="6" y="5" width="3" height="9" rx=".8" fill="rgba(255,255,255,.72)" />
+              <rect x="11" y="1" width="3" height="13" rx=".8" fill="white" />
+            </svg>
+          </div>
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.3px" }}>
+            <span style={{ color: "#1A56DB" }}>factor</span>
+            <span style={{ color: "rgba(12,14,19,.5)" }}>lens</span>
+          </span>
+        </Link>
+      </div>
+
       {/* ── Mobile Bottom Nav ── */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,

@@ -208,8 +208,8 @@ export default function RankingsPage() {
     <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "32px 32px 64px" }} className="rank-wrap-resp">
 
-        {/* Desktop page header */}
-        <div style={{ marginBottom: 28 }} className="hidden md:block">
+        {/* Page header */}
+        <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h1 style={{
@@ -245,48 +245,92 @@ export default function RankingsPage() {
         {!loading && top3.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 }}
             className="leader-grid-resp">
-            {top3.map(f => {
-              const cs = catStyle(f.category)
+            {top3.map((f, idx) => {
+              const medals = [
+                { label: "GOLD", bg: "#FFFBEB", border: "#FCD34D", badgeBg: "linear-gradient(135deg,#F59E0B,#D97706)", labelColor: "#92400E", starFill: "#F59E0B" },
+                { label: "SILVER", bg: "#F8FAFC", border: "#CBD5E1", badgeBg: "linear-gradient(135deg,#94A3B8,#64748B)", labelColor: "#475569", starFill: "#94A3B8" },
+                { label: "BRONZE", bg: "#FFF7ED", border: "#FDBA74", badgeBg: "linear-gradient(135deg,#CD9264,#B45309)", labelColor: "#C2410C", starFill: "#CD7C36" },
+              ]
+              const m = medals[idx]
               return (
                 <div
                   key={f.id}
                   style={{
-                    background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+                    background: m.bg,
+                    border: `1.5px solid ${m.border}`,
                     borderRadius: 16, padding: 20, cursor: "pointer",
                     transition: "all .18s",
                   }}
-                  className="hover:shadow-[0_4px_16px_rgba(0,0,0,.08)] hover:border-[rgba(12,14,19,.3)] hover:-translate-y-0.5"
+                  className="hover:shadow-[0_6px_20px_rgba(0,0,0,.1)] hover:-translate-y-0.5"
                   onClick={() => handleToggleExpand(f.id)}
                 >
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 10 }}>
-                    #{f.final_rank} · {f.category}
+                  {/* Medal badge + rank */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: "50%",
+                      background: m.badgeBg,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,.12)",
+                    }}>
+                      {/* Medal icon */}
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="12" r="6" fill="rgba(255,255,255,.25)" />
+                        <circle cx="10" cy="12" r="4.5" fill="rgba(255,255,255,.35)" />
+                        <text x="10" y="16" textAnchor="middle" fontSize="7" fontWeight="800" fill="white" fontFamily="monospace">{f.final_rank}</text>
+                        <path d="M7 6.5L8.5 2h3L13 6.5" stroke="rgba(255,255,255,.7)" strokeWidth="1.2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "1.2px", color: m.labelColor, textTransform: "uppercase" as const }}>
+                        {m.label}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: "rgba(12,14,19,.4)", fontWeight: 600, marginTop: 1 }}>
+                        {f.category}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "-.1px", marginBottom: 10, lineHeight: 1.35 }}>
+
+                  <div style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: "-.1px", marginBottom: 12, lineHeight: 1.35, color: "#0C0E13" }}>
                     {f.name}
                   </div>
-                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" as const }}>
-                    <div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ background: "rgba(255,255,255,.6)", borderRadius: 10, padding: "9px 11px" }}>
                       <div style={{
                         fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                        fontSize: 20, fontWeight: 400, color: "#0A7C4E", letterSpacing: "-.3px",
+                        fontSize: 19, fontWeight: 400, color: "#0A7C4E", letterSpacing: "-.3px",
                       }}>
                         {pct(f.cagr)}
                       </div>
-                      <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase" as const, marginTop: 1 }}>
+                      <div style={{ fontSize: 9.5, color: "rgba(12,14,19,.35)", fontWeight: 700, letterSpacing: ".6px", textTransform: "uppercase" as const, marginTop: 1 }}>
                         CAGR
                       </div>
                     </div>
-                    <div>
+                    <div style={{ background: "rgba(255,255,255,.6)", borderRadius: 10, padding: "9px 11px" }}>
                       <div style={{
                         fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                        fontSize: 20, fontWeight: 400, color: "#0C0E13", letterSpacing: "-.3px",
+                        fontSize: 19, fontWeight: 400, color: "#0C0E13", letterSpacing: "-.3px",
                       }}>
                         {fixed(f.sharpe_ratio)}
                       </div>
-                      <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase" as const, marginTop: 1 }}>
+                      <div style={{ fontSize: 9.5, color: "rgba(12,14,19,.35)", fontWeight: 700, letterSpacing: ".6px", textTransform: "uppercase" as const, marginTop: 1 }}>
                         Sharpe
                       </div>
                     </div>
+                  </div>
+
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ flex: 1, height: 4, background: "rgba(12,14,19,.08)", borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{
+                        height: "100%",
+                        background: `linear-gradient(90deg, ${m.starFill}, ${idx === 0 ? "#22c55e" : idx === 1 ? "#94a3b8" : "#f97316"})`,
+                        borderRadius: 2,
+                        width: `${Math.min((f.score / 50) * 100, 100)}%`,
+                      }} />
+                    </div>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: m.labelColor }}>
+                      {f.score?.toFixed(1)} / 100
+                    </span>
                   </div>
                 </div>
               )
@@ -316,10 +360,10 @@ export default function RankingsPage() {
         </div>
 
         {/* Filters */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" as const, marginBottom: 20 }}
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" as const, marginBottom: 20 }}
           className="rfilt-resp">
           {/* Search */}
-          <div style={{ position: "relative", flex: 1, minWidth: 180, maxWidth: 290 }}>
+          <div style={{ position: "relative", flex: "0 0 auto", width: "100%", maxWidth: 290 }} className="rfilt-search">
             <svg viewBox="0 0 20 20" fill="none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "rgba(12,14,19,.3)", pointerEvents: "none" }}>
               <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8" />
               <path d="M14 14l-3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -341,7 +385,7 @@ export default function RankingsPage() {
             />
           </div>
           {/* Category pills */}
-          <div style={{ display: "flex", gap: 6, overflow: "hidden" }} className="rcats-scroll">
+          <div style={{ display: "flex", gap: 6, overflowX: "auto" as const, flex: 1, paddingBottom: 2 }} className="rcats-scroll">
             {categories.map((cat) => (
               <button
                 key={cat}
@@ -487,8 +531,8 @@ export default function RankingsPage() {
                                   width: `${Math.min((fund.score / 50) * 100, 100)}%`,
                                 }} />
                               </div>
-                              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "#0C0E13", width: 30 }}>
-                                {fund.score?.toFixed(1)}
+                              <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#0C0E13", whiteSpace: "nowrap" as const }}>
+                                {fund.score?.toFixed(1)} / 100
                               </span>
                             </div>
                           </td>
@@ -634,7 +678,7 @@ export default function RankingsPage() {
                     <div style={{ padding: "0 20px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)" }}>Composite Score</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#1A56DB" }}>{fund.score?.toFixed(1)}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#1A56DB" }}>{fund.score?.toFixed(1)} / 100</span>
                       </div>
                       <div style={{ height: 6, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
                         <div style={{

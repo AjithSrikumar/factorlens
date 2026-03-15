@@ -333,48 +333,64 @@ export function RollingReturnChart({
 }
 
 const PIE_COLORS = [
-  "#4f46e5", "#0d9488", "#7c3aed", "#d97706",
-  "#059669", "#dc2626", "#0284c7", "#9333ea",
+  "#1A56DB", "#0d9488", "#9333ea", "#d97706",
+  "#059669", "#dc2626", "#0284c7", "#7c3aed",
   "#16a34a", "#ea580c"
 ]
 
-export function AllocationPieChart({ data }: { data: { name: string; weight: number }[] }) {
+export function AllocationPieChart({ data }: { data: { name: string; code?: string; weight: number }[] }) {
+  const label = (d: { name: string; code?: string }) => d.code || d.name.slice(0, 10)
   return (
-    <ResponsiveContainer width="100%" height={240}>
-      <PieChart>
-        <Pie
-          data={data}
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={95}
-          dataKey="weight"
-          nameKey="name"
-          paddingAngle={2}
-          strokeWidth={0}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(v) => [`${v}%`, "Allocation"]}
-          contentStyle={{
-            background: "hsl(var(--popover))",
-            border: "1px solid hsl(var(--border))",
-            borderRadius: 12,
-            fontSize: 12,
-          }}
-        />
-        <Legend
-          formatter={(value) => (
-            <span style={{ fontSize: 11, fontFamily: "var(--font-sans)" }}>
-              {value.length > 22 ? value.slice(0, 22) + "…" : value}
+    <div>
+      <ResponsiveContainer width="100%" height={200}>
+        <PieChart>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={62}
+            outerRadius={90}
+            dataKey="weight"
+            paddingAngle={2}
+            strokeWidth={2}
+            stroke="#ffffff"
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(v, _name, props) => [`${(v as number).toFixed(1)}%`, label(props.payload)]}
+            contentStyle={{
+              background: "#ffffff",
+              border: "1px solid rgba(12,14,19,.12)",
+              borderRadius: 10, fontSize: 12,
+              boxShadow: "0 4px 16px rgba(0,0,0,.08)",
+            }}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      {/* External legend — fund codes + weights */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: "6px 14px",
+        padding: "10px 4px 4px", justifyContent: "center",
+      }}>
+        {data.map((d, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: PIE_COLORS[i % PIE_COLORS.length], flexShrink: 0,
+            }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "rgba(12,14,19,.55)" }}>
+              {label(d)}
             </span>
-          )}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "rgba(12,14,19,.85)" }}>
+              {d.weight.toFixed(0)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -514,62 +530,88 @@ export function FiscalYearChart({
     )
   }
 
+  // v4-style: vertical grouped bars, portfolio blue/red, benchmark gray/red
   return (
     <div>
-      <ResponsiveContainer width="100%" height={chartHeight}>
+      {/* Legend row */}
+      <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12, flexWrap: "wrap" as const }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "rgba(12,14,19,.5)" }}>
+          <div style={{ display: "flex", gap: 3 }}>
+            <div style={{ width: 10, height: 12, borderRadius: 2, background: "rgba(26,86,219,.85)" }} />
+            <div style={{ width: 10, height: 12, borderRadius: 2, background: "rgba(197,39,30,.75)" }} />
+          </div>
+          {fundName} (+/−)
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "rgba(12,14,19,.5)" }}>
+          <div style={{ display: "flex", gap: 3 }}>
+            <div style={{ width: 10, height: 12, borderRadius: 2, background: "rgba(148,163,184,.6)" }} />
+            <div style={{ width: 10, height: 12, borderRadius: 2, background: "rgba(197,39,30,.35)" }} />
+          </div>
+          {benchmarkName} (+/−)
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={300}>
         <BarChart
           data={data}
-          layout="vertical"
-          margin={{ top: 4, right: 54, left: 4, bottom: 4 }}
-          barSize={12}
+          margin={{ top: 4, right: 8, left: 0, bottom: 48 }}
+          barSize={10}
           barGap={2}
-          barCategoryGap="30%"
+          barCategoryGap="28%"
         >
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridStroke} strokeOpacity={0.5} />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridStroke} strokeOpacity={0.5} />
           <XAxis
-            type="number"
-            tickFormatter={(v) => `${v.toFixed(0)}%`}
-            tick={{ ...axisTick, fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            type="category"
             dataKey="fy"
             tick={({ x, y, payload }) => {
               const row = data.find(d => d.fy === payload.value)
-              const fill = row?.isLive ? "#f59e0b" : "hsl(var(--foreground))"
               return (
-                <text x={x} y={y} dy={4} textAnchor="end" fontSize={10} fontWeight={row?.isLive ? 600 : 500} fill={fill} fontFamily="var(--font-mono)">
-                  {payload.value}{row?.isLive ? "*" : ""}
-                </text>
+                <g transform={`translate(${x},${y})`}>
+                  <text
+                    x={0} y={0} dy={12}
+                    textAnchor="end"
+                    fontSize={9.5}
+                    fontWeight={row?.isLive ? 700 : 500}
+                    fill={row?.isLive ? "#f59e0b" : "rgba(12,14,19,.45)"}
+                    fontFamily="var(--font-mono)"
+                    transform="rotate(-45)"
+                  >
+                    {payload.value}{row?.isLive ? "*" : ""}
+                  </text>
+                </g>
               )
             }}
-            width={36}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
           />
-          <ReferenceLine x={0} stroke="hsl(var(--border))" />
-          <Tooltip content={<CustomFYTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }} />
-          <Legend verticalAlign="top" height={28} iconType="square" wrapperStyle={{ fontSize: 11 }} />
-          <Bar dataKey="fund" name={fundName} fill="#4f46e5" radius={[0, 3, 3, 0]}>
+          <YAxis
+            tick={{ ...axisTick, fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => `${v.toFixed(0)}%`}
+            width={44}
+          />
+          <ReferenceLine y={0} stroke="rgba(12,14,19,.2)" strokeWidth={1} />
+          <Tooltip content={<CustomFYTooltip />} cursor={{ fill: "rgba(12,14,19,.04)" }} />
+          <Bar dataKey="fund" name={fundName} radius={[3, 3, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.fund !== null && d.fund >= 0 ? "rgba(26,86,219,.85)" : "rgba(197,39,30,.75)"} />
+            ))}
             <LabelList
               dataKey="fund"
-              position="right"
-              formatter={(v: number | null) => v !== null ? `${v > 0 ? "+" : ""}${v?.toFixed(0)}%` : ""}
-              style={{ fontSize: 9, fill: "#6366f1", fontFamily: "var(--font-mono)" }}
+              position="top"
+              formatter={(v: number | null) => v !== null ? `${v > 0 ? "+" : ""}${v.toFixed(0)}` : ""}
+              style={{ fontSize: 8, fill: "rgba(12,14,19,.5)", fontFamily: "var(--font-mono)" }}
             />
           </Bar>
-          <Bar dataKey="benchmark" name={benchmarkName} fill="#94a3b8" radius={[0, 3, 3, 0]}>
-            <LabelList
-              dataKey="benchmark"
-              position="right"
-              formatter={(v: number | null) => v !== null ? `${v > 0 ? "+" : ""}${v?.toFixed(0)}%` : ""}
-              style={{ fontSize: 9, fill: "#64748b", fontFamily: "var(--font-mono)" }}
-            />
+          <Bar dataKey="benchmark" name={benchmarkName} radius={[3, 3, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.benchmark !== null && d.benchmark >= 0 ? "rgba(148,163,184,.6)" : "rgba(197,39,30,.4)"} />
+            ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       {hasLive && (
-        <p className="text-[10px] text-amber-600 dark:text-amber-400 text-center mt-1 font-medium">
+        <p style={{ fontSize: 10, color: "#B45309", textAlign: "center", marginTop: 4, fontWeight: 500 }}>
           * {liveFYLabel} is live (year-to-date through {today})
         </p>
       )}
@@ -593,7 +635,7 @@ interface FYTableData {
 }
 
 function fmtVal(v: number): string {
-  return v.toLocaleString("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 })
+  return v.toLocaleString("en-IN", { maximumFractionDigits: 0, minimumFractionDigits: 0 })
 }
 
 function fmtDate(d: string): string {
