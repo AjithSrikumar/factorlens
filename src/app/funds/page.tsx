@@ -53,7 +53,16 @@ export default function FundsPage() {
   useEffect(() => {
     fetch("/api/mffunds")
       .then(r => r.json())
-      .then((data: MFFund[]) => { setFunds(data); setLoading(false) })
+      .then((data: unknown) => {
+        if (Array.isArray(data)) {
+          setFunds(data as MFFund[])
+        } else if (data && typeof data === "object" && "error" in data) {
+          setError(String((data as { error: string }).error))
+        } else {
+          setError("Unexpected response from server")
+        }
+        setLoading(false)
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Service role needed to bypass RLS on mf_funds / mf_nav_data
+// Use anon key — tables have RLS disabled so anon reads work.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 function dateMinusYears(isoDate: string, years: number): string {
@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
   }
 
-  // 2. Full NAV history ordered ascending for chart (paginated — Supabase caps at 1000/page)
+  // 2. Full NAV history — paginated (Supabase caps at 1000 rows/page)
   const history: Array<{ date: string; nav: number }> = []
   const PAGE = 1000
   let from = 0
@@ -57,7 +57,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (history.length === 0) {
-    return NextResponse.json({ fund, nav_history: [], metrics: null })
+    return NextResponse.json({
+      fund: { ...fund, nav: null, nav_date: null, inception_date: null },
+      metrics: null,
+      nav_history: [],
+    })
   }
 
   const latestNav = history[history.length - 1].nav
@@ -65,36 +69,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const inceptionDate = history[0].date
   const inceptionNav = history[0].nav
 
-  // 3. Compute metrics
-  // Returns at 1y, 3y, 5y
+  // Find closest NAV to a target date within the history
   function findNavAround(targetDate: string) {
+    const targetMs = new Date(targetDate).getTime()
     let closest: { date: string; nav: number } | null = null
     let minDiff = Infinity
     for (const row of history) {
-      const diff = Math.abs(new Date(row.date).getTime() - new Date(targetDate).getTime())
+      const diff = Math.abs(new Date(row.date).getTime() - targetMs)
       if (diff < minDiff) { minDiff = diff; closest = row }
     }
-    return closest
+    // Only use if within 20 days
+    return minDiff <= 20 * 86400000 ? closest : null
   }
 
-  const target1y = dateMinusYears(latestDate, 1)
-  const target3y = dateMinusYears(latestDate, 3)
-  const target5y = dateMinusYears(latestDate, 5)
+  const nav1y = findNavAround(dateMinusYears(latestDate, 1))
+  const nav3y = findNavAround(dateMinusYears(latestDate, 3))
+  const nav5y = findNavAround(dateMinusYears(latestDate, 5))
 
-  const nav1y = findNavAround(target1y)
-  const nav3y = findNavAround(target3y)
-  const nav5y = findNavAround(target5y)
-
-  const return_1y = nav1y ? cagrPct(nav1y.nav, latestNav, 1) : null
-  const return_3y = nav3y ? cagrPct(nav3y.nav, latestNav, 3) : null
-  const return_5y = nav5y ? cagrPct(nav5y.nav, latestNav, 5) : null
-
-  // Years since inception
-  const yearsTotal = (new Date(latestDate).getTime() - new Date(inceptionDate).getTime()) / (365.25 * 24 * 3600 * 1000)
+  const yearsTotal = (new Date(latestDate).getTime() - new Date(inceptionDate).getTime()) / (365.25 * 86400000)
   const cagr_inception = yearsTotal >= 0.5 ? cagrPct(inceptionNav, latestNav, yearsTotal) : null
   const total_return = ((latestNav - inceptionNav) / inceptionNav) * 100
 
-  // Volatility & max drawdown from daily returns
+  // Annualised volatility from daily returns
   const dailyReturns: number[] = []
   for (let i = 1; i < history.length; i++) {
     const prev = history[i - 1].nav
@@ -106,38 +102,34 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (dailyReturns.length > 30) {
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
     const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / dailyReturns.length
-    volatility = Math.sqrt(variance) * Math.sqrt(252) * 100 // annualised %
+    volatility = Math.sqrt(variance) * Math.sqrt(252) * 100
   }
 
+  // Max drawdown
   let maxDrawdown: number | null = null
-  let peak = history[0].nav
-  let maxDD = 0
-  for (const row of history) {
-    if (row.nav > peak) peak = row.nav
-    const dd = (row.nav - peak) / peak
-    if (dd < maxDD) maxDD = dd
+  if (history.length > 30) {
+    let peak = history[0].nav
+    let maxDD = 0
+    for (const row of history) {
+      if (row.nav > peak) peak = row.nav
+      const dd = (row.nav - peak) / peak
+      if (dd < maxDD) maxDD = dd
+    }
+    maxDrawdown = maxDD * 100
   }
-  if (history.length > 30) maxDrawdown = maxDD * 100
 
-  // Sharpe (assumes 6% risk-free)
-  let sharpe: number | null = null
-  if (volatility !== null && cagr_inception !== null) {
-    sharpe = (cagr_inception - 6) / volatility
-  }
+  const sharpe = (volatility !== null && cagr_inception !== null)
+    ? (cagr_inception - 6) / volatility
+    : null
 
   return NextResponse.json({
-    fund: {
-      ...fund,
-      nav: latestNav,
-      nav_date: latestDate,
-      inception_date: inceptionDate,
-    },
+    fund: { ...fund, nav: latestNav, nav_date: latestDate, inception_date: inceptionDate },
     metrics: {
       cagr_inception,
       total_return,
-      return_1y,
-      return_3y,
-      return_5y,
+      return_1y: nav1y ? cagrPct(nav1y.nav, latestNav, 1) : null,
+      return_3y: nav3y ? cagrPct(nav3y.nav, latestNav, 3) : null,
+      return_5y: nav5y ? cagrPct(nav5y.nav, latestNav, 5) : null,
       volatility,
       max_drawdown: maxDrawdown,
       sharpe,

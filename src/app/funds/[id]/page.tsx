@@ -109,7 +109,16 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     fetch(`/api/mffunds/${id}`)
       .then(r => r.json())
-      .then((d: FundDetail) => { setData(d); setLoading(false) })
+      .then((d: unknown) => {
+        if (d && typeof d === "object" && "fund" in d) {
+          setData(d as FundDetail)
+        } else if (d && typeof d === "object" && "error" in d) {
+          setError(String((d as { error: string }).error))
+        } else {
+          setError("Unexpected response from server")
+        }
+        setLoading(false)
+      })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [id])
 
@@ -206,28 +215,26 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           <MetricTile label="5 Year CAGR" value={r5y.str} positive={r5y.pos} />
         </div>
 
-        {/* Risk metrics */}
-        {metrics && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <MetricTile
-              label="Total Return"
-              value={metrics.total_return !== null ? `${metrics.total_return.toFixed(0)}%` : null}
-              sub="Since inception"
-              positive={overallPositive}
-            />
-            <MetricTile
-              label="Volatility"
-              value={metrics.volatility !== null ? `${metrics.volatility.toFixed(1)}%` : null}
-              sub="Annualised std dev"
-            />
-            <MetricTile
-              label="Max Drawdown"
-              value={metrics.max_drawdown !== null ? `${metrics.max_drawdown.toFixed(1)}%` : null}
-              sub="Worst peak-to-trough"
-              positive={metrics.max_drawdown !== null ? false : undefined}
-            />
-          </div>
-        )}
+        {/* Risk metrics — always rendered; shows — when data unavailable */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <MetricTile
+            label="Total Return"
+            value={metrics?.total_return != null ? `${metrics.total_return.toFixed(0)}%` : null}
+            sub="Since inception"
+            positive={overallPositive}
+          />
+          <MetricTile
+            label="Volatility"
+            value={metrics?.volatility != null ? `${metrics.volatility.toFixed(1)}%` : null}
+            sub="Annualised std dev"
+          />
+          <MetricTile
+            label="Max Drawdown"
+            value={metrics?.max_drawdown != null ? `${metrics.max_drawdown.toFixed(1)}%` : null}
+            sub="Worst peak-to-trough"
+            positive={metrics?.max_drawdown != null ? false : undefined}
+          />
+        </div>
 
         {/* NAV Chart */}
         {chartData.length > 0 && (

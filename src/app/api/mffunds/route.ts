@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Service role needed to bypass RLS on mf_funds / mf_nav_data
+// Use anon key — mf_funds / mf_nav_data have RLS disabled so anon key reads work.
+// Service role key is only needed for writes (mf-load / mf-eod cron).
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 function dateMinusYears(isoDate: string, years: number): string {
@@ -24,31 +25,12 @@ function windowRange(target: string, days = 10): [string, string] {
   return [lo.toISOString().slice(0, 10), hi.toISOString().slice(0, 10)]
 }
 
-/** For a list of rows (already filtered to a date window), pick the one closest to `target` per scheme. */
-function pickClosest(
-  rows: Array<{ scheme_code: number; date: string; nav: number }>,
-  target: string
-): Map<number, { date: string; nav: number }> {
-  const map = new Map<number, { date: string; nav: number }>()
-  const targetMs = new Date(target).getTime()
-  for (const row of rows) {
-    const existing = map.get(row.scheme_code)
-    const thisDiff = Math.abs(new Date(row.date).getTime() - targetMs)
-    if (!existing) {
-      map.set(row.scheme_code, { date: row.date, nav: Number(row.nav) })
-    } else {
-      const prevDiff = Math.abs(new Date(existing.date).getTime() - targetMs)
-      if (thisDiff < prevDiff) {
-        map.set(row.scheme_code, { date: row.date, nav: Number(row.nav) })
-      }
-    }
-  }
-  return map
-}
-
-/** Paginate through mf_nav_data for a given date range, returning all rows. */
-async function fetchNavRange(
-  schemeCodes: number[],
+/**
+ * Fetch all mf_nav_data rows within [lo, hi] date range.
+ * Does NOT filter by scheme_code to avoid URL-length issues with 257 codes.
+ * Paginates to bypass the 1000-row default cap.
+ */
+async function fetchNavInRange(
   lo: string,
   hi: string
 ): Promise<Array<{ scheme_code: number; date: string; nav: number }>> {
@@ -59,45 +41,69 @@ async function fetchNavRange(
     const { data, error } = await supabase
       .from('mf_nav_data')
       .select('scheme_code, date, nav')
-      .in('scheme_code', schemeCodes)
       .gte('date', lo)
       .lte('date', hi)
       .order('date', { ascending: false })
       .range(from, from + PAGE - 1)
 
     if (error || !data?.length) break
-    for (const r of data) all.push({ scheme_code: r.scheme_code, date: r.date, nav: Number(r.nav) })
+    for (const r of data) {
+      all.push({ scheme_code: Number(r.scheme_code), date: r.date, nav: Number(r.nav) })
+    }
     if (data.length < PAGE) break
     from += PAGE
   }
   return all
 }
 
+/** For rows in a date window, pick the row closest to `target` per scheme_code. */
+function pickClosest(
+  rows: Array<{ scheme_code: number; date: string; nav: number }>,
+  target: string
+): Map<number, { date: string; nav: number }> {
+  const map = new Map<number, { date: string; nav: number }>()
+  const targetMs = new Date(target).getTime()
+  for (const row of rows) {
+    const existing = map.get(row.scheme_code)
+    const thisDiff = Math.abs(new Date(row.date).getTime() - targetMs)
+    if (!existing) {
+      map.set(row.scheme_code, { date: row.date, nav: row.nav })
+    } else {
+      const prevDiff = Math.abs(new Date(existing.date).getTime() - targetMs)
+      if (thisDiff < prevDiff) {
+        map.set(row.scheme_code, { date: row.date, nav: row.nav })
+      }
+    }
+  }
+  return map
+}
+
 export async function GET() {
   try {
-    // 1. Load all funds
+    // 1. Load all funds from mf_funds
     const { data: funds, error: fundsErr } = await supabase
       .from('mf_funds')
       .select('scheme_code, scheme_name, fund_house, scheme_category')
       .order('scheme_name')
 
-    if (fundsErr || !funds?.length) {
-      return NextResponse.json({ error: fundsErr?.message ?? 'No funds found' }, { status: 500 })
+    if (fundsErr) {
+      return NextResponse.json({ error: fundsErr.message }, { status: 500 })
     }
 
-    const schemeCodes = funds.map(f => f.scheme_code)
+    if (!funds || funds.length === 0) {
+      return NextResponse.json([])
+    }
 
-    // 2. Find the latest date in the DB (single row query)
-    const { data: latestRow } = await supabase
+    // 2. Find the single latest date across all NAV data
+    const { data: latestRow, error: latestErr } = await supabase
       .from('mf_nav_data')
       .select('date')
-      .in('scheme_code', schemeCodes)
       .order('date', { ascending: false })
       .limit(1)
       .single()
 
-    if (!latestRow) {
-      // No NAV data yet — return funds with nulls
+    if (latestErr || !latestRow) {
+      // No NAV data at all — return funds with all nulls
       return NextResponse.json(funds.map(f => ({
         scheme_code: f.scheme_code,
         scheme_name: f.scheme_name,
@@ -110,36 +116,36 @@ export async function GET() {
 
     const maxDate = latestRow.date
 
-    // 3. Fetch current NAV (within ±5 days of latest date)
-    const [loNow, hiNow] = windowRange(maxDate, 5)
-    const currentRows = await fetchNavRange(schemeCodes, loNow, hiNow)
-    const latestByScheme = pickClosest(currentRows, maxDate)
-
-    // 4. Fetch NAV at 1y, 3y, 5y ago (±10 day windows)
+    // 3. Target dates for historical returns
     const target1y = dateMinusYears(maxDate, 1)
     const target3y = dateMinusYears(maxDate, 3)
     const target5y = dateMinusYears(maxDate, 5)
 
-    const [rows1y, rows3y, rows5y] = await Promise.all([
-      fetchNavRange(schemeCodes, ...windowRange(target1y)),
-      fetchNavRange(schemeCodes, ...windowRange(target3y)),
-      fetchNavRange(schemeCodes, ...windowRange(target5y)),
+    // 4. Fetch NAV data for each date window in parallel
+    // No scheme_code filter — avoids URL-length issues with 257 codes
+    const [currentRows, rows1y, rows3y, rows5y] = await Promise.all([
+      fetchNavInRange(...windowRange(maxDate, 5)),      // current NAV ±5 days
+      fetchNavInRange(...windowRange(target1y, 14)),    // 1yr ago ±14 days
+      fetchNavInRange(...windowRange(target3y, 14)),    // 3yr ago ±14 days
+      fetchNavInRange(...windowRange(target5y, 14)),    // 5yr ago ±14 days
     ])
 
+    const latestByScheme = pickClosest(currentRows, maxDate)
     const nav1yMap = pickClosest(rows1y, target1y)
     const nav3yMap = pickClosest(rows3y, target3y)
     const nav5yMap = pickClosest(rows5y, target5y)
 
-    // 5. Assemble
+    // 5. Assemble result
     const result = funds.map(f => {
-      const latest = latestByScheme.get(f.scheme_code)
-      const nav1y = nav1yMap.get(f.scheme_code)
-      const nav3y = nav3yMap.get(f.scheme_code)
-      const nav5y = nav5yMap.get(f.scheme_code)
+      const code = Number(f.scheme_code)
+      const latest = latestByScheme.get(code)
+      const nav1y = nav1yMap.get(code)
+      const nav3y = nav3yMap.get(code)
+      const nav5y = nav5yMap.get(code)
       const currentNav = latest?.nav ?? null
 
       return {
-        scheme_code: f.scheme_code,
+        scheme_code: code,
         scheme_name: f.scheme_name,
         fund_house: f.fund_house,
         scheme_category: f.scheme_category,
