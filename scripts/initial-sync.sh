@@ -38,7 +38,7 @@ for i in $(seq 0 $((TOTAL_BATCHES - 1))); do
   elif echo "$RESPONSE" | grep -q '"synced"'; then
     BATCH_SYNCED=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('synced',0))" 2>/dev/null || echo "?")
     BATCH_FAILED=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('failed',0))" 2>/dev/null || echo "?")
-    SYNCED=$((SYNCED + ${BATCH_SYNCED:-0}))
+    SYNCED=$((SYNCED + ${BATCH_SYNCED//[^0-9]/}))
     echo "✓  synced ${BATCH_SYNCED} funds (${BATCH_FAILED} failed)"
   else
     echo "? Unexpected response: $RESPONSE"
