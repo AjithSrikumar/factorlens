@@ -73,6 +73,7 @@ export default function FundsPage() {
   const [noData,         setNoData]         = useState(false)
   const [seeding,        setSeeding]        = useState(false)
   const [seedMsg,        setSeedMsg]        = useState("")
+  const [seedProgress,   setSeedProgress]   = useState(0)   // 0–100
   const [search,         setSearch]         = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
   const [sortKey,        setSortKey]        = useState<SortKey>("return_1y")
@@ -99,22 +100,40 @@ export default function FundsPage() {
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
 
-  // Trigger the admin seed loader — uses anon key (RLS disabled on mf tables)
+  // Trigger the admin seed loader in batches of 20 until all funds are loaded
   async function triggerSeed() {
     setSeeding(true)
-    setSeedMsg("Starting data load — this takes 2–5 minutes for all funds…")
+    setSeedProgress(0)
+    setSeedMsg("Starting… fetching fund list from mfapi.in")
+
+    const BATCH = 20
+    let offset  = 0
+    let total   = 282  // will be updated from first response
+
     try {
-      // Trigger in batches (offset 0 first; the admin route loads 20 at a time)
-      const res = await fetch("/api/admin/mf-load?offset=0&limit=282")
-      const json = await res.json() as Record<string, unknown>
-      if (json.ok) {
-        setSeedMsg(`Loaded batch 0–20. Refreshing…`)
-        // Auto-reload page after short delay to show data
-        setTimeout(() => window.location.reload(), 2000)
-      } else {
-        setSeedMsg(`Error: ${String(json.error ?? "Unknown error")}`)
-        setSeeding(false)
+      while (true) {
+        setSeedMsg(`Loading funds ${offset + 1}–${Math.min(offset + BATCH, total)} of ${total}…`)
+        const res  = await fetch(`/api/admin/mf-load?offset=${offset}&limit=${BATCH}`)
+        const json = await res.json() as Record<string, unknown>
+
+        if (!json.ok) {
+          setSeedMsg(`Error on batch ${offset}: ${String(json.error ?? "Unknown")}`)
+          setSeeding(false)
+          return
+        }
+
+        // Update total from first response
+        if (typeof json.total === "number") total = json.total
+        offset += BATCH
+        setSeedProgress(Math.min(Math.round((offset / total) * 100), 99))
+
+        // All batches done
+        if (!json.hasMore) break
       }
+
+      setSeedProgress(100)
+      setSeedMsg("All funds loaded! Reloading page…")
+      setTimeout(() => window.location.reload(), 1500)
     } catch (e) {
       setSeedMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`)
       setSeeding(false)
@@ -223,7 +242,7 @@ export default function FundsPage() {
               style={{
                 display: "inline-flex", alignItems: "center", gap: 8,
                 padding: "11px 24px", borderRadius: 10,
-                background: seeding ? "rgba(12,14,19,.12)" : "#0C0E13",
+                background: seeding ? "rgba(12,14,19,.08)" : "#0C0E13",
                 color: seeding ? "rgba(12,14,19,.4)" : "#ffffff",
                 border: "none", cursor: seeding ? "not-allowed" : "pointer",
                 fontSize: 14, fontWeight: 600, transition: "all .2s",
@@ -232,21 +251,41 @@ export default function FundsPage() {
               {seeding ? (
                 <>
                   <svg viewBox="0 0 16 16" fill="none" style={{ width: 14, height: 14, animation: "spin .8s linear infinite" }}>
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="10" />
+                    <circle cx="8" cy="8" r="6" stroke="rgba(12,14,19,.4)" strokeWidth="2" strokeDasharray="28" strokeDashoffset="10" />
                   </svg>
-                  Loading…
+                  Loading funds…
                 </>
               ) : (
                 <>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ width: 14, height: 14 }}>
-                    <path d="M8 2v6l3-3M8 8l-3-3" /><circle cx="8" cy="8" r="6" />
+                    <path d="M8 1v8M5 6l3 3 3-3" /><path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" />
                   </svg>
                   Load All Funds from mfapi.in
                 </>
               )}
             </button>
-            {seedMsg && (
-              <p style={{ color: "rgba(12,14,19,.5)", fontSize: 12.5, marginTop: 12 }}>{seedMsg}</p>
+
+            {/* Progress bar */}
+            {seeding && (
+              <div style={{ width: "100%", maxWidth: 360, margin: "14px auto 0" }}>
+                <div style={{
+                  height: 6, borderRadius: 99,
+                  background: "rgba(12,14,19,.08)", overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%", borderRadius: 99,
+                    background: "linear-gradient(90deg, #1A56DB, #0A7C4E)",
+                    width: `${seedProgress}%`,
+                    transition: "width .5s ease",
+                  }} />
+                </div>
+                <p style={{ color: "rgba(12,14,19,.4)", fontSize: 12, marginTop: 6, textAlign: "center" }}>
+                  {seedProgress}% — {seedMsg}
+                </p>
+              </div>
+            )}
+            {!seeding && seedMsg && (
+              <p style={{ color: "rgba(12,14,19,.5)", fontSize: 12.5, marginTop: 10 }}>{seedMsg}</p>
             )}
           </div>
         )}
