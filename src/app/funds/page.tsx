@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
+import { supabase } from "@/lib/supabase"
 
 interface MFFund {
   scheme_code:     number
@@ -135,6 +136,7 @@ export default function FundsPage() {
   const [sortKey,        setSortKey]        = useState<SortKey>("return_3y")
   const [sortDir,        setSortDir]        = useState<SortDir>("desc")
 
+  // Initial load
   useEffect(() => {
     fetch("/api/mffunds")
       .then(r => r.json())
@@ -149,6 +151,27 @@ export default function FundsPage() {
         setLoading(false)
       })
       .catch(e => { setError(e.message); setLoading(false) })
+  }, [])
+
+  // Supabase realtime: update individual fund rows when daily sync pushes new NAV data
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return
+
+    const channel = supabase
+      .channel("funds-realtime")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "funds" },
+        (payload) => {
+          const updated = payload.new as MFFund
+          setFunds(prev =>
+            prev.map(f => f.scheme_code === updated.scheme_code ? { ...f, ...updated } : f)
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const categories = useMemo(() => {

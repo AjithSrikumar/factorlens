@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/mf-eod",
       "schedule": "30 17 * * 1-5"
+    },
+    {
+      "path": "/api/nav-sync?action=daily",
+      "schedule": "30 15 * * 1-5"
     }
   ],
   "functions": {
@@ -14,6 +18,9 @@
       "maxDuration": 300
     },
     "src/app/api/cron/mf-eod/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/nav-sync/route.ts": {
       "maxDuration": 300
     }
   }

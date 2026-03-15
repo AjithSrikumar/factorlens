@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
+import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 
 const MFAPI_BASE = 'https://api.mfapi.in/mf'
 
@@ -147,6 +148,24 @@ async function fetchFundsBatch(codes: number[]): Promise<Map<number, FundRow>> {
 
 export async function GET() {
   try {
+    // ── Path A: Supabase (fast — pre-computed metrics, normalized NAVs) ────────
+    if (isSupabaseConfigured()) {
+      const { data: sbFunds, error } = await supabaseAdmin
+        .from('funds')
+        .select('scheme_code, scheme_name, fund_house, scheme_category, nav, nav_date, return_1y, return_3y, return_5y')
+        .not('last_nav_sync', 'is', null)
+        .limit(500)
+
+      if (!error && sbFunds && sbFunds.length > 0) {
+        // Add aum_cr: null for interface compatibility
+        const result = sbFunds.map(f => ({ ...f, aum_cr: null }))
+        return NextResponse.json(result, {
+          headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' },
+        })
+      }
+    }
+
+    // ── Path B: mfapi.in fallback (cold start or Supabase not configured) ─────
     // 1. Get the list of all 257 scheme entries (instant — pre-computed)
     const entries = await discoverSchemeEntries()
 
