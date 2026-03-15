@@ -71,6 +71,17 @@ function fixed(v: number | null, d = 2) {
   return v.toFixed(d)
 }
 
+/** Convert raw score (0–100, lower = better rank) to display score (0–10, higher = better) */
+function displayScore(raw: number | null | undefined): string {
+  if (raw == null) return "—"
+  return ((100 - raw) / 10).toFixed(1)
+}
+
+function scoreBarWidth(raw: number | null | undefined): string {
+  if (raw == null) return "0%"
+  return `${Math.min(Math.max((100 - raw) / 10, 0), 10) * 10}%`
+}
+
 function RankBadge({ rank }: { rank: number }) {
   const style = rank === 1
     ? { background: "#FEF3C7", color: "#92400E" }
@@ -243,8 +254,7 @@ export default function RankingsPage() {
 
         {/* Leader grid — top 3 funds */}
         {!loading && top3.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 28 }}
-            className="leader-grid-resp">
+          <div style={{ marginBottom: 28 }} className="leader-grid-resp">
             {top3.map((f, idx) => {
               const medals = [
                 { label: "GOLD", bg: "#FFFBEB", border: "#FCD34D", badgeBg: "linear-gradient(135deg,#F59E0B,#D97706)", labelColor: "#92400E", starFill: "#F59E0B" },
@@ -325,11 +335,11 @@ export default function RankingsPage() {
                         height: "100%",
                         background: `linear-gradient(90deg, ${m.starFill}, ${idx === 0 ? "#22c55e" : idx === 1 ? "#94a3b8" : "#f97316"})`,
                         borderRadius: 2,
-                        width: `${Math.min((f.score / 50) * 100, 100)}%`,
+                        width: scoreBarWidth(f.score),
                       }} />
                     </div>
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: m.labelColor }}>
-                      {f.score?.toFixed(1)} / 100
+                      {displayScore(f.score)} / 10
                     </span>
                   </div>
                 </div>
@@ -353,7 +363,7 @@ export default function RankingsPage() {
             </svg>
           </div>
           <p style={{ fontSize: 13, color: "rgba(12,14,19,.5)", lineHeight: 1.6 }}>
-            <strong style={{ color: "#0C0E13" }}>Ranking Strength Bar</strong> visualises composite score — CAGR, 3Y rolling, Sharpe, and drawdown protection.{" "}
+            <strong style={{ color: "#0C0E13" }}>Score out of 10</strong> — composite of CAGR, 3Y rolling, Sharpe, and drawdown protection. Higher is better.{" "}
             <strong style={{ color: "#0C0E13" }}>Tap any row</strong> to expand.{" "}
             <strong style={{ color: "#0C0E13" }}>Fund name →</strong> opens full detail page.
           </p>
@@ -522,17 +532,17 @@ export default function RankingsPage() {
                           </td>
                           {/* Score bar */}
                           <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 80 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 90 }}>
                               <div style={{ flex: 1, height: 5, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
                                 <div style={{
                                   height: "100%",
                                   background: "linear-gradient(90deg, #1A56DB, #22c55e)",
                                   borderRadius: 3,
-                                  width: `${Math.min((fund.score / 50) * 100, 100)}%`,
+                                  width: scoreBarWidth(fund.score),
                                 }} />
                               </div>
                               <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#0C0E13", whiteSpace: "nowrap" as const }}>
-                                {fund.score?.toFixed(1)} / 100
+                                {displayScore(fund.score)} / 10
                               </span>
                             </div>
                           </td>
@@ -678,12 +688,12 @@ export default function RankingsPage() {
                     <div style={{ padding: "0 20px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)" }}>Composite Score</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#1A56DB" }}>{fund.score?.toFixed(1)} / 100</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#1A56DB" }}>{displayScore(fund.score)} / 10</span>
                       </div>
                       <div style={{ height: 6, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
                         <div style={{
                           height: "100%", background: "linear-gradient(90deg, #1A56DB, #22c55e)",
-                          borderRadius: 3, width: `${Math.min((fund.score / 50) * 100, 100)}%`,
+                          borderRadius: 3, width: scoreBarWidth(fund.score),
                         }} />
                       </div>
                     </div>

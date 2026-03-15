@@ -53,6 +53,10 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
   const weightError = Math.abs(totalWeight - 100) > 0.5
   const selectedIds = new Set(allocations.map((a) => a.fund.id))
 
+  // Detect if weights are unequal (to highlight the Equalize button)
+  const equalWeight = allocations.length > 0 ? Math.round(100 / allocations.length) : 0
+  const weightsUnequal = allocations.length > 1 && allocations.some(a => Math.round(a.weight) !== equalWeight)
+
   const filteredFunds = funds.filter((f) => {
     const matchCat = catFilter === "All" || f.category === catFilter
     const matchSearch = f.name.toLowerCase().includes(search.toLowerCase())
@@ -105,10 +109,15 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
         {allocations.length > 1 && (
           <button
             onClick={autoNormalize}
-            className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg hover:bg-primary/5"
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-semibold transition-all px-2.5 py-1.5 rounded-lg",
+              weightsUnequal
+                ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 animate-in fade-in duration-200"
+                : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+            )}
           >
             <Equal className="h-3 w-3" />
-            Equal Weight
+            Equalize
           </button>
         )}
       </div>

@@ -19,6 +19,21 @@ interface MFFund {
 type SortKey = "scheme_name" | "scheme_category" | "nav" | "return_1y" | "return_3y" | "return_5y"
 type SortDir = "asc" | "desc"
 
+/** Map AMFI category names to human-readable labels */
+const CATEGORY_LABEL: Record<string, string> = {
+  "Other Scheme - Index Funds": "Index Fund",
+  "Other Scheme - Other ETFs": "ETF",
+  "Other ETFs": "ETF",
+  "Equity Scheme - Index Funds": "Equity Index",
+  "Equity Scheme - Sectoral/ Thematic": "Thematic",
+  "Other Scheme - Fund of Funds (Domestic)": "FoF",
+  "Other Scheme - Fund of Funds (Overseas)": "FoF (Global)",
+}
+function catLabel(raw: string | null | undefined): string {
+  if (!raw) return "—"
+  return CATEGORY_LABEL[raw] ?? raw
+}
+
 function ReturnBadge({ value }: { value: number | null }) {
   if (value === null) return <span style={{ color: "rgba(12,14,19,.25)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>
   const pos = value >= 0
@@ -171,7 +186,7 @@ export default function FundsPage() {
         )}
 
         {/* ── Search + Filter bar ── */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
               {/* Search input */}
               <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
                 <svg viewBox="0 0 18 18" fill="none" style={{
@@ -198,7 +213,7 @@ export default function FundsPage() {
               </div>
               {/* Category filter */}
               {categories.length > 1 && (
-                <div className="mf-scroll-cats" style={{ display: "flex", gap: 6, overflow: "auto", alignItems: "center" }}>
+                <div className="mf-scroll-cats" style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center", flexShrink: 0, maxWidth: "100%" }}>
                   {categories.map(c => (
                     <button
                       key={c}
@@ -210,7 +225,7 @@ export default function FundsPage() {
                         borderColor: categoryFilter === c ? "#0C0E13" : "rgba(12,14,19,.15)",
                       }}
                     >
-                      {c}
+                      {c === "All" ? "All" : catLabel(c)}
                     </button>
                   ))}
                 </div>
@@ -308,13 +323,13 @@ export default function FundsPage() {
                               fontSize: 11, fontWeight: 600,
                               color: "rgba(12,14,19,.55)",
                             }}>
-                              {fund.scheme_category || "—"}
+                              {catLabel(fund.scheme_category)}
                             </span>
                           </td>
                           <td style={{ padding: "13px 16px", textAlign: "right" }}>
                             {fund.nav !== null
                               ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "#0C0E13" }}>
-                                  ₹{fund.nav.toFixed(4)}
+                                  ₹{fund.nav.toFixed(1)}
                                 </span>
                               : <span style={{ color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</span>
                             }
@@ -385,7 +400,7 @@ export default function FundsPage() {
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           {fund.nav !== null
                             ? <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0C0E13" }}>
-                                ₹{fund.nav.toFixed(2)}
+                                ₹{fund.nav.toFixed(1)}
                               </p>
                             : <p style={{ margin: 0, color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</p>
                           }
@@ -403,7 +418,7 @@ export default function FundsPage() {
                           borderRadius: 5, background: "rgba(12,14,19,.06)",
                           fontSize: 10.5, fontWeight: 600, color: "rgba(12,14,19,.5)",
                         }}>
-                          {fund.scheme_category || "—"}
+                          {catLabel(fund.scheme_category)}
                         </span>
                       </div>
 

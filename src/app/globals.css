@@ -400,14 +400,26 @@ nextjs-portal {
    RANKINGS — RESPONSIVE GRIDS
 ───────────────────────────────────────── */
 
-/* Leader grid — 3 → 1 col (medalled cards) */
+/* Leader grid — 3 cols on desktop, horizontal scroll on mobile */
 .leader-grid-resp {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
 @media (max-width: 700px) {
-  .leader-grid-resp { grid-template-columns: 1fr; gap: 10px; }
+  .leader-grid-resp {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 10px;
+    padding-bottom: 6px;
+  }
+  .leader-grid-resp::-webkit-scrollbar { display: none; }
+  .leader-grid-resp > * {
+    flex: 0 0 260px;
+    min-width: 260px;
+  }
 }
 
 /* Rankings wrapper padding */

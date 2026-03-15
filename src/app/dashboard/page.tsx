@@ -488,7 +488,7 @@ export default function DashboardPage() {
         <div style={{ marginBottom: 20 }} id="builder-section">
           <div style={{
             background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-            borderRadius: 20, overflow: "hidden",
+            borderRadius: 20,
           }}>
             {/* Builder header — collapsible */}
             <div
@@ -597,15 +597,7 @@ export default function DashboardPage() {
           {result && !loading && (
             <div ref={resultsRef}>
 
-              {/* Portfolio Snapshot */}
-              <PortfolioSnapshot
-                metrics={result.metrics}
-                benchmark={result.benchmarkMetrics}
-                allocations={allocations}
-                rollingReturns={result.rollingReturns}
-              />
-
-              {/* Performance vs NIFTY */}
+              {/* Performance vs NIFTY — first, right below builder */}
               <CCard
                 title="Performance vs NIFTY 50"
                 sub="Normalised to ₹100 at common start date"
@@ -616,6 +608,30 @@ export default function DashboardPage() {
               >
                 <NavChart data={result.portfolioNav} benchmarkData={result.benchmarkNav} />
               </CCard>
+
+              {/* Portfolio Composition — above Snapshot */}
+              <div style={{
+                background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+                borderRadius: 20, overflow: "hidden", marginBottom: 20,
+              }}>
+                <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Portfolio Composition</div>
+                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>Weight distribution</div>
+                </div>
+                <div style={{ padding: "24px 28px 0" }} className="ccard-body-resp">
+                  <AllocationPieChart
+                    data={allocations.map((a) => ({ name: a.fund.name, code: a.fund.code, weight: a.weight }))}
+                  />
+                </div>
+              </div>
+
+              {/* Portfolio Snapshot */}
+              <PortfolioSnapshot
+                metrics={result.metrics}
+                benchmark={result.benchmarkMetrics}
+                allocations={allocations}
+                rollingReturns={result.rollingReturns}
+              />
 
               {/* Fiscal Year Returns chart */}
               {result.benchmarkNav && result.benchmarkNav.length > 0 && (
@@ -655,39 +671,17 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Side-by-side: Drawdown + Composition */}
-              <div style={{ marginBottom: 20 }}
-                className="side2-resp">
-                {/* Drawdown */}
-                <div style={{
-                  background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                  borderRadius: 20, overflow: "hidden",
-                }}>
-                  <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Drawdown Risk</div>
-                    <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>% decline from previous peak</div>
-                  </div>
-                  <div style={{ padding: "24px 28px" }} className="ccard-body-resp">
-                    <DrawdownChart data={result.drawdownSeries} benchmarkData={result.benchmarkDrawdown} />
-                  </div>
-                </div>
-
-                {/* Portfolio Composition */}
-                <div style={{
-                  background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                  borderRadius: 20, overflow: "hidden",
-                }}>
-                  <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)" }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Portfolio Composition</div>
-                    <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>Weight distribution</div>
-                  </div>
-                  <div style={{ padding: "24px 28px 0" }} className="ccard-body-resp">
-                    <AllocationPieChart
-                      data={allocations.map((a) => ({ name: a.fund.name, code: a.fund.code, weight: a.weight }))}
-                    />
-                  </div>
-                </div>
-              </div>
+              {/* Drawdown Risk */}
+              <CCard
+                title="Drawdown Risk"
+                sub="% decline from previous peak"
+                legend={<ChartLegend items={[
+                  { color: "#C5271E", label: "Portfolio" },
+                  { color: "#94a3b8", label: "Nifty 50", dashed: true },
+                ]} />}
+              >
+                <DrawdownChart data={result.drawdownSeries} benchmarkData={result.benchmarkDrawdown} />
+              </CCard>
 
               {/* Rolling Returns */}
               {result.rollingReturns.length > 0 && (

@@ -133,8 +133,8 @@ export function Navbar() {
         background: "rgba(245,245,243,.95)",
         backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
         borderBottom: "1px solid rgba(12,14,19,.10)",
-        display: "flex", alignItems: "center", padding: "0 18px",
-      }} className="md:hidden">
+        alignItems: "center", padding: "0 18px",
+      }} className="flex md:hidden">
         <Link href="/" style={{
           display: "flex", alignItems: "center", gap: 9,
           textDecoration: "none", flexShrink: 0,
