@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+// Service role needed to bypass RLS on mf_funds / mf_nav_data
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 function dateMinusYears(isoDate: string, years: number): string {
@@ -36,18 +37,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Fund not found' }, { status: 404 })
   }
 
-  // 2. Full NAV history ordered ascending for chart
-  const { data: navHistory, error: navErr } = await supabase
-    .from('mf_nav_data')
-    .select('date, nav')
-    .eq('scheme_code', schemeCode)
-    .order('date', { ascending: true })
+  // 2. Full NAV history ordered ascending for chart (paginated — Supabase caps at 1000/page)
+  const history: Array<{ date: string; nav: number }> = []
+  const PAGE = 1000
+  let from = 0
+  while (true) {
+    const { data: batch, error: navErr } = await supabase
+      .from('mf_nav_data')
+      .select('date, nav')
+      .eq('scheme_code', schemeCode)
+      .order('date', { ascending: true })
+      .range(from, from + PAGE - 1)
 
-  if (navErr) {
-    return NextResponse.json({ error: navErr.message }, { status: 500 })
+    if (navErr) return NextResponse.json({ error: navErr.message }, { status: 500 })
+    if (!batch?.length) break
+    for (const r of batch) history.push({ date: r.date, nav: Number(r.nav) })
+    if (batch.length < PAGE) break
+    from += PAGE
   }
-
-  const history = (navHistory ?? []).map(r => ({ date: r.date, nav: Number(r.nav) }))
 
   if (history.length === 0) {
     return NextResponse.json({ fund, nav_history: [], metrics: null })
