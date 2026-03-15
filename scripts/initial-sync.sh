@@ -9,7 +9,7 @@
 # Make sure your dev server is running first: npm run dev
 
 BASE_URL="http://localhost:3000"
-SECRET="change-me-to-a-strong-random-secret"   # ← must match SYNC_SECRET in .env.local
+SECRET="factorlens2024"   # ← must match SYNC_SECRET in .env.local
 TOTAL_BATCHES=26
 
 echo ""
