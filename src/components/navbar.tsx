@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
-import { Moon, Sun, BarChart3, Home, Trophy, BookOpen, TrendingUp } from "lucide-react"
+import { Moon, Sun, BarChart3, Home, Trophy, BookOpen, TrendingUp, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/funds", label: "Funds" },
   { href: "/rankings", label: "Rankings" },
   { href: "/academy", label: "Academy" },
 ]
@@ -16,6 +17,7 @@ const navLinks = [
 const bottomNavLinks = [
   { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Dashboard", icon: TrendingUp },
+  { href: "/funds", label: "Funds", icon: Layers },
   { href: "/rankings", label: "Rankings", icon: Trophy },
   { href: "/academy", label: "Learn", icon: BookOpen },
 ]
