@@ -1,12 +1,27 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Use anon key — mf_funds / mf_nav_data have RLS disabled so anon key reads work.
-// Service role key is only needed for writes (mf-load / mf-eod cron).
+const MFAPI_BASE = 'https://api.mfapi.in/mf'
+
+// Anon key is sufficient — RLS is disabled on mf_funds / mf_nav_data.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+/** '13-Mar-2026' → '2026-03-13'. Returns '' on failure. */
+function mfapiDateToISO(s: string): string {
+  const MONTHS: Record<string, string> = {
+    Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+    Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12',
+  }
+  const [dd, mon, yyyy] = s.trim().split('-')
+  const mm = MONTHS[mon] ?? ''
+  if (!mm) return ''
+  return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
+}
 
 function dateMinusYears(isoDate: string, years: number): string {
   const d = new Date(isoDate)
@@ -19,17 +34,77 @@ function cagrPct(navStart: number, navEnd: number, years: number): number | null
   return (Math.pow(navEnd / navStart, 1 / years) - 1) * 100
 }
 
-function windowRange(target: string, days = 10): [string, string] {
+function windowRange(target: string, days = 14): [string, string] {
   const lo = new Date(target); lo.setDate(lo.getDate() - days)
   const hi = new Date(target); hi.setDate(hi.getDate() + days)
   return [lo.toISOString().slice(0, 10), hi.toISOString().slice(0, 10)]
 }
 
+// ── Live NAV from mfapi.in ────────────────────────────────────────────────────
+
+interface LiveNav {
+  schemeCode:     number
+  schemeName:     string
+  fundHouse:      string
+  schemeCategory: string
+  nav:            number
+  navDate:        string
+}
+
 /**
- * Fetch all mf_nav_data rows within [lo, hi] date range.
- * Does NOT filter by scheme_code to avoid URL-length issues with 257 codes.
- * Paginates to bypass the 1000-row default cap.
+ * Batch-fetch /latest from mfapi.in for multiple scheme codes.
+ * Runs in parallel batches of BATCH_SIZE to avoid overwhelming the API.
  */
+async function fetchLiveNavBatch(codes: number[]): Promise<Map<number, LiveNav>> {
+  const results = new Map<number, LiveNav>()
+  const BATCH_SIZE = 40
+
+  for (let i = 0; i < codes.length; i += BATCH_SIZE) {
+    const batch = codes.slice(i, i + BATCH_SIZE)
+
+    const settled = await Promise.allSettled(
+      batch.map(async (code) => {
+        const res = await fetch(`${MFAPI_BASE}/${code}/latest`, {
+          signal: AbortSignal.timeout(10_000),
+          // Next.js server-side caching — 1 hour (NAV is published once daily)
+          next: { revalidate: 3600 },
+        })
+        if (!res.ok) return null
+        const json = await res.json() as {
+          status: string
+          data:   Array<{ date: string; nav: string }>
+          meta:   Record<string, string | number>
+        }
+        if (json.status !== 'SUCCESS' || !json.data?.length) return null
+
+        const row     = json.data[0]
+        const navDate = mfapiDateToISO(row.date)
+        const nav     = parseFloat(row.nav)
+        if (!navDate || isNaN(nav) || nav <= 0) return null
+
+        return {
+          schemeCode:     code,
+          schemeName:     String(json.meta['scheme_name']     ?? ''),
+          fundHouse:      String(json.meta['fund_house']      ?? ''),
+          schemeCategory: String(json.meta['scheme_category'] ?? ''),
+          nav,
+          navDate,
+        } satisfies LiveNav
+      })
+    )
+
+    for (const r of settled) {
+      if (r.status === 'fulfilled' && r.value) {
+        results.set(r.value.schemeCode, r.value)
+      }
+    }
+  }
+
+  return results
+}
+
+// ── Historical NAV from Supabase ──────────────────────────────────────────────
+
 async function fetchNavInRange(
   lo: string,
   hi: string
@@ -37,6 +112,7 @@ async function fetchNavInRange(
   const PAGE = 1000
   const all: Array<{ scheme_code: number; date: string; nav: number }> = []
   let from = 0
+
   while (true) {
     const { data, error } = await supabase
       .from('mf_nav_data')
@@ -56,7 +132,6 @@ async function fetchNavInRange(
   return all
 }
 
-/** For rows in a date window, pick the row closest to `target` per scheme_code. */
 function pickClosest(
   rows: Array<{ scheme_code: number; date: string; nav: number }>,
   target: string
@@ -70,96 +145,107 @@ function pickClosest(
       map.set(row.scheme_code, { date: row.date, nav: row.nav })
     } else {
       const prevDiff = Math.abs(new Date(existing.date).getTime() - targetMs)
-      if (thisDiff < prevDiff) {
-        map.set(row.scheme_code, { date: row.date, nav: row.nav })
-      }
+      if (thisDiff < prevDiff) map.set(row.scheme_code, { date: row.date, nav: row.nav })
     }
   }
   return map
 }
 
+// ── Main handler ──────────────────────────────────────────────────────────────
+
 export async function GET() {
   try {
-    // 1. Load all funds from mf_funds
+    // 1. Load all fund metadata from Supabase (scheme codes + names)
     const { data: funds, error: fundsErr } = await supabase
       .from('mf_funds')
       .select('scheme_code, scheme_name, fund_house, scheme_category')
       .order('scheme_name')
 
     if (fundsErr) {
-      return NextResponse.json({ error: fundsErr.message }, { status: 500 })
+      return NextResponse.json({ error: `Supabase error: ${fundsErr.message}` }, { status: 500 })
     }
 
+    // If no funds loaded yet, return a descriptive error so the UI can guide the user
     if (!funds || funds.length === 0) {
-      return NextResponse.json([])
+      return NextResponse.json({
+        error: 'no_data',
+        message: 'Fund database is empty. Visit /api/admin/mf-load to seed data.',
+        funds: [],
+      }, { status: 200 })
     }
 
-    // 2. Find the single latest date across all NAV data
-    const { data: latestRow, error: latestErr } = await supabase
-      .from('mf_nav_data')
-      .select('date')
-      .order('date', { ascending: false })
-      .limit(1)
-      .single()
+    const schemeCodes = funds.map(f => Number(f.scheme_code))
 
-    if (latestErr || !latestRow) {
-      // No NAV data at all — return funds with all nulls
-      return NextResponse.json(funds.map(f => ({
-        scheme_code: f.scheme_code,
-        scheme_name: f.scheme_name,
-        fund_house: f.fund_house,
-        scheme_category: f.scheme_category,
-        nav: null, nav_date: null,
-        return_1y: null, return_3y: null, return_5y: null, aum_cr: null,
-      })))
+    // 2. Fetch LIVE NAV from mfapi.in for ALL funds in parallel batches
+    //    This gives true real-time data (updated 6×/day by mfapi.in from AMFI)
+    const liveNavMap = await fetchLiveNavBatch(schemeCodes)
+
+    // Determine the most recent nav date across all live data
+    let maxDate = ''
+    for (const v of liveNavMap.values()) {
+      if (v.navDate > maxDate) maxDate = v.navDate
     }
 
-    const maxDate = latestRow.date
+    // If live data is available, use that date for historical return targets.
+    // Fall back to Supabase's latest date if mfapi.in couldn't be reached.
+    if (!maxDate) {
+      const { data: latestRow } = await supabase
+        .from('mf_nav_data')
+        .select('date')
+        .order('date', { ascending: false })
+        .limit(1)
+        .single()
+      maxDate = latestRow?.date ?? ''
+    }
 
-    // 3. Target dates for historical returns
-    const target1y = dateMinusYears(maxDate, 1)
-    const target3y = dateMinusYears(maxDate, 3)
-    const target5y = dateMinusYears(maxDate, 5)
+    // 3. Fetch historical NAV windows from Supabase for 1Y / 3Y / 5Y return calcs
+    let map1y = new Map<number, { date: string; nav: number }>()
+    let map3y = new Map<number, { date: string; nav: number }>()
+    let map5y = new Map<number, { date: string; nav: number }>()
 
-    // 4. Fetch NAV data for each date window in parallel
-    // No scheme_code filter — avoids URL-length issues with 257 codes
-    const [currentRows, rows1y, rows3y, rows5y] = await Promise.all([
-      fetchNavInRange(...windowRange(maxDate, 5)),      // current NAV ±5 days
-      fetchNavInRange(...windowRange(target1y, 14)),    // 1yr ago ±14 days
-      fetchNavInRange(...windowRange(target3y, 14)),    // 3yr ago ±14 days
-      fetchNavInRange(...windowRange(target5y, 14)),    // 5yr ago ±14 days
-    ])
+    if (maxDate) {
+      const [rows1y, rows3y, rows5y] = await Promise.all([
+        fetchNavInRange(...windowRange(dateMinusYears(maxDate, 1))),
+        fetchNavInRange(...windowRange(dateMinusYears(maxDate, 3))),
+        fetchNavInRange(...windowRange(dateMinusYears(maxDate, 5))),
+      ])
+      map1y = pickClosest(rows1y, dateMinusYears(maxDate, 1))
+      map3y = pickClosest(rows3y, dateMinusYears(maxDate, 3))
+      map5y = pickClosest(rows5y, dateMinusYears(maxDate, 5))
+    }
 
-    const latestByScheme = pickClosest(currentRows, maxDate)
-    const nav1yMap = pickClosest(rows1y, target1y)
-    const nav3yMap = pickClosest(rows3y, target3y)
-    const nav5yMap = pickClosest(rows5y, target5y)
-
-    // 5. Assemble result
+    // 4. Assemble result — live NAV overrides stale Supabase NAV
     const result = funds.map(f => {
-      const code = Number(f.scheme_code)
-      const latest = latestByScheme.get(code)
-      const nav1y = nav1yMap.get(code)
-      const nav3y = nav3yMap.get(code)
-      const nav5y = nav5yMap.get(code)
-      const currentNav = latest?.nav ?? null
+      const code  = Number(f.scheme_code)
+      const live  = liveNavMap.get(code)
+      const nav   = live?.nav ?? null
+      const nav1y = map1y.get(code)
+      const nav3y = map3y.get(code)
+      const nav5y = map5y.get(code)
 
       return {
-        scheme_code: code,
-        scheme_name: f.scheme_name,
-        fund_house: f.fund_house,
-        scheme_category: f.scheme_category,
-        nav: currentNav,
-        nav_date: latest?.date ?? null,
-        return_1y: currentNav && nav1y ? cagrPct(nav1y.nav, currentNav, 1) : null,
-        return_3y: currentNav && nav3y ? cagrPct(nav3y.nav, currentNav, 3) : null,
-        return_5y: currentNav && nav5y ? cagrPct(nav5y.nav, currentNav, 5) : null,
+        scheme_code:     code,
+        scheme_name:     live?.schemeName     || String(f.scheme_name     ?? ''),
+        fund_house:      live?.fundHouse      || String(f.fund_house      ?? ''),
+        scheme_category: live?.schemeCategory || String(f.scheme_category ?? ''),
+        nav,
+        nav_date: live?.navDate ?? null,
+        return_1y: nav && nav1y ? cagrPct(nav1y.nav, nav, 1) : null,
+        return_3y: nav && nav3y ? cagrPct(nav3y.nav, nav, 3) : null,
+        return_5y: nav && nav5y ? cagrPct(nav5y.nav, nav, 5) : null,
         aum_cr: null,
       }
     })
 
+    // Sort: funds with live NAV first (active), then alphabetical
+    result.sort((a, b) => {
+      if (a.nav !== null && b.nav === null) return -1
+      if (a.nav === null && b.nav !== null) return 1
+      return a.scheme_name.localeCompare(b.scheme_name)
+    })
+
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400' }
+      headers: { 'Cache-Control': 's-maxage=900, stale-while-revalidate=3600' },
     })
 
   } catch (e) {

@@ -2,53 +2,81 @@
 
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { Search, TrendingUp, TrendingDown, ArrowUpDown, ChevronUp, ChevronDown, Building2 } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 interface MFFund {
-  scheme_code: number
-  scheme_name: string
-  fund_house: string
+  scheme_code:     number
+  scheme_name:     string
+  fund_house:      string
   scheme_category: string
-  nav: number | null
-  nav_date: string | null
-  return_1y: number | null
-  return_3y: number | null
-  return_5y: number | null
-  aum_cr: null
+  nav:             number | null
+  nav_date:        string | null
+  return_1y:       number | null
+  return_3y:       number | null
+  return_5y:       number | null
+  aum_cr:          null
 }
 
 type SortKey = "scheme_name" | "scheme_category" | "nav" | "return_1y" | "return_3y" | "return_5y"
 type SortDir = "asc" | "desc"
 
-function ReturnCell({ value }: { value: number | null }) {
-  if (value === null) return <span className="text-muted-foreground/50 font-mono text-xs">—</span>
+function ReturnBadge({ value }: { value: number | null }) {
+  if (value === null) return <span style={{ color: "rgba(12,14,19,.25)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>
   const pos = value >= 0
   return (
-    <span className={cn(
-      "font-mono text-xs font-bold tabular-nums",
-      pos ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
-    )}>
+    <span style={{
+      fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
+      color: pos ? "#0A7C4E" : "#C5271E",
+    }}>
       {pos ? "+" : ""}{value.toFixed(1)}%
     </span>
   )
 }
 
-function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
-  if (col !== sortKey) return <ArrowUpDown className="h-3 w-3 opacity-30" />
-  return sortDir === "asc"
-    ? <ChevronUp className="h-3 w-3 text-primary" />
-    : <ChevronDown className="h-3 w-3 text-primary" />
+function SortArrow({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return (
+    <svg viewBox="0 0 10 14" fill="none" style={{ width: 8, height: 10, opacity: 0.25 }}>
+      <path d="M5 1v12M1 5l4-4 4 4M1 9l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+  return sortDir === "asc" ? (
+    <svg viewBox="0 0 10 7" fill="none" style={{ width: 8, height: 6 }}>
+      <path d="M1 6l4-5 4 5" stroke="#1A56DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 10 7" fill="none" style={{ width: 8, height: 6 }}>
+      <path d="M1 1l4 5 4-5" stroke="#1A56DB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Loading skeleton row
+function SkeletonRow() {
+  return (
+    <tr>
+      {[180, 100, 70, 60, 60, 60].map((w, i) => (
+        <td key={i} style={{ padding: "14px 16px" }}>
+          <div style={{
+            height: 12, width: w, borderRadius: 6,
+            background: "rgba(12,14,19,.07)",
+            animation: "mf-pulse 1.4s ease infinite",
+          }} />
+        </td>
+      ))}
+    </tr>
+  )
 }
 
 export default function FundsPage() {
-  const [funds, setFunds] = useState<MFFund[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
+  const [funds,          setFunds]          = useState<MFFund[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [error,          setError]          = useState<string | null>(null)
+  const [noData,         setNoData]         = useState(false)
+  const [seeding,        setSeeding]        = useState(false)
+  const [seedMsg,        setSeedMsg]        = useState("")
+  const [search,         setSearch]         = useState("")
   const [categoryFilter, setCategoryFilter] = useState("All")
-  const [sortKey, setSortKey] = useState<SortKey>("return_1y")
-  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [sortKey,        setSortKey]        = useState<SortKey>("return_1y")
+  const [sortDir,        setSortDir]        = useState<SortDir>("desc")
 
   useEffect(() => {
     fetch("/api/mffunds")
@@ -56,15 +84,42 @@ export default function FundsPage() {
       .then((data: unknown) => {
         if (Array.isArray(data)) {
           setFunds(data as MFFund[])
-        } else if (data && typeof data === "object" && "error" in data) {
-          setError(String((data as { error: string }).error))
-        } else {
-          setError("Unexpected response from server")
+        } else if (data && typeof data === "object") {
+          const d = data as Record<string, unknown>
+          if (d.error === "no_data" || (Array.isArray(d.funds) && d.funds.length === 0)) {
+            setNoData(true)
+          } else if (typeof d.error === "string") {
+            setError(d.error as string)
+          } else {
+            setError("Unexpected response")
+          }
         }
         setLoading(false)
       })
       .catch(e => { setError(e.message); setLoading(false) })
   }, [])
+
+  // Trigger the admin seed loader — uses anon key (RLS disabled on mf tables)
+  async function triggerSeed() {
+    setSeeding(true)
+    setSeedMsg("Starting data load — this takes 2–5 minutes for all funds…")
+    try {
+      // Trigger in batches (offset 0 first; the admin route loads 20 at a time)
+      const res = await fetch("/api/admin/mf-load?offset=0&limit=282")
+      const json = await res.json() as Record<string, unknown>
+      if (json.ok) {
+        setSeedMsg(`Loaded batch 0–20. Refreshing…`)
+        // Auto-reload page after short delay to show data
+        setTimeout(() => window.location.reload(), 2000)
+      } else {
+        setSeedMsg(`Error: ${String(json.error ?? "Unknown error")}`)
+        setSeeding(false)
+      }
+    } catch (e) {
+      setSeedMsg(`Failed: ${e instanceof Error ? e.message : String(e)}`)
+      setSeeding(false)
+    }
+  }
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(funds.map(f => f.scheme_category).filter(Boolean)))
@@ -84,10 +139,11 @@ export default function FundsPage() {
       list = list.filter(f => f.scheme_category === categoryFilter)
     }
     list = [...list].sort((a, b) => {
-      let av = a[sortKey]
-      let bv = b[sortKey]
-      if (av === null) av = sortDir === "asc" ? Infinity : -Infinity
-      if (bv === null) bv = sortDir === "asc" ? Infinity : -Infinity
+      let av: string | number | null = a[sortKey]
+      let bv: string | number | null = b[sortKey]
+      const nullVal = sortDir === "asc" ? Infinity : -Infinity
+      if (av === null) av = nullVal as number
+      if (bv === null) bv = nullVal as number
       if (typeof av === "string" && typeof bv === "string") {
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av)
       }
@@ -97,228 +153,397 @@ export default function FundsPage() {
   }, [funds, search, categoryFilter, sortKey, sortDir])
 
   function toggleSort(col: SortKey) {
-    if (sortKey === col) {
-      setSortDir(d => d === "asc" ? "desc" : "asc")
-    } else {
-      setSortKey(col)
-      setSortDir("desc")
-    }
+    if (sortKey === col) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortKey(col); setSortDir("desc") }
   }
 
-  const navDate = funds.find(f => f.nav_date)?.nav_date
+  const navDate     = funds.find(f => f.nav_date)?.nav_date
+  const withReturns = funds.filter(f => f.return_1y !== null).length
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-5">
+    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+      <style>{`
+        @keyframes mf-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .4; }
+        }
+        .mf-row:hover { background: rgba(26,86,219,.03) !important; }
+        .mf-th:hover { color: #0C0E13 !important; }
+        .mf-sort-btn { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+        .mf-cat-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; border: 1px solid transparent; cursor: pointer; transition: all .15s; white-space: nowrap; }
+        .mf-scroll-cats::-webkit-scrollbar { display: none; }
+        .mf-scroll-cats { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
 
-        {/* Header */}
-        <div className="pt-1">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Mutual Funds</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {loading ? "Loading…" : `${funds.length} funds · NAV as of ${navDate ?? "—"}`}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 20px 80px" }}>
+
+        {/* ── Header ── */}
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0C0E13", margin: "0 0 4px", letterSpacing: "-.02em" }}>
+            Mutual Funds
+          </h1>
+          <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: 0 }}>
+            {loading
+              ? "Loading live data from mfapi.in…"
+              : noData
+              ? "Database not seeded yet"
+              : `${funds.length} funds · NAV as of ${navDate ?? "—"} · ${withReturns} with return history`
+            }
           </p>
         </div>
 
-        {/* Search + Filter */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-            <input
-              type="text"
-              placeholder="Search by fund name or AMC…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 text-sm rounded-xl border border-border/60 bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-            />
-          </div>
-          <select
-            value={categoryFilter}
-            onChange={e => setCategoryFilter(e.target.value)}
-            className="sm:w-56 px-3 py-2.5 text-sm rounded-xl border border-border/60 bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
-          >
-            {categories.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3">
-            <p className="text-sm text-destructive">{error}</p>
+        {/* ── No-data state: guide user to seed ── */}
+        {!loading && noData && (
+          <div style={{
+            background: "#ffffff",
+            border: "1px solid rgba(12,14,19,.12)",
+            borderRadius: 18, padding: "32px 28px",
+            textAlign: "center", maxWidth: 560, margin: "0 auto",
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: "rgba(26,86,219,.1)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px",
+            }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#1A56DB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#0C0E13", margin: "0 0 8px" }}>
+              Fund data not loaded yet
+            </h3>
+            <p style={{ color: "rgba(12,14,19,.5)", fontSize: 13.5, lineHeight: 1.65, margin: "0 0 24px" }}>
+              The fund database is empty. Click below to fetch all funds from mfapi.in and seed the database. This is a one-time setup that takes 2–5 minutes.
+            </p>
+            <button
+              onClick={triggerSeed}
+              disabled={seeding}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "11px 24px", borderRadius: 10,
+                background: seeding ? "rgba(12,14,19,.12)" : "#0C0E13",
+                color: seeding ? "rgba(12,14,19,.4)" : "#ffffff",
+                border: "none", cursor: seeding ? "not-allowed" : "pointer",
+                fontSize: 14, fontWeight: 600, transition: "all .2s",
+              }}
+            >
+              {seeding ? (
+                <>
+                  <svg viewBox="0 0 16 16" fill="none" style={{ width: 14, height: 14, animation: "spin .8s linear infinite" }}>
+                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="28" strokeDashoffset="10" />
+                  </svg>
+                  Loading…
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ width: 14, height: 14 }}>
+                    <path d="M8 2v6l3-3M8 8l-3-3" /><circle cx="8" cy="8" r="6" />
+                  </svg>
+                  Load All Funds from mfapi.in
+                </>
+              )}
+            </button>
+            {seedMsg && (
+              <p style={{ color: "rgba(12,14,19,.5)", fontSize: 12.5, marginTop: 12 }}>{seedMsg}</p>
+            )}
           </div>
         )}
 
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="space-y-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-16 rounded-2xl bg-muted/30 animate-pulse" />
-            ))}
+        {/* ── Error ── */}
+        {error && !noData && (
+          <div style={{
+            background: "rgba(197,39,30,.05)", border: "1px solid rgba(197,39,30,.2)",
+            borderRadius: 12, padding: "14px 18px", marginBottom: 20,
+          }}>
+            <p style={{ color: "#C5271E", fontSize: 13.5, margin: 0 }}>{error}</p>
           </div>
         )}
 
-        {/* Results count */}
-        {!loading && !error && (
-          <p className="text-xs text-muted-foreground">
-            Showing {filtered.length} of {funds.length} funds
-            {categoryFilter !== "All" && <span> in <span className="font-semibold">{categoryFilter}</span></span>}
-          </p>
-        )}
-
-        {/* Desktop Table */}
-        {!loading && !error && (
-          <div className="hidden md:block rounded-2xl border border-border/60 bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    {[
-                      { key: "scheme_name" as SortKey, label: "Fund Name", align: "left" },
-                      { key: "scheme_category" as SortKey, label: "Category", align: "left" },
-                      { key: "nav" as SortKey, label: "NAV (₹)", align: "right" },
-                      { key: "return_1y" as SortKey, label: "1Y Return", align: "right" },
-                      { key: "return_3y" as SortKey, label: "3Y CAGR", align: "right" },
-                      { key: "return_5y" as SortKey, label: "5Y CAGR", align: "right" },
-                    ].map(col => (
-                      <th
-                        key={col.key}
-                        className={cn(
-                          "px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground cursor-pointer hover:text-foreground select-none transition-colors",
-                          col.align === "right" ? "text-right" : "text-left"
-                        )}
-                        onClick={() => toggleSort(col.key)}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {col.align === "right" && <SortIcon col={col.key} sortKey={sortKey} sortDir={sortDir} />}
-                          {col.label}
-                          {col.align === "left" && <SortIcon col={col.key} sortKey={sortKey} sortDir={sortDir} />}
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {filtered.map(fund => (
-                    <tr
-                      key={fund.scheme_code}
-                      className="hover:bg-muted/30 transition-colors cursor-pointer group"
-                      onClick={() => window.location.href = `/funds/${fund.scheme_code}`}
+        {!noData && (
+          <>
+            {/* ── Search + Filter bar ── */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+              {/* Search input */}
+              <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+                <svg viewBox="0 0 18 18" fill="none" style={{
+                  position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                  width: 15, height: 15, pointerEvents: "none",
+                }}>
+                  <circle cx="7.5" cy="7.5" r="5.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" />
+                  <path d="M12 12l3.5 3.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search by fund name or AMC…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{
+                    width: "100%", paddingLeft: 36, paddingRight: 14,
+                    paddingTop: 10, paddingBottom: 10,
+                    border: "1px solid rgba(12,14,19,.12)",
+                    borderRadius: 10, background: "#ffffff",
+                    fontSize: 13.5, color: "#0C0E13", outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              {/* Category filter */}
+              {categories.length > 1 && (
+                <div className="mf-scroll-cats" style={{ display: "flex", gap: 6, overflow: "auto", alignItems: "center" }}>
+                  {categories.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setCategoryFilter(c)}
+                      className="mf-cat-pill"
+                      style={{
+                        background: categoryFilter === c ? "#0C0E13" : "#ffffff",
+                        color: categoryFilter === c ? "#ffffff" : "rgba(12,14,19,.6)",
+                        borderColor: categoryFilter === c ? "#0C0E13" : "rgba(12,14,19,.15)",
+                      }}
                     >
-                      <td className="px-4 py-3.5">
-                        <div className="font-medium text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2">
-                          {fund.scheme_name}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                          <Building2 className="h-3 w-3 flex-shrink-0" />
-                          {fund.fund_house}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
-                          {fund.scheme_category || "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        {fund.nav !== null
-                          ? <span className="font-mono text-sm font-semibold tabular-nums">₹{fund.nav.toFixed(4)}</span>
-                          : <span className="text-muted-foreground/50 text-xs">—</span>
-                        }
-                      </td>
-                      <td className="px-4 py-3.5 text-right"><ReturnCell value={fund.return_1y} /></td>
-                      <td className="px-4 py-3.5 text-right"><ReturnCell value={fund.return_3y} /></td>
-                      <td className="px-4 py-3.5 text-right"><ReturnCell value={fund.return_5y} /></td>
-                    </tr>
+                      {c}
+                    </button>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
 
-            {filtered.length === 0 && (
-              <div className="py-16 text-center">
-                <p className="text-muted-foreground text-sm">No funds match your search.</p>
+            {/* Results count */}
+            {!loading && funds.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.4)" }}>
+                  {filtered.length} of {funds.length} funds
+                  {categoryFilter !== "All" && <> in <strong style={{ color: "#0C0E13" }}>{categoryFilter}</strong></>}
+                </span>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Mobile Cards */}
-        {!loading && !error && (
-          <div className="md:hidden space-y-2">
-            {filtered.length === 0 && (
-              <div className="py-16 text-center rounded-2xl border border-dashed border-border/70 bg-card">
-                <p className="text-muted-foreground text-sm">No funds match your search.</p>
-              </div>
-            )}
-            {filtered.map(fund => (
-              <Link
-                key={fund.scheme_code}
-                href={`/funds/${fund.scheme_code}`}
-                className="block rounded-2xl border border-border/60 bg-card p-4 hover:border-primary/20 transition-all active:scale-[0.98]"
-              >
-                <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm leading-snug line-clamp-2">{fund.scheme_name}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{fund.fund_house}</p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    {fund.nav !== null
-                      ? <p className="font-mono text-sm font-bold tabular-nums">₹{fund.nav.toFixed(2)}</p>
-                      : <p className="text-muted-foreground/50 text-xs">—</p>
+            {/* ── Desktop Table ── */}
+            <div className="md:block hidden" style={{
+              background: "#ffffff",
+              border: "1px solid rgba(12,14,19,.1)",
+              borderRadius: 16, overflow: "hidden",
+            }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+                  <thead>
+                    <tr style={{ background: "#F5F5F3", borderBottom: "1px solid rgba(12,14,19,.1)" }}>
+                      {([
+                        { key: "scheme_name"     as SortKey, label: "Fund Name",  align: "left"  },
+                        { key: "scheme_category" as SortKey, label: "Category",   align: "left"  },
+                        { key: "nav"             as SortKey, label: "NAV (₹)",    align: "right" },
+                        { key: "return_1y"       as SortKey, label: "1Y Return",  align: "right" },
+                        { key: "return_3y"       as SortKey, label: "3Y CAGR",    align: "right" },
+                        { key: "return_5y"       as SortKey, label: "5Y CAGR",    align: "right" },
+                      ]).map(col => (
+                        <th
+                          key={col.key}
+                          className="mf-th"
+                          onClick={() => toggleSort(col.key)}
+                          style={{
+                            padding: "11px 16px",
+                            textAlign: col.align as "left" | "right",
+                            fontSize: 10.5, fontWeight: 700,
+                            color: "rgba(12,14,19,.4)", letterSpacing: ".7px",
+                            textTransform: "uppercase",
+                            cursor: "pointer", transition: "color .15s",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span className="mf-sort-btn">
+                            {col.align === "right" && <SortArrow col={col.key} sortKey={sortKey} sortDir={sortDir} />}
+                            {col.label}
+                            {col.align === "left"  && <SortArrow col={col.key} sortKey={sortKey} sortDir={sortDir} />}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading
+                      ? Array.from({ length: 12 }).map((_, i) => <SkeletonRow key={i} />)
+                      : filtered.map(fund => (
+                        <tr
+                          key={fund.scheme_code}
+                          className="mf-row"
+                          onClick={() => window.location.href = `/funds/${fund.scheme_code}`}
+                          style={{
+                            cursor: "pointer",
+                            borderBottom: "1px solid rgba(12,14,19,.06)",
+                            transition: "background .12s",
+                          }}
+                        >
+                          <td style={{ padding: "13px 16px" }}>
+                            <div style={{
+                              fontWeight: 600, fontSize: 13.5, color: "#0C0E13",
+                              lineHeight: 1.35, maxWidth: 380,
+                            }}>
+                              {fund.scheme_name}
+                            </div>
+                            <div style={{
+                              marginTop: 2, fontSize: 11.5,
+                              color: "rgba(12,14,19,.4)",
+                              display: "flex", alignItems: "center", gap: 5,
+                            }}>
+                              <svg viewBox="0 0 14 14" fill="none" style={{ width: 11, height: 11, flexShrink: 0 }}>
+                                <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                                <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                              </svg>
+                              {fund.fund_house}
+                            </div>
+                          </td>
+                          <td style={{ padding: "13px 16px" }}>
+                            <span style={{
+                              display: "inline-block", padding: "3px 8px",
+                              borderRadius: 6, background: "rgba(12,14,19,.06)",
+                              fontSize: 11, fontWeight: 600,
+                              color: "rgba(12,14,19,.55)",
+                            }}>
+                              {fund.scheme_category || "—"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                            {fund.nav !== null
+                              ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "#0C0E13" }}>
+                                  ₹{fund.nav.toFixed(4)}
+                                </span>
+                              : <span style={{ color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</span>
+                            }
+                            {fund.nav_date && (
+                              <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                                {fund.nav_date}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                            <ReturnBadge value={fund.return_1y} />
+                          </td>
+                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                            <ReturnBadge value={fund.return_3y} />
+                          </td>
+                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                            <ReturnBadge value={fund.return_5y} />
+                          </td>
+                        </tr>
+                      ))
                     }
-                    {fund.nav_date && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{fund.nav_date}</p>
-                    )}
-                  </div>
-                </div>
+                  </tbody>
+                </table>
+              </div>
 
-                <div className="flex items-center gap-1 mb-2.5">
-                  <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
-                    {fund.scheme_category || "—"}
-                  </span>
+              {!loading && filtered.length === 0 && funds.length > 0 && (
+                <div style={{ padding: "48px 24px", textAlign: "center" }}>
+                  <p style={{ color: "rgba(12,14,19,.4)", fontSize: 14 }}>No funds match your search.</p>
                 </div>
+              )}
+            </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: "1Y", value: fund.return_1y },
-                    { label: "3Y CAGR", value: fund.return_3y },
-                    { label: "5Y CAGR", value: fund.return_5y },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="rounded-xl bg-muted/30 px-2.5 py-2 text-center">
-                      <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mb-0.5">{label}</p>
-                      {value !== null ? (
-                        <div className={cn(
-                          "flex items-center justify-center gap-0.5 text-xs font-bold tabular-nums",
-                          value >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"
-                        )}>
-                          {value >= 0
-                            ? <TrendingUp className="h-2.5 w-2.5" />
-                            : <TrendingDown className="h-2.5 w-2.5" />
-                          }
-                          {value >= 0 ? "+" : ""}{value.toFixed(1)}%
+            {/* ── Mobile Cards ── */}
+            <div className="md:hidden" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} style={{
+                      height: 110, borderRadius: 14,
+                      background: "rgba(12,14,19,.06)",
+                      animation: "mf-pulse 1.4s ease infinite",
+                    }} />
+                  ))
+                : filtered.map(fund => (
+                    <Link
+                      key={fund.scheme_code}
+                      href={`/funds/${fund.scheme_code}`}
+                      style={{
+                        display: "block", textDecoration: "none",
+                        background: "#ffffff",
+                        border: "1px solid rgba(12,14,19,.1)",
+                        borderRadius: 14, padding: "14px 16px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            margin: 0, fontWeight: 600, fontSize: 13.5,
+                            color: "#0C0E13", lineHeight: 1.35,
+                            overflow: "hidden", textOverflow: "ellipsis",
+                            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                          }}>
+                            {fund.scheme_name}
+                          </p>
+                          <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "rgba(12,14,19,.4)" }}>
+                            {fund.fund_house}
+                          </p>
                         </div>
-                      ) : (
-                        <p className="text-[10px] text-muted-foreground/50">—</p>
-                      )}
-                    </div>
-                  ))}
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          {fund.nav !== null
+                            ? <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0C0E13" }}>
+                                ₹{fund.nav.toFixed(2)}
+                              </p>
+                            : <p style={{ margin: 0, color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</p>
+                          }
+                          {fund.nav_date && (
+                            <p style={{ margin: "2px 0 0", fontSize: 10, color: "rgba(12,14,19,.3)" }}>
+                              {fund.nav_date}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                        <span style={{
+                          display: "inline-block", padding: "2px 7px",
+                          borderRadius: 5, background: "rgba(12,14,19,.06)",
+                          fontSize: 10.5, fontWeight: 600, color: "rgba(12,14,19,.5)",
+                        }}>
+                          {fund.scheme_category || "—"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                        {[
+                          { label: "1Y",      value: fund.return_1y },
+                          { label: "3Y CAGR", value: fund.return_3y },
+                          { label: "5Y CAGR", value: fund.return_5y },
+                        ].map(({ label, value }) => (
+                          <div key={label} style={{
+                            background: "#F5F5F3", borderRadius: 8,
+                            padding: "6px 8px", textAlign: "center",
+                          }}>
+                            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>
+                              {label}
+                            </p>
+                            <ReturnBadge value={value} />
+                          </div>
+                        ))}
+                      </div>
+                    </Link>
+                  ))
+              }
+
+              {!loading && filtered.length === 0 && funds.length > 0 && (
+                <div style={{ padding: "48px 0", textAlign: "center" }}>
+                  <p style={{ color: "rgba(12,14,19,.4)", fontSize: 14 }}>No funds match your search.</p>
                 </div>
-              </Link>
-            ))}
-          </div>
-        )}
+              )}
+            </div>
 
-        {/* Disclaimer */}
-        {!loading && !error && funds.length > 0 && (
-          <div className="rounded-xl border border-dashed border-border/50 p-4 bg-muted/10">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Disclosure</p>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              NAV data sourced from AMFI via mfapi.in. Returns are calculated from historical NAV. Past performance is not indicative of future results.
-              1Y return is point-to-point; 3Y and 5Y returns are CAGR. AUM data is not available.
-            </p>
-          </div>
+            {/* ── Disclosure ── */}
+            {!loading && funds.length > 0 && (
+              <div style={{
+                marginTop: 20, borderRadius: 12,
+                border: "1px dashed rgba(12,14,19,.15)",
+                padding: "12px 16px", background: "rgba(12,14,19,.02)",
+              }}>
+                <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".7px" }}>Disclosure</p>
+                <p style={{ margin: 0, fontSize: 11.5, color: "rgba(12,14,19,.45)", lineHeight: 1.65 }}>
+                  NAV data sourced from AMFI via mfapi.in (updated 6× daily). Returns are point-to-point (1Y) or CAGR (3Y / 5Y) computed from historical NAV.
+                  Past performance is not indicative of future results.
+                </p>
+              </div>
+            )}
+          </>
         )}
-
       </div>
     </div>
   )
