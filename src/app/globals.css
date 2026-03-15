@@ -1,3 +1,6 @@
+/* Google Fonts — loaded at runtime (no build-time network required) */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap");
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -49,6 +52,10 @@
    LIGHT THEME  (off-white + navy system)
 ───────────────────────────────────────── */
 :root {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+
   --radius: 0.75rem;
 
   /* Backgrounds */
