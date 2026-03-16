@@ -93,6 +93,60 @@ function ReturnBadge({ value }: { value: number | null }) {
   )
 }
 
+// ── AMC logo mapping (Groww CDN) ───────────────────────────────────────────────
+const GROWW_LOGO = "https://assets-netstorage.groww.in/mf-assets/logos/"
+const AMC_LOGOS: Array<[string[], string]> = [
+  [["sbi funds", "sbi mutual"],                     "sbi_groww.png"],
+  [["hdfc"],                                         "hdfc_groww.png"],
+  [["icici"],                                        "icici_groww.png"],
+  [["nippon"],                                       "nippon_groww.png"],
+  [["mirae"],                                        "mirae_groww.png"],
+  [["axis asset"],                                   "axis_groww.png"],
+  [["kotak"],                                        "kotak_groww.png"],
+  [["dsp"],                                          "dsp_groww.png"],
+  [["motilal"],                                      "motilal_groww.png"],
+  [["uti asset"],                                    "uti_groww.png"],
+  [["tata asset"],                                   "tata_groww.png"],
+  [["aditya birla", "birla sun life"],               "aditya_groww.png"],
+  [["franklin templeton"],                           "franklin_groww.png"],
+  [["pgim"],                                         "pgim_groww.png"],
+  [["bandhan"],                                      "bandhan_groww.png"],
+  [["canara robeco"],                                "canara_groww.png"],
+  [["invesco"],                                      "invesco_groww.png"],
+  [["lic mutual", "lic mf"],                         "lic_groww.png"],
+  [["ppfas", "parag parikh"],                        "ppfas_groww.png"],
+  [["quantum asset"],                                "quantum_groww.png"],
+  [["sundaram asset"],                               "sundaram_groww.png"],
+  [["union asset"],                                  "union_groww.png"],
+  [["whiteoak", "white oak capital"],                "whiteoak_groww.png"],
+  [["edelweiss"],                                    "edelweiss_groww.png"],
+  [["jm financial"],                                 "jm_groww.png"],
+  [["360 one"],                                      "360_groww.png"],
+  [["zerodha"],                                      "zerodha_groww.png"],
+  [["groww asset"],                                  "indiabulls_groww.png"],
+  [["quant money"],                                  "quant_groww.png"],
+  [["baroda bnp", "bnp paribas"],                    "barodabnpparibasmutualfund_groww.png"],
+  [["bank of india"],                                "bank_groww.png"],
+  [["mahindra manulife"],                            "mahindra_groww.png"],
+  [["nj asset"],                                     "nj_groww.png"],
+  [["bajaj finserv"],                                "bajaj_groww.png"],
+  [["navi"],                                         "navi_groww.png"],
+  [["hsbc"],                                         "hsbc_groww.png"],
+  [["helios"],                                       "helios_groww.png"],
+  [["jio blackrock", "jioblackrock"],                "jioblackrock_groww.png"],
+  [["360 one"],                                      "360_groww.png"],
+  [["shriram"],                                      "shriram_groww.png"],
+  [["taurus"],                                       "taurus_groww.png"],
+]
+
+function amcLogoUrl(fundHouse: string): string | null {
+  const h = fundHouse.toLowerCase()
+  for (const [keywords, file] of AMC_LOGOS) {
+    if (keywords.some(k => h.includes(k))) return GROWW_LOGO + file
+  }
+  return null
+}
+
 function SortArrow({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
   if (col !== sortKey) return (
     <svg viewBox="0 0 10 14" fill="none" style={{ width: 8, height: 10, opacity: 0.25 }}>
@@ -377,10 +431,18 @@ export default function FundsPage() {
                               color: "rgba(12,14,19,.4)",
                               display: "flex", alignItems: "center", gap: 5,
                             }}>
-                              <svg viewBox="0 0 14 14" fill="none" style={{ width: 11, height: 11, flexShrink: 0 }}>
-                                <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                                <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                              </svg>
+                              {amcLogoUrl(fund.fund_house)
+                                ? <img
+                                    src={amcLogoUrl(fund.fund_house)!}
+                                    alt=""
+                                    width={16} height={16}
+                                    style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
+                                  />
+                                : <svg viewBox="0 0 14 14" fill="none" style={{ width: 11, height: 11, flexShrink: 0 }}>
+                                    <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                                    <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                                  </svg>
+                              }
                               {fund.fund_house}
                             </div>
                           </td>
@@ -461,9 +523,19 @@ export default function FundsPage() {
                           }}>
                             {fund.scheme_name}
                           </p>
-                          <p style={{ margin: "3px 0 0", fontSize: 11.5, color: "rgba(12,14,19,.4)" }}>
-                            {fund.fund_house}
-                          </p>
+                          <div style={{ margin: "3px 0 0", display: "flex", alignItems: "center", gap: 5 }}>
+                            {amcLogoUrl(fund.fund_house) && (
+                              <img
+                                src={amcLogoUrl(fund.fund_house)!}
+                                alt=""
+                                width={14} height={14}
+                                style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
+                              />
+                            )}
+                            <span style={{ fontSize: 11.5, color: "rgba(12,14,19,.4)" }}>
+                              {fund.fund_house}
+                            </span>
+                          </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           {fund.nav !== null
