@@ -59,7 +59,7 @@ export function Navbar() {
         background: "rgba(245,245,243,.93)",
         backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
         borderBottom: "1px solid rgba(12,14,19,.12)",
-        display: "flex", alignItems: "center",
+        alignItems: "center",
       }} className="hidden md:flex">
         <div style={{
           maxWidth: 1160, width: "100%", margin: "0 auto",

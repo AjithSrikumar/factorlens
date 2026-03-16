@@ -516,7 +516,7 @@ export default function DashboardPage() {
                   <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px" }}>Build Your Portfolio</div>
                   <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 2 }}>
                     {!builderOpen && allocations.length > 0
-                      ? allocations.map(a => `${a.fund.code} ${a.weight.toFixed(0)}%`).join(" · ")
+                      ? `${allocations.length} fund${allocations.length !== 1 ? "s" : ""} selected`
                       : "Select funds · Set weights · Generate"}
                   </div>
                 </div>
