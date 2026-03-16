@@ -94,52 +94,60 @@ function ReturnBadge({ value }: { value: number | null }) {
 }
 
 // ── AMC logo mapping (Groww CDN) ───────────────────────────────────────────────
+// Keywords are intentionally short so they match regardless of whether
+// fund_house is "Axis Asset Management Company Ltd." or "Axis AMC" etc.
+// Order matters: more-specific entries must come before shorter ones that
+// would otherwise shadow them (e.g. "quantum" before "quant").
 const GROWW_LOGO = "https://assets-netstorage.groww.in/mf-assets/logos/"
 const AMC_LOGOS: Array<[string[], string]> = [
-  [["sbi funds", "sbi mutual"],                     "sbi_groww.png"],
+  [["sbi"],                                          "sbi_groww.png"],
   [["hdfc"],                                         "hdfc_groww.png"],
   [["icici"],                                        "icici_groww.png"],
   [["nippon"],                                       "nippon_groww.png"],
   [["mirae"],                                        "mirae_groww.png"],
-  [["axis asset"],                                   "axis_groww.png"],
+  [["axis"],                                         "axis_groww.png"],
   [["kotak"],                                        "kotak_groww.png"],
   [["dsp"],                                          "dsp_groww.png"],
   [["motilal"],                                      "motilal_groww.png"],
-  [["uti asset"],                                    "uti_groww.png"],
-  [["tata asset"],                                   "tata_groww.png"],
-  [["aditya birla", "birla sun life"],               "aditya_groww.png"],
-  [["franklin templeton"],                           "franklin_groww.png"],
+  [["uti"],                                          "uti_groww.png"],
+  [["tata"],                                         "tata_groww.png"],
+  [["aditya birla", "birla sun"],                    "aditya_groww.png"],
+  [["franklin"],                                     "franklin_groww.png"],
   [["pgim"],                                         "pgim_groww.png"],
   [["bandhan"],                                      "bandhan_groww.png"],
-  [["canara robeco"],                                "canara_groww.png"],
+  [["canara"],                                       "canara_groww.png"],
   [["invesco"],                                      "invesco_groww.png"],
-  [["lic mutual", "lic mf"],                         "lic_groww.png"],
+  [["lic"],                                          "lic_groww.png"],
   [["ppfas", "parag parikh"],                        "ppfas_groww.png"],
-  [["quantum asset"],                                "quantum_groww.png"],
-  [["sundaram asset"],                               "sundaram_groww.png"],
-  [["union asset"],                                  "union_groww.png"],
-  [["whiteoak", "white oak capital"],                "whiteoak_groww.png"],
+  [["quantum"],                                      "quantum_groww.png"],  // before "quant"
+  [["quant"],                                        "quant_groww.png"],
+  [["sundaram"],                                     "sundaram_groww.png"],
+  [["union"],                                        "union_groww.png"],
+  [["whiteoak", "white oak"],                        "whiteoak_groww.png"],
   [["edelweiss"],                                    "edelweiss_groww.png"],
   [["jm financial"],                                 "jm_groww.png"],
   [["360 one"],                                      "360_groww.png"],
   [["zerodha"],                                      "zerodha_groww.png"],
-  [["groww asset"],                                  "indiabulls_groww.png"],
-  [["quant money"],                                  "quant_groww.png"],
-  [["baroda bnp", "bnp paribas"],                    "barodabnpparibasmutualfund_groww.png"],
+  [["groww"],                                        "indiabulls_groww.png"],
+  [["baroda", "bnp paribas"],                        "barodabnpparibasmutualfund_groww.png"],
   [["bank of india"],                                "bank_groww.png"],
-  [["mahindra manulife"],                            "mahindra_groww.png"],
-  [["nj asset"],                                     "nj_groww.png"],
-  [["bajaj finserv"],                                "bajaj_groww.png"],
+  [["mahindra"],                                     "mahindra_groww.png"],
+  [["nj asset", "nj mutual"],                        "nj_groww.png"],
+  [["bajaj"],                                        "bajaj_groww.png"],
   [["navi"],                                         "navi_groww.png"],
   [["hsbc"],                                         "hsbc_groww.png"],
   [["helios"],                                       "helios_groww.png"],
-  [["jio blackrock", "jioblackrock"],                "jioblackrock_groww.png"],
-  [["360 one"],                                      "360_groww.png"],
+  [["jio"],                                          "jioblackrock_groww.png"],
   [["shriram"],                                      "shriram_groww.png"],
   [["taurus"],                                       "taurus_groww.png"],
+  [["the wealth"],                                   "the_groww.png"],
+  [["samco"],                                        "samco_groww.png"],
+  [["iti mutual", "iti asset"],                      "iti_groww.png"],
+  [["trust mutual", "trust asset"],                  "trust_groww.png"],
 ]
 
 function amcLogoUrl(fundHouse: string): string | null {
+  if (!fundHouse) return null
   const h = fundHouse.toLowerCase()
   for (const [keywords, file] of AMC_LOGOS) {
     if (keywords.some(k => h.includes(k))) return GROWW_LOGO + file

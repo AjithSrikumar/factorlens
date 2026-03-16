@@ -156,7 +156,7 @@ export const SCHEME_ENTRIES: SchemeEntry[] = [
   { schemeCode: 153253, schemeName: "SBI Nifty Bank Index Fund-Regular Plan- Growth", fundName: "SBI Nifty Bank Index Fund-Reg(G)" },
   { schemeCode: 139367, schemeName: "Edelweiss ETF - Nifty 100 Quality 30", fundName: "Edelweiss Nifty 100 Quality 30 Index Fund-Reg(G)" },
   { schemeCode: 153096, schemeName: "HDFC Nifty India Digital Index Fund - Growth Option - Regular", fundName: "HDFC Nifty India Digital Index Fund-Reg(G)" },
-  { schemeCode: 140452, schemeName: "Sundaram Smart Nifty 100 Equal Weight Fund Regular Plan - Growth", fundName: "Sundaram Nifty 100 Equal Weight Fund(G)" },
+  { schemeCode: 149481, schemeName: "Sundaram Nifty 100 Equal Weight Fund - Regular Plan - Growth", fundName: "Sundaram Nifty 100 Equal Weight Fund-Reg(G)" },
   { schemeCode: 150592, schemeName: "BANDHAN NIFTY200 MOMENTUM 30 INDEX FUND - GROWTH - REGULAR PLAN", fundName: "Bandhan Nifty200 Momentum 30 Index Fund-Reg(G)" },
   { schemeCode: 152664, schemeName: "Kotak NIFTY 100 Low Volatility 30 Index Fund - Regular plan - Growth option", fundName: "Kotak NIFTY 100 Low Volatility 30 Index Fund-Reg(G)" },
   { schemeCode: 153803, schemeName: "DSP Nifty500 Flexicap Quality 30 Index Fund - Regular - IDCW", fundName: "DSP Nifty500 Flexicap Quality 30 Index Fund-Reg(G)" },

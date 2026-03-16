@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
+import { detectSplits, normalizeHistory } from '@/lib/nav-normalize'
 
 const MFAPI_BASE = 'https://api.mfapi.in/mf'
 
@@ -89,15 +90,26 @@ async function fetchFundsBatch(codes: number[]): Promise<Map<number, FundRow>> {
 
         // Parse history — mfapi.in returns newest-first
         type NavPt = { date: string; nav: number }
-        const hist: NavPt[] = []
+        const rawHist: NavPt[] = []
         for (const r of json.data) {
           const date = mfapiDateToISO(r.date)
           const nav  = parseFloat(r.nav)
-          if (date && !isNaN(nav) && nav > 0) hist.push({ date, nav })
+          if (date && !isNaN(nav) && nav > 0) rawHist.push({ date, nav })
         }
-        if (!hist.length) return null
+        if (!rawHist.length) return null
 
-        const latest = hist[0]   // newest entry
+        // ── Normalize: detect NAV splits (e.g. SBI Gold ETF ₹4008→₹46 in FY22) ─
+        // mfapi.in returns raw un-adjusted NAVs. Without normalization the
+        // 5-year return for a split fund would be calculated as e.g.
+        // cagrPct(₹3500, ₹46, 5) ≈ -73%/yr — completely wrong.
+        const chronRaw  = [...rawHist].reverse()   // oldest → newest
+        const splits    = detectSplits(chronRaw, code)
+        const adjNavs   = normalizeHistory(chronRaw, splits)
+        const hist: NavPt[] = adjNavs
+          .map((nav, i) => ({ date: chronRaw[i].date, nav }))
+          .reverse()   // back to newest-first (same structure as rawHist)
+
+        const latest = hist[0]   // newest entry (split-adjusted)
 
         // Find closest NAV to a target date (within ±30 days)
         const findNav = (target: string): number | null => {
