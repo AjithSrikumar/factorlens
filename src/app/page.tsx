@@ -79,12 +79,10 @@ export default function LandingPage() {
       ══════════════════════════════════════════════════════ */}
       <section style={{
         background: "oklch(0.10 0.012 264)",
-        paddingLeft: 20,
-        paddingRight: 20,
-        paddingBottom: 80,
+        padding: "72px 20px 80px",
         position: "relative",
         overflow: "hidden",
-      }} className="-mt-[52px] pt-[124px] md:mt-0 md:pt-[72px]">
+      }}>
         {/* Blue radial glow */}
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",

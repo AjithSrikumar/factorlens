@@ -21,7 +21,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <Navbar />
           {/* pt-[52px] on mobile for top bar; pb-[72px] for bottom nav */}
-          <main className="pt-[52px] md:pt-0 pb-[72px] md:pb-0">{children}</main>
+          <main className="pb-[72px] md:pb-0">{children}</main>
         </ThemeProvider>
         <VisualEditsMessenger />
       </body>

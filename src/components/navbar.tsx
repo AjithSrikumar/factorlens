@@ -128,7 +128,7 @@ export function Navbar() {
 
       {/* ── Mobile Top Bar — logo only, no page links ── */}
       <div style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
+        position: "sticky", top: 0, zIndex: 300,
         height: 52,
         background: "rgba(245,245,243,.95)",
         backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
