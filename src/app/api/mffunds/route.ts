@@ -5,10 +5,10 @@ import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 
 const MFAPI_BASE = 'https://api.mfapi.in/mf'
 
-// ── Per-fund cache keyed by scheme code — 6-hour TTL ─────────────────────────
-// Stores live NAV + computed 1Y/3Y/5Y returns from full history in one shot.
+// ── Per-fund cache keyed by scheme code — 30-min TTL ─────────────────────────
+// NAV updates once per day; 30 min keeps data fresh without hammering mfapi.in.
 const _cache = new Map<number, { data: FundRow; ts: number }>()
-const CACHE_TTL = 6 * 60 * 60 * 1000 // 6 hours
+const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -157,11 +157,21 @@ export async function GET() {
         .limit(500)
 
       if (!error && sbFunds && sbFunds.length > 0) {
-        // Add aum_cr: null for interface compatibility
-        const result = sbFunds.map(f => ({ ...f, aum_cr: null }))
-        return NextResponse.json(result, {
-          headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' },
-        })
+        // Staleness check: if the most recent nav_date is older than 3 days,
+        // fall through to mfapi.in so today's NAV is always reflected.
+        const maxNavDate = sbFunds.reduce((max, f) =>
+          f.nav_date && f.nav_date > max ? f.nav_date : max, '')
+        const cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - 3)
+        const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+        if (maxNavDate >= cutoffStr) {
+          const result = sbFunds.map(f => ({ ...f, aum_cr: null }))
+          return NextResponse.json(result, {
+            headers: { 'Cache-Control': 'no-store' },
+          })
+        }
+        // Supabase data is stale — fall through to live mfapi.in fetch
       }
     }
 
@@ -212,7 +222,7 @@ export async function GET() {
     })
 
     return NextResponse.json(result, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=21600' },
+      headers: { 'Cache-Control': 's-maxage=1800, stale-while-revalidate=1800' },
     })
 
   } catch (e) {

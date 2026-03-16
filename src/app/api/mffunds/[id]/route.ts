@@ -67,39 +67,49 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       ])
 
       if (!fundErr && !histErr && fund && rawHistory?.length) {
-        // Use split-adjusted NAV for all calculations
-        const history: NavRow[] = rawHistory.map(r => ({
-          date: r.date as string,
-          nav:  Number(r.nav_adj ?? r.nav),
-        }))
+        // Staleness check: if nav_date is older than 3 days, fall through to
+        // mfapi.in so the chart and metrics always reflect today's latest NAV.
+        const cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - 3)
+        const cutoffStr = cutoff.toISOString().slice(0, 10)
+        const isStale = !fund.nav_date || fund.nav_date < cutoffStr
 
-        const metrics = computeMetrics(history)
-        const fy_data = computeFiscalYears(history)
+        if (!isStale) {
+          const history: NavRow[] = rawHistory.map(r => ({
+            date: r.date as string,
+            nav:  Number(r.nav_adj ?? r.nav),
+          }))
 
-        return NextResponse.json({
-          fund: {
-            scheme_code:     fund.scheme_code,
-            scheme_name:     fund.scheme_name,
-            fund_house:      fund.fund_house ?? '',
-            scheme_type:     fund.scheme_type ?? '',
-            scheme_category: fund.scheme_category ?? '',
-            nav:             fund.nav,
-            nav_date:        fund.nav_date,
-            inception_date:  fund.inception_date,
-          },
-          metrics,
-          fy_data,
-          nav_history: history,
-        }, {
-          headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=3600' },
-        })
+          const metrics = computeMetrics(history)
+          const fy_data = computeFiscalYears(history)
+
+          return NextResponse.json({
+            fund: {
+              scheme_code:     fund.scheme_code,
+              scheme_name:     fund.scheme_name,
+              fund_house:      fund.fund_house ?? '',
+              scheme_type:     fund.scheme_type ?? '',
+              scheme_category: fund.scheme_category ?? '',
+              nav:             fund.nav,
+              nav_date:        fund.nav_date,
+              inception_date:  fund.inception_date,
+            },
+            metrics,
+            fy_data,
+            nav_history: history,
+          }, {
+            headers: { 'Cache-Control': 'no-store' },
+          })
+        }
+        // Supabase data is stale — fall through to live mfapi.in fetch
       }
     }
 
-    // ── Path B: mfapi.in fallback (before Supabase is seeded) ────────────────
+    // ── Path B: mfapi.in fallback (Supabase stale or not configured) ─────────
+    // cache: 'no-store' disables Next.js Data Cache so every request is live.
     const res = await fetchViaProxy(`${MFAPI_BASE}/${schemeCode}`, {
       signal: AbortSignal.timeout(30_000),
-      next: { revalidate: 3600 },
+      cache: 'no-store',
     })
 
     if (!res.ok) {
@@ -195,7 +205,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       fy_data,
       nav_history: history,
     }, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200' },
+      headers: { 'Cache-Control': 's-maxage=1800, stale-while-revalidate=1800' },
     })
 
   } catch (e) {
