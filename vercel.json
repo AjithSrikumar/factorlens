@@ -11,6 +11,10 @@
     {
       "path": "/api/nav-sync?action=daily",
       "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/nav-sync?action=normalize",
+      "schedule": "30 18 * * 0"
     }
   ],
   "functions": {

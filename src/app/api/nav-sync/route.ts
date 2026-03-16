@@ -261,15 +261,31 @@ async function runFullBatch(batchNum: number): Promise<NextResponse> {
 // ── Daily sync: fetch latest NAV for all funds ────────────────────────────────
 // Uses /latest endpoint (tiny response) — NOT full history — so 257 funds
 // complete in ~30 seconds well under the 300-second function limit.
-// Normalization (expensive) is skipped here; it runs via ?action=normalize
-// which can be triggered separately when splits need reprocessing.
+//
+// Split detection: if any fund's new NAV is <50% of its stored NAV (a split
+// happened overnight), normalizeFund() is called immediately for that fund to
+// re-adjust all historical nav_adj values and recompute metrics.
 
 async function runDailySync(): Promise<NextResponse> {
   const allEntries = SCHEME_ENTRIES
-  const updated: number[] = []
-  const failed:  number[] = []
-  const CONCUR   = 25   // larger batch: /latest is fast & small
-  const nowISO   = new Date().toISOString()
+  const updated:    number[] = []
+  const failed:     number[] = []
+  const normalized: number[] = []
+  const CONCUR      = 25   // /latest is fast & tiny — run more in parallel
+  const nowISO      = new Date().toISOString()
+
+  // ── Pre-fetch current NAVs for all MF funds in one batch query ──────────────
+  // Used to detect splits: if new_nav / prev_nav < 0.5, a split occurred.
+  const schemeCodes = allEntries.map(e => e.schemeCode)
+  const { data: currentFunds } = await supabaseAdmin
+    .from('funds')
+    .select('scheme_code, nav')
+    .in('scheme_code', schemeCodes)
+
+  const prevNavBySch = new Map<number, number>()
+  for (const row of currentFunds ?? []) {
+    if (row.nav != null) prevNavBySch.set(Number(row.scheme_code), Number(row.nav))
+  }
 
   for (let i = 0; i < allEntries.length; i += CONCUR) {
     const chunk = allEntries.slice(i, i + CONCUR)
@@ -292,13 +308,27 @@ async function runDailySync(): Promise<NextResponse> {
           const nav    = parseFloat(latest.nav)
           if (!date || isNaN(nav) || nav <= 0) { failed.push(entry.schemeCode); return }
 
-          // Upsert into nav_history (skip if date already exists)
+          // ── Detect new split ────────────────────────────────────────────────
+          // If the new NAV is < 50% of the previously stored NAV, a split
+          // occurred overnight. We record it and re-normalize the full history.
+          const prevNav  = prevNavBySch.get(entry.schemeCode)
+          const isSplit  = prevNav !== undefined && prevNav > 0 && (nav / prevNav) < 0.5
+
+          // Upsert into nav_history (skip if this date already exists)
           await supabaseAdmin.from('nav_history').upsert(
             { scheme_code: entry.schemeCode, date, nav, nav_adj: nav },
             { onConflict: 'scheme_code,date', ignoreDuplicates: true }
           )
 
-          // Update funds table with today's NAV so the API reflects it immediately
+          // ── Re-normalize entire history when a split is detected ────────────
+          // normalizeFund() detects the split ratio, updates nav_adj for all
+          // historical rows, and recomputes all metrics in the funds table.
+          if (isSplit) {
+            await normalizeFund(entry.schemeCode)
+            normalized.push(entry.schemeCode)
+          }
+
+          // Update funds table so the API reflects today's NAV immediately
           await supabaseAdmin.from('funds').update({
             nav,
             nav_date:      date,
@@ -314,10 +344,11 @@ async function runDailySync(): Promise<NextResponse> {
   }
 
   return NextResponse.json({
-    action:  'daily',
-    updated: updated.length,
-    failed:  failed.length,
-    at:      nowISO,
+    action:     'daily',
+    updated:    updated.length,
+    failed:     failed.length,
+    normalized: normalized.length,
+    at:         nowISO,
   })
 }
 
