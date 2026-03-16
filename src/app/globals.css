@@ -244,6 +244,13 @@ nextjs-portal {
   100% { box-shadow: 0 0 0 0   rgba(34,211,160,0); }
 }
 
+/* Landing page: pull hero flush against fixed mobile navbar */
+@media (max-width: 767px) {
+  .landing-hero-offset {
+    margin-top: -52px;
+  }
+}
+
 /* CTA button row — stack on mobile, row on ≥480px */
 .hero-actions-wrap { flex-direction: column !important; align-items: center !important; }
 @media (min-width: 480px) {

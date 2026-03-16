@@ -72,7 +72,7 @@ const whyCards = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen" style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}>
+    <div className="min-h-screen landing-hero-offset" style={{ fontFamily: "var(--font-sans), system-ui, sans-serif" }}>
 
       {/* ══════════════════════════════════════════════════════
           HERO — dark navy, centred, Instrument Serif headline
