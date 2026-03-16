@@ -223,6 +223,27 @@ export async function GET(req: NextRequest) {
           totalInserted += chunk.length
         }
       }
+
+      // ── 5. Also update the `funds` table so the API reflects today's NAV ────
+      // Build a map of the most-recent NAV per scheme_code from what we just inserted.
+      const latestBySch = new Map<number, { date: string; nav: number }>()
+      for (const r of toInsert) {
+        const prev = latestBySch.get(r.scheme_code)
+        if (!prev || r.date > prev.date) {
+          latestBySch.set(r.scheme_code, { date: r.date, nav: r.nav })
+        }
+      }
+
+      const nowISO = new Date().toISOString()
+      const fundsUpdateResults = await Promise.allSettled(
+        Array.from(latestBySch.entries()).map(([scheme_code, latest]) =>
+          supabase.from('funds')
+            .update({ nav: latest.nav, nav_date: latest.date, last_nav_sync: nowISO })
+            .eq('scheme_code', scheme_code)
+        )
+      )
+      const fundsUpdated = fundsUpdateResults.filter(r => r.status === 'fulfilled').length
+      log.push(`[mf-eod] updated funds table for ${fundsUpdated} / ${latestBySch.size} schemes`)
     }
 
     log.push(

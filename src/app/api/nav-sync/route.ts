@@ -259,20 +259,26 @@ async function runFullBatch(batchNum: number): Promise<NextResponse> {
 }
 
 // ── Daily sync: fetch latest NAV for all funds ────────────────────────────────
+// Uses /latest endpoint (tiny response) — NOT full history — so 257 funds
+// complete in ~30 seconds well under the 300-second function limit.
+// Normalization (expensive) is skipped here; it runs via ?action=normalize
+// which can be triggered separately when splits need reprocessing.
 
 async function runDailySync(): Promise<NextResponse> {
   const allEntries = SCHEME_ENTRIES
   const updated: number[] = []
   const failed:  number[] = []
+  const CONCUR   = 25   // larger batch: /latest is fast & small
+  const nowISO   = new Date().toISOString()
 
-  // Process in parallel batches of FETCH_CONCUR
-  for (let i = 0; i < allEntries.length; i += FETCH_CONCUR) {
-    const chunk = allEntries.slice(i, i + FETCH_CONCUR)
+  for (let i = 0; i < allEntries.length; i += CONCUR) {
+    const chunk = allEntries.slice(i, i + CONCUR)
     await Promise.all(
       chunk.map(async entry => {
         try {
-          const res = await fetchViaProxy(`${MFAPI_BASE}/${entry.schemeCode}`, {
-            signal: AbortSignal.timeout(15_000),
+          // ── Use /latest (tiny JSON) instead of full history (huge) ──────────
+          const res = await fetchViaProxy(`${MFAPI_BASE}/${entry.schemeCode}/latest`, {
+            signal: AbortSignal.timeout(10_000),
           })
           if (!res.ok) { failed.push(entry.schemeCode); return }
 
@@ -281,28 +287,24 @@ async function runDailySync(): Promise<NextResponse> {
             failed.push(entry.schemeCode); return
           }
 
-          // Only process the latest NAV record (first item, newest-first)
           const latest = json.data[0]
           const date   = mfapiDateToISO(latest.date)
           const nav    = parseFloat(latest.nav)
           if (!date || isNaN(nav) || nav <= 0) { failed.push(entry.schemeCode); return }
 
-          // Insert new NAV record (skip if already exists)
-          const { error: insertErr } = await supabaseAdmin.from('nav_history').upsert(
+          // Upsert into nav_history (skip if date already exists)
+          await supabaseAdmin.from('nav_history').upsert(
             { scheme_code: entry.schemeCode, date, nav, nav_adj: nav },
             { onConflict: 'scheme_code,date', ignoreDuplicates: true }
           )
-          if (insertErr) { failed.push(entry.schemeCode); return }
 
-          // Update latest NAV in funds table and re-run normalization
+          // Update funds table with today's NAV so the API reflects it immediately
           await supabaseAdmin.from('funds').update({
             nav,
             nav_date:      date,
-            last_nav_sync: new Date().toISOString(),
+            last_nav_sync: nowISO,
           }).eq('scheme_code', entry.schemeCode)
 
-          // Recompute metrics with updated + normalized history
-          await normalizeFund(entry.schemeCode)
           updated.push(entry.schemeCode)
         } catch {
           failed.push(entry.schemeCode)
@@ -315,7 +317,7 @@ async function runDailySync(): Promise<NextResponse> {
     action:  'daily',
     updated: updated.length,
     failed:  failed.length,
-    at:      new Date().toISOString(),
+    at:      nowISO,
   })
 }
 
@@ -353,36 +355,44 @@ async function runNormalizeAll(): Promise<NextResponse> {
 // ── Handlers ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  // Status check — public endpoint
-  const { data: fundsData } = await supabaseAdmin
-    .from('funds')
-    .select('scheme_code, last_nav_sync')
-    .not('last_nav_sync', 'is', null)
-    .limit(1)
+  const { searchParams } = new URL(req.url)
+  const action = searchParams.get('action')
 
-  const totalEntries  = SCHEME_ENTRIES.length
-  const totalBatches  = Math.ceil(totalEntries / BATCH_SIZE)
+  // ── Vercel cron sends GET requests — support action= via GET so the cron
+  // actually triggers a sync instead of just returning a status page. ──────────
+  if (action === 'daily') {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return runDailySync()
+  }
 
-  const { count } = await supabaseAdmin
-    .from('funds')
-    .select('*', { count: 'exact', head: true })
-    .not('last_nav_sync', 'is', null)
+  if (action === 'normalize') {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    return runNormalizeAll()
+  }
 
-  const { count: navCount } = await supabaseAdmin
-    .from('nav_history')
-    .select('*', { count: 'exact', head: true })
+  // ── Status check (no action param) ───────────────────────────────────────────
+  const totalEntries = SCHEME_ENTRIES.length
+  const totalBatches = Math.ceil(totalEntries / BATCH_SIZE)
+
+  const [{ count }, { count: navCount }] = await Promise.all([
+    supabaseAdmin.from('funds').select('*', { count: 'exact', head: true }).not('last_nav_sync', 'is', null),
+    supabaseAdmin.from('nav_history').select('*', { count: 'exact', head: true }),
+  ])
 
   return NextResponse.json({
-    synced_funds:   count ?? 0,
-    total_funds:    totalEntries,
-    total_batches:  totalBatches,
-    batch_size:     BATCH_SIZE,
-    nav_rows:       navCount ?? 0,
-    has_data:       Boolean(fundsData?.length),
+    synced_funds:  count ?? 0,
+    total_funds:   totalEntries,
+    total_batches: totalBatches,
+    batch_size:    BATCH_SIZE,
+    nav_rows:      navCount ?? 0,
     instructions: {
       full_sync:  `POST /api/nav-sync?action=full&batch=0  (then batch=1,2,… up to ${totalBatches - 1})`,
-      daily_sync: 'POST /api/nav-sync?action=daily',
-      normalize:  'POST /api/nav-sync?action=normalize',
+      daily_sync: 'GET or POST /api/nav-sync?action=daily',
+      normalize:  'GET or POST /api/nav-sync?action=normalize',
     },
   })
 }
