@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 import {
+  detectSplits,
+  normalizeHistory,
   computeMetrics,
   computeFiscalYears,
   cagrPct,
@@ -129,17 +131,26 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const meta = json.meta
 
     // mfapi.in returns newest-first → reverse to chronological
-    const history: NavRow[] = json.data
+    const rawHistory: NavRow[] = json.data
       .map(r => ({ date: mfapiDateToISO(r.date), nav: parseFloat(r.nav) }))
       .filter(r => r.date.length === 10 && !isNaN(r.nav) && r.nav > 0)
       .reverse()
 
-    if (!history.length) {
+    if (!rawHistory.length) {
       return NextResponse.json({ error: 'No valid NAV data found' }, { status: 404 })
     }
 
-    const latestNav   = history[history.length - 1].nav
-    const latestDate  = history[history.length - 1].date
+    // ── Apply split normalization to raw mfapi.in data ────────────────────────
+    // mfapi.in returns raw (un-adjusted) NAVs. ETFs like SBI Gold ETF had
+    // splits (e.g. ₹4008 → ₹46 in FY22) that cause false spikes in charts and
+    // completely wrong return metrics. Detect splits and adjust on-the-fly so
+    // charts and all metrics are always on a consistent scale.
+    const splits  = detectSplits(rawHistory, schemeCode)
+    const adjNavs = normalizeHistory(rawHistory, splits)
+    const history: NavRow[] = rawHistory.map((r, i) => ({ date: r.date, nav: adjNavs[i] }))
+
+    const latestNav     = history[history.length - 1].nav
+    const latestDate    = history[history.length - 1].date
     const inceptionDate = history[0].date
     const inceptionNav  = history[0].nav
     const yearsTotal    = (new Date(latestDate).getTime() - new Date(inceptionDate).getTime()) / (365.25 * 86_400_000)
