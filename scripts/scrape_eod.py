@@ -19,9 +19,14 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import requests
-import yfinance as yf
 import psycopg2
 from psycopg2.extras import execute_values
+
+try:
+    import yfinance as yf
+    _YFINANCE_OK = True
+except Exception:
+    _YFINANCE_OK = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -451,6 +456,9 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
 
 def fetch_yahoo(symbol: str, from_iso: str, to_iso: str):
     """Return list of (date_iso, close_value) tuples via yfinance."""
+    if not _YFINANCE_OK:
+        print(f"  Yahoo {symbol}: yfinance not available, skipping")
+        return []
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.history(start=from_iso, end=add_days(to_iso, 1), interval="1d", auto_adjust=True)
