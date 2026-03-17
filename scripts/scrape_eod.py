@@ -1,9 +1,11 @@
 """
 EOD scraper for FactorLens — run manually or via CI.
-Fetches latest NAV data for all 28 indices and upserts to Supabase.
+Fetches daily NAV data for all NSE indices and upserts to Supabase.
+New indices are automatically inserted into the `funds` table if missing,
+and historical data is pulled from the index inception date on first run.
 
 Sources:
-  - 26 NSE indices : niftyindices.com POST API
+  - NSE indices    : niftyindices.com POST API
   - S&P 500 (SPX)  : Yahoo Finance  (^GSPC)
   - Gold BeES      : Yahoo Finance  (GOLDBEES.NS)
 
@@ -31,38 +33,348 @@ DB_URL = os.getenv(
 IST = ZoneInfo("Asia/Kolkata")
 
 NSE_INDICES = [
-    ("N50",         "NIFTY 50"),
-    ("NN50",        "NIFTY NEXT 50"),
-    ("N500",        "NIFTY 500"),
-    ("NMC150",      "NIFTY MIDCAP 150"),
-    ("NSC250",      "NIFTY SMALLCAP 250"),
-    ("NSC500",      "NIFTY SMALLCAP 500"),
-    ("NμC250",      "NIFTY MICROCAP 250"),
-    ("NTM",         "NIFTY TOTAL MARKET"),
-    ("MC150M50",    "NIFTY MIDCAP150 MOMENTUM 50"),
-    ("N500M50",     "NIFTY500 MOMENTUM 50"),
-    ("N200M30",     "NIFTY200 MOMENTUM 30"),
-    ("NTMMQ50",     "NIFTY TOTAL MARKET MOMENTUM QUALITY 50"),
-    ("MC150Q50",    "NIFTY MIDCAP150 QUALITY 50"),
-    ("N500Q50",     "NIFTY500 QUALITY 50"),
-    ("N200Q30",     "NIFTY200 QUALITY 30"),
-    ("N100Q30",     "NIFTY100 QUALITY 30"),
-    ("SC250Q50",    "NIFTY SMALLCAP250 QUALITY 50"),
-    ("N100LV30",    "NIFTY100 LOW VOLATILITY 30"),
-    ("N500LV50",    "NIFTY500 LOW VOLATILITY 50"),
-    ("N100A30",     "NIFTY100 ALPHA 30"),
-    ("N200A30",     "NIFTY200 ALPHA 30"),
-    ("N500V50",     "NIFTY500 VALUE 50"),
-    ("MMS400MQ100", "NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100"),
-    ("SC250MQ100",  "NIFTY SMALLCAP250 MOMENTUM QUALITY 100"),
-    ("N500MCQ50",   "NIFTY500 MULTICAP MOMENTUM QUALITY 50"),
-    ("N500MF50",    "NIFTY500 MULTIFACTOR MQVLV 50"),
+    # ── Broad Market ──────────────────────────────────────────────────────────
+    ("N50",          "NIFTY 50"),
+    ("NN50",         "NIFTY NEXT 50"),
+    ("N100",         "NIFTY 100"),
+    ("N200",         "NIFTY 200"),
+    ("N500",         "NIFTY 500"),
+    ("NMC50",        "NIFTY MIDCAP 50"),
+    ("NMC100",       "NIFTY MIDCAP 100"),
+    ("NMC150",       "NIFTY MIDCAP 150"),
+    ("NMCSEL",       "NIFTY MIDCAP SELECT"),
+    ("NSC50",        "NIFTY SMALLCAP 50"),
+    ("NSC100",       "NIFTY SMALLCAP 100"),
+    ("NSC250",       "NIFTY SMALLCAP 250"),
+    ("NSC500",       "NIFTY SMALLCAP 500"),
+    ("NμC250",       "NIFTY MICROCAP 250"),
+    ("NTM",          "NIFTY TOTAL MARKET"),
+    ("NMSC400",      "NIFTY MIDSMALLCAP 400"),
+    ("N500MC5025",   "NIFTY500 MULTICAP 50:25:25"),
+    ("NLMC250",      "NIFTY LARGEMIDCAP 250"),
+    ("N500LMSECW",   "NIFTY500 LARGEMIDSMALL EQUAL-CAP WEIGHTED"),
+    ("NIFPI150",     "NIFTY INDIA FPI 150"),
+
+    # ── Factor: Momentum ──────────────────────────────────────────────────────
+    ("MC150M50",     "NIFTY MIDCAP150 MOMENTUM 50"),
+    ("N500M50",      "NIFTY500 MOMENTUM 50"),
+    ("N200M30",      "NIFTY200 MOMENTUM 30"),
+    ("NTMMQ50",      "NIFTY TOTAL MARKET MOMENTUM QUALITY 50"),
+    ("MMS400MQ100",  "NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100"),
+    ("SC250MQ100",   "NIFTY SMALLCAP250 MOMENTUM QUALITY 100"),
+    ("N500MCQ50",    "NIFTY500 MULTICAP MOMENTUM QUALITY 50"),
+
+    # ── Factor: Quality ───────────────────────────────────────────────────────
+    ("MC150Q50",     "NIFTY MIDCAP150 QUALITY 50"),
+    ("N500Q50",      "NIFTY500 QUALITY 50"),
+    ("N200Q30",      "NIFTY200 QUALITY 30"),
+    ("N100Q30",      "NIFTY100 QUALITY 30"),
+    ("SC250Q50",     "NIFTY SMALLCAP250 QUALITY 50"),
+    ("N500FCQ30",    "NIFTY500 FLEXICAP QUALITY 30"),
+
+    # ── Factor: Low Volatility ────────────────────────────────────────────────
+    ("N100LV30",     "NIFTY100 LOW VOLATILITY 30"),
+    ("N500LV50",     "NIFTY500 LOW VOLATILITY 50"),
+    ("NLV50",        "NIFTY LOW VOLATILITY 50"),
+
+    # ── Factor: Alpha ─────────────────────────────────────────────────────────
+    ("NALPHA50",     "NIFTY ALPHA 50"),
+    ("N100A30",      "NIFTY100 ALPHA 30"),
+    ("N200A30",      "NIFTY200 ALPHA 30"),
+
+    # ── Factor: Value ─────────────────────────────────────────────────────────
+    ("N500V50",      "NIFTY500 VALUE 50"),
+    ("N200V30",      "NIFTY200 VALUE 30"),
+    ("N50V20",       "NIFTY50 VALUE 20"),
+
+    # ── Factor: Multi-Factor ─────────────────────────────────────────────────
+    ("N500MF50",     "NIFTY500 MULTIFACTOR MQVLV 50"),
+    ("NALV30",       "NIFTY ALPHA LOW-VOLATILITY 30"),
+    ("NAQLV30",      "NIFTY ALPHA QUALITY LOW-VOLATILITY 30"),
+    ("NAQVLV30",     "NIFTY ALPHA QUALITY VALUE LOW-VOLATILITY 30"),
+    ("NQLV30",       "NIFTY QUALITY LOW-VOLATILITY 30"),
+
+    # ── Factor: Dividend ─────────────────────────────────────────────────────
+    ("NDIV50",       "NIFTY DIVIDEND OPPORTUNITIES 50"),
+    ("N50DP",        "NIFTY50 DIVIDEND POINTS"),
+
+    # ── Factor: Equal Weight ─────────────────────────────────────────────────
+    ("N50EW",        "NIFTY50 EQUAL WEIGHT"),
+    ("N100EW",       "NIFTY100 EQUAL WEIGHT"),
+    ("N500EW",       "NIFTY500 EQUAL WEIGHT"),
+    ("NT10EW",       "NIFTY TOP 10 EQUAL WEIGHT"),
+    ("NT15EW",       "NIFTY TOP 15 EQUAL WEIGHT"),
+    ("NT20EW",       "NIFTY TOP 20 EQUAL WEIGHT"),
+
+    # ── Factor: High Beta ────────────────────────────────────────────────────
+    ("NHBETA50",     "NIFTY HIGH BETA 50"),
+
+    # ── Factor: Growth ───────────────────────────────────────────────────────
+    ("NGRWTH15",     "NIFTY GROWTH SECTORS 15"),
+
+    # ── Leverage / Inverse ───────────────────────────────────────────────────
+    ("N50TR2X",      "NIFTY50 TR 2X LEVERAGE"),
+    ("N50PR2X",      "NIFTY50 PR 2X LEVERAGE"),
+    ("N50TR1XI",     "NIFTY50 TR 1X INVERSE"),
+    ("N50PR1XI",     "NIFTY50 PR 1X INVERSE"),
+
+    # ── USD ──────────────────────────────────────────────────────────────────
+    ("N50USD",       "NIFTY50 USD"),
+
+    # ── Sectoral / Thematic ──────────────────────────────────────────────────
+    ("NBANK",        "NIFTY BANK"),
+    ("NFIN",         "NIFTY FINANCIAL SERVICES"),
+    ("NFIN2550",     "NIFTY FINANCIAL SERVICES 25/50"),
+    ("NFINEXBNK",    "NIFTY FINANCIAL SERVICES EX-BANK"),
+    ("NPVTBNK",      "NIFTY PRIVATE BANK"),
+    ("NPSUBNK",      "NIFTY PSU BANK"),
+    ("NIT",          "NIFTY IT"),
+    ("NPHARMA",      "NIFTY PHARMA"),
+    ("NHCARE",       "NIFTY HEALTHCARE INDEX"),
+    ("NAUTO",        "NIFTY AUTO"),
+    ("NFMCG",        "NIFTY FMCG"),
+    ("NMETAL",       "NIFTY METAL"),
+    ("NENERGY",      "NIFTY ENERGY"),
+    ("NOILGAS",      "NIFTY OIL & GAS"),
+    ("NINFRA",       "NIFTY INFRASTRUCTURE"),
+    ("NREALTY",      "NIFTY REALTY"),
+    ("NMEDIA",       "NIFTY MEDIA"),
+    ("NCONSDUR",     "NIFTY CONSUMER DURABLES"),
+    ("NCHEM",        "NIFTY CHEMICALS"),
+    ("NMNC",         "NIFTY MNC"),
+    ("NPSE",         "NIFTY PSE"),
+    ("NCPSE",        "NIFTY CPSE"),
+    ("NCOMMOD",      "NIFTY COMMODITIES"),
+    ("NCON",         "NIFTY INDIA CONSUMPTION"),
+    ("NSVC",         "NIFTY SERVICES SECTOR"),
+    ("N500HCARE",    "NIFTY500 HEALTHCARE"),
+    ("NMSHCARE",     "NIFTY MIDSMALL HEALTHCARE"),
+    ("NMSFIN",       "NIFTY MIDSMALL FINANCIAL SERVICES"),
+    ("NMSITTEL",     "NIFTY MIDSMALL IT & TELECOM"),
+    ("NINDIDEF",     "NIFTY INDIA DEFENCE"),
+    ("NINDIATRM",    "NIFTY INDIA TOURISM"),
+    ("NCAPITAL",     "NIFTY CAPITAL MARKETS"),
+    ("NEVNAA",       "NIFTY EV & NEW AGE AUTOMOTIVE"),
+    ("NNACON",       "NIFTY INDIA NEW AGE CONSUMPTION"),
+    ("NMATR",        "NIFTY INDIA SELECT 5 CORPORATE GROUPS (MAATR)"),
+    ("NMOBIL",       "NIFTY MOBILITY"),
+    ("NCOREHSE",     "NIFTY CORE HOUSING"),
+    ("NHOUSING",     "NIFTY HOUSING"),
+    ("NIPO",         "NIFTY IPO"),
+    ("NMSCON",       "NIFTY MIDSMALL INDIA CONSUMPTION"),
+    ("NNCC",         "NIFTY NON-CYCLICAL CONSUMER"),
+    ("NRURAL",       "NIFTY RURAL"),
+    ("NSHAR25",      "NIFTY SHARIAH 25"),
+    ("N50SHAR",      "NIFTY50 SHARIAH"),
+    ("N500SHAR",     "NIFTY500 SHARIAH"),
+    ("NTRANLOG",     "NIFTY TRANSPORTATION & LOGISTICS"),
+    ("NSMEEMERGE",   "NIFTY SME EMERGE"),
+    ("NINDINTRN",    "NIFTY INDIA INTERNET"),
+    ("NWAVES",       "NIFTY WAVES"),
+    ("NIIL",         "NIFTY INDIA INFRASTRUCTURE & LOGISTICS"),
+    ("NIRNPSU",      "NIFTY INDIA RAILWAYS PSU"),
+    ("NCONG50",      "NIFTY CONGLOMERATE 50"),
+    ("NINDIAMFG",    "NIFTY INDIA MANUFACTURING"),
+    ("NITATACG",     "NIFTY INDIA CORPORATE GROUP INDEX - TATA GROUP 25% CAP"),
+    ("N500MCIM",     "NIFTY500 MULTICAP INDIA MANUFACTURING 50:30:20"),
+    ("N500MCINFRA",  "NIFTY500 MULTICAP INFRASTRUCTURE 50:30:20"),
+    ("N100ESGSL",    "NIFTY100 ESG SECTOR LEADERS"),
+    ("N100ESG",      "NIFTY100 ESG"),
+    ("N100EESG",     "NIFTY100 ENHANCED ESG"),
+    ("NINDIDIG",     "NIFTY INDIA DIGITAL"),
+
+    # ── Liquidity ────────────────────────────────────────────────────────────
+    ("N100LQ15",     "NIFTY100 LIQUID 15"),
+    ("NMCLQ15",      "NIFTY MIDCAP LIQUID 15"),
+
+    # ── Volatility ───────────────────────────────────────────────────────────
+    ("IVIX",         "INDIA VIX"),
+
+    # ── Fixed Income / G-Sec / Bharat Bond ───────────────────────────────────
+    ("N813GSEC",     "NIFTY 8-13 YR G-SEC"),
+    ("N10GSEC",      "NIFTY 10 YR BENCHMARK G-SEC"),
+    ("N10GSECCP",    "NIFTY 10 YR BENCHMARK G-SEC (CLEAN PRICE)"),
+    ("N48GSEC",      "NIFTY 4-8 YR G-SEC INDEX"),
+    ("N1115GSEC",    "NIFTY 11-15 YR G-SEC INDEX"),
+    ("N15PGSEC",     "NIFTY 15 YR AND ABOVE G-SEC INDEX"),
+    ("NCGSEC",       "NIFTY COMPOSITE G-SEC INDEX"),
+    ("NBB2030",      "NIFTY BHARAT BOND INDEX - APRIL 2030"),
+    ("NBB2031",      "NIFTY BHARAT BOND INDEX - APRIL 2031"),
+    ("NBB2032",      "NIFTY BHARAT BOND INDEX - APRIL 2032"),
+    ("NBB2033",      "NIFTY BHARAT BOND INDEX - APRIL 2033"),
 ]
+
+# ── Inception dates for new indices (used on first DB insert / first fetch) ───
+# These are approximate launch dates; actual first data point may differ slightly.
+INCEPTION_DATES = {
+    # Broad Market
+    "N50":         "1995-11-03",  "NN50":        "1997-01-01",
+    "N100":        "2004-01-01",  "N200":        "2004-01-01",
+    "N500":        "1995-11-03",  "NMC50":       "2004-01-01",
+    "NMC100":      "2004-01-01",  "NMC150":      "2004-01-01",
+    "NMCSEL":      "2014-01-01",  "NSC50":       "2004-01-01",
+    "NSC100":      "2004-01-01",  "NSC250":      "2004-01-01",
+    "NSC500":      "2005-01-03",  "NμC250":      "2005-01-03",
+    "NTM":         "2005-01-03",  "NMSC400":     "2004-01-01",
+    "N500MC5025":  "2005-01-03",  "NLMC250":     "2004-01-01",
+    "N500LMSECW":  "2005-01-03",  "NIFPI150":    "2015-01-01",
+    # Momentum
+    "MC150M50":    "2005-01-03",  "N500M50":     "2005-01-03",
+    "N200M30":     "2005-01-03",  "NTMMQ50":     "2005-01-03",
+    "MMS400MQ100": "2005-01-03",  "SC250MQ100":  "2005-01-03",
+    "N500MCQ50":   "2005-01-03",
+    # Quality
+    "MC150Q50":    "2005-01-03",  "N500Q50":     "2005-01-03",
+    "N200Q30":     "2005-01-03",  "N100Q30":     "2005-01-03",
+    "SC250Q50":    "2005-01-03",  "N500FCQ30":   "2018-01-01",
+    # Low Vol
+    "N100LV30":    "2005-01-03",  "N500LV50":    "2005-01-03",
+    "NLV50":       "2005-01-03",
+    # Alpha
+    "NALPHA50":    "2005-01-03",  "N100A30":     "2005-01-03",
+    "N200A30":     "2005-01-03",
+    # Value
+    "N500V50":     "2005-01-03",  "N200V30":     "2005-01-03",
+    "N50V20":      "2005-01-03",
+    # Multi-Factor
+    "N500MF50":    "2005-01-03",  "NALV30":      "2005-01-03",
+    "NAQLV30":     "2005-01-03",  "NAQVLV30":    "2005-01-03",
+    "NQLV30":      "2005-01-03",
+    # Dividend
+    "NDIV50":      "2005-01-03",  "N50DP":       "2002-01-01",
+    # Equal Weight
+    "N50EW":       "2003-01-01",  "N100EW":      "2003-01-01",
+    "N500EW":      "2005-01-03",  "NT10EW":      "2005-01-03",
+    "NT15EW":      "2005-01-03",  "NT20EW":      "2005-01-03",
+    # High Beta / Growth
+    "NHBETA50":    "2005-01-03",  "NGRWTH15":    "2005-01-03",
+    # Leverage
+    "N50TR2X":     "2010-01-04",  "N50PR2X":     "2010-01-04",
+    "N50TR1XI":    "2010-01-04",  "N50PR1XI":    "2010-01-04",
+    "N50USD":      "1995-11-03",
+    # Sectoral
+    "NBANK":       "2000-01-01",  "NFIN":        "2004-01-01",
+    "NFIN2550":    "2004-01-01",  "NFINEXBNK":   "2017-01-01",
+    "NPVTBNK":     "2006-04-03",  "NPSUBNK":     "2004-01-01",
+    "NIT":         "1996-01-01",  "NPHARMA":     "2001-01-01",
+    "NHCARE":      "2017-01-01",  "NAUTO":       "2001-01-01",
+    "NFMCG":       "1996-01-01",  "NMETAL":      "2004-01-01",
+    "NENERGY":     "2001-01-01",  "NOILGAS":     "2018-01-01",
+    "NINFRA":      "2004-01-01",  "NREALTY":     "2007-01-01",
+    "NMEDIA":      "2004-01-01",  "NCONSDUR":    "2018-01-01",
+    "NCHEM":       "2018-01-01",  "NMNC":        "1996-01-01",
+    "NPSE":        "2007-01-01",  "NCPSE":       "2013-01-01",
+    "NCOMMOD":     "2004-01-01",  "NCON":        "2011-01-03",
+    "NSVC":        "2004-01-01",  "N500HCARE":   "2017-01-01",
+    "NMSHCARE":    "2017-01-01",  "NMSFIN":      "2017-01-01",
+    "NMSITTEL":    "2017-01-01",  "NINDIDEF":    "2018-01-01",
+    "NINDIATRM":   "2022-01-03",  "NCAPITAL":    "2022-01-03",
+    "NEVNAA":      "2022-01-03",  "NNACON":      "2022-01-03",
+    "NMATR":       "2022-01-03",  "NMOBIL":      "2022-01-03",
+    "NCOREHSE":    "2021-01-04",  "NHOUSING":    "2019-01-01",
+    "NIPO":        "2010-01-04",  "NMSCON":      "2017-01-01",
+    "NNCC":        "2019-01-01",  "NRURAL":      "2019-01-01",
+    "NSHAR25":     "2004-01-01",  "N50SHAR":     "2009-01-01",
+    "N500SHAR":    "2012-01-02",  "NTRANLOG":    "2022-01-03",
+    "NSMEEMERGE":  "2015-01-01",  "NINDINTRN":   "2021-01-04",
+    "NWAVES":      "2022-01-03",  "NIIL":        "2022-01-03",
+    "NIRNPSU":     "2022-01-03",  "NCONG50":     "2022-01-03",
+    "NINDIAMFG":   "2018-01-01",  "NITATACG":    "2019-01-01",
+    "N500MCIM":    "2020-01-01",  "N500MCINFRA": "2020-01-01",
+    "N100ESGSL":   "2019-01-01",  "N100ESG":     "2011-01-03",
+    "N100EESG":    "2019-01-01",  "NINDIDIG":    "2020-01-01",
+    # Liquidity
+    "N100LQ15":    "2003-01-01",  "NMCLQ15":     "2004-01-01",
+    # Volatility
+    "IVIX":        "2008-01-01",
+    # Fixed Income
+    "N813GSEC":    "2001-01-01",  "N10GSEC":     "2001-01-01",
+    "N10GSECCP":   "2001-01-01",  "N48GSEC":     "2001-01-01",
+    "N1115GSEC":   "2001-01-01",  "N15PGSEC":    "2001-01-01",
+    "NCGSEC":      "2001-01-01",  "NBB2030":     "2020-01-01",
+    "NBB2031":     "2021-01-04",  "NBB2032":     "2022-01-03",
+    "NBB2033":     "2023-01-02",
+    # Yahoo Finance
+    "SPX":         "1993-01-01",  "GOLD":        "2007-03-22",
+}
 
 YAHOO_FUNDS = [
     ("SPX",  "^GSPC"),
     ("GOLD", "GOLDBEES.NS"),
 ]
+
+# ── Category helper for auto-insert ──────────────────────────────────────────
+
+def derive_index_category(code: str, name: str) -> str:
+    """Derive a display category for a new index based on its code/name."""
+    n = name.lower()
+    if code in ("IVIX",):                          return "Volatility"
+    if "g-sec" in n or "bharat bond" in n:         return "Fixed Income"
+    if any(x in n for x in ("momentum",)):         return "Momentum"
+    if "multifactor" in n or "mqvlv" in n:         return "Multi-Factor"
+    if any(x in n for x in ("alpha", "low vol", "quality", "value")):
+        if sum(1 for x in ("alpha","low vol","quality","value") if x in n) >= 2:
+            return "Multi-Factor"
+        if "momentum" in n:                        return "Momentum"
+        if "alpha" in n:                           return "Alpha"
+        if "low vol" in n or "low-vol" in n:       return "Low Vol"
+        if "quality" in n:                         return "Quality"
+        if "value" in n:                           return "Value"
+    if "dividend" in n:                            return "Dividend"
+    if "equal weight" in n or "equal-cap" in n:    return "Equal Weight"
+    if "high beta" in n:                           return "High Beta"
+    if any(x in n for x in (
+        "bank","financial","it ","pharma","health","auto","fmcg","metal",
+        "energy","oil","infra","realty","media","psu","cpse","defence",
+        "consumption","tourism","capital market","ev ","digital","rural",
+        "shariah","transport","housing","ipo","manufacturing","mnc","pse",
+        "chemical","conglomerate","internet","waves","railways","mobility",
+        "esg","commodit","service","emerge",
+    )):
+        return "Thematic"
+    return "Broad Market"
+
+# ── Auto-insert new index funds into the `funds` table ───────────────────────
+
+def ensure_funds_in_db(conn, cur) -> dict:
+    """
+    Insert any index codes from NSE_INDICES / YAHOO_FUNDS that are not yet
+    in the `funds` table.  Returns the refreshed code→id mapping.
+    """
+    cur.execute("SELECT code FROM funds")
+    existing = {row[0] for row in cur.fetchall()}
+
+    all_indices = list(NSE_INDICES) + [(c, c) for c, _ in YAHOO_FUNDS]
+    to_insert = []
+    for code, name in NSE_INDICES:
+        if code not in existing:
+            inception = INCEPTION_DATES.get(code, "2000-01-01")
+            category  = derive_index_category(code, name)
+            to_insert.append((code, name, category, inception))
+    for code, _ in YAHOO_FUNDS:
+        if code not in existing:
+            display = "S&P 500" if code == "SPX" else "Gold (GOLDBEES)"
+            inception = INCEPTION_DATES.get(code, "2000-01-01")
+            to_insert.append((code, display, "Global/Other", inception))
+
+    if to_insert:
+        print(f"  Auto-inserting {len(to_insert)} new fund(s) into `funds` table …")
+        execute_values(
+            cur,
+            """
+            INSERT INTO funds (code, name, category, inception_date)
+            VALUES %s
+            ON CONFLICT (code) DO NOTHING
+            """,
+            to_insert,
+        )
+        conn.commit()
+        for code, name, cat, inc in to_insert:
+            print(f"    + [{code}] {name}  ({cat}, from {inc})")
+
+    # Return refreshed map
+    cur.execute("SELECT id, code FROM funds")
+    return {row[1]: row[0] for row in cur.fetchall()}
 
 NIFTY_HEADERS = {
     "Content-Type":     "application/json; charset=utf-8",
@@ -364,9 +676,9 @@ def main():
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
 
-    # Load fund id map
-    cur.execute("SELECT id, code FROM funds")
-    code_to_id = {row[1]: row[0] for row in cur.fetchall()}
+    # ── Ensure all index entries exist in the `funds` table ──────────────────
+    print("=== ENSURING FUND ENTRIES IN DB ===")
+    code_to_id = ensure_funds_in_db(conn, cur)
 
     # Latest nav date per fund
     cur.execute("""
@@ -376,7 +688,6 @@ def main():
     """)
     latest_by_fund = {row[0]: row[1].strftime("%Y-%m-%d") for row in cur.fetchall()}
 
-    DEFAULT_FROM = "2026-02-28"
     total_inserted = 0
     funds_updated = []
 
@@ -388,7 +699,9 @@ def main():
             print(f"  [{code}] not in DB, skipping")
             continue
 
-        last_date = latest_by_fund.get(fund_id, DEFAULT_FROM)
+        # For funds with no data yet, pull from inception date; otherwise +1 day
+        default_start = INCEPTION_DATES.get(code, "2000-01-01")
+        last_date = latest_by_fund.get(fund_id, default_start)
         from_iso  = add_days(last_date, 1)
 
         if from_iso > today:
@@ -423,7 +736,8 @@ def main():
             print(f"  [{code}] not in DB, skipping")
             continue
 
-        last_date = latest_by_fund.get(fund_id, DEFAULT_FROM)
+        default_start = INCEPTION_DATES.get(code, "2000-01-01")
+        last_date = latest_by_fund.get(fund_id, default_start)
         from_iso  = add_days(last_date, 1)
 
         if from_iso > today:

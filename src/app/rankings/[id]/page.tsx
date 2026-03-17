@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { ArrowLeft, TrendingUp, TrendingDown, Activity, Shield, BarChart3, Info, CalendarDays, ExternalLink } from "lucide-react"
+import { ArrowLeft, TrendingUp, TrendingDown, Activity, Shield, BarChart3, Info, CalendarDays, ExternalLink, BookOpen } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MetricsGrid } from "@/components/metrics-grid"
@@ -40,6 +40,18 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 interface NavPoint { date: string; value: number }
 
+interface TrackingFund {
+  scheme_code:     number
+  scheme_name:     string
+  fund_house:      string
+  scheme_category: string
+  nav:             number | null
+  nav_date:        string | null
+  return_1y:       number | null
+  return_3y:       number | null
+  return_5y:       number | null
+}
+
 export default function FundDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [loading, setLoading] = useState(true)
@@ -57,6 +69,8 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
   const [fyRows, setFyRows] = useState<FYRawRow[]>([])
   const [benchFyRows, setBenchFyRows] = useState<FYRawRow[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [trackingFunds, setTrackingFunds] = useState<TrackingFund[]>([])
+  const [trackingLoading, setTrackingLoading] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -69,6 +83,17 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
         const benchmarkData = await benchmarkRes.json()
         if (fundData.error) throw new Error(fundData.error)
         setFund(fundData.fund)
+
+        // Fetch tracking mutual funds for this index
+        if (fundData.fund?.name) {
+          setTrackingLoading(true)
+          fetch(`/api/mffunds/byindex?indexName=${encodeURIComponent(fundData.fund.name)}`)
+            .then(r => r.json())
+            .then((data: unknown) => {
+              if (Array.isArray(data)) setTrackingFunds(data as TrackingFund[])
+            })
+            .finally(() => setTrackingLoading(false))
+        }
 
         const fundNavRaw: NavPoint[] = fundData.nav
         const benchNavRaw: NavPoint[] = benchmarkData.nav ?? []
@@ -381,6 +406,82 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Tracking Mutual Funds */}
+            <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
+              <div className="px-5 pt-5 pb-3 border-b border-border/40">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-indigo-500" />
+                  <h3 className="font-bold text-sm">Mutual Funds Tracking This Index</h3>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Index funds &amp; ETFs benchmarked to {fund.name}
+                </p>
+              </div>
+              <div className="px-5 py-4">
+                {trackingLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="h-10 rounded-xl bg-muted/60 animate-pulse" />
+                    ))}
+                  </div>
+                ) : trackingFunds.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No mutual funds found tracking this index.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {trackingFunds.map(tf => (
+                      <Link
+                        key={tf.scheme_code}
+                        href={`/funds/${tf.scheme_code}`}
+                        className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                            {tf.scheme_name}
+                          </p>
+                          {tf.fund_house && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                              {tf.fund_house}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          {tf.return_3y !== null ? (
+                            <span className={cn(
+                              "text-[11px] font-bold tabular-nums",
+                              tf.return_3y >= 0 ? "text-emerald-600" : "text-red-500"
+                            )}>
+                              {tf.return_3y >= 0 ? "+" : ""}{tf.return_3y.toFixed(1)}%
+                              <span className="block text-[9px] font-normal text-muted-foreground">3Y</span>
+                            </span>
+                          ) : tf.return_1y !== null ? (
+                            <span className={cn(
+                              "text-[11px] font-bold tabular-nums",
+                              tf.return_1y >= 0 ? "text-emerald-600" : "text-red-500"
+                            )}>
+                              {tf.return_1y >= 0 ? "+" : ""}{tf.return_1y.toFixed(1)}%
+                              <span className="block text-[9px] font-normal text-muted-foreground">1Y</span>
+                            </span>
+                          ) : (
+                            <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                    <div className="pt-1">
+                      <Link
+                        href={`/funds?search=${encodeURIComponent(fund.name.toLowerCase().replace(/^nifty\s*/i, ""))}`}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 px-3 py-1"
+                      >
+                        View all in Funds page →
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

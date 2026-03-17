@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { getTrackedIndex } from "@/lib/index-fund-map"
 
 interface MFFund {
   scheme_code:     number
@@ -21,59 +23,111 @@ type SortKey = "scheme_name" | "scheme_category" | "nav" | "return_1y" | "return
 type SortDir = "asc" | "desc"
 
 /**
- * Derive a meaningful category from the fund name.
+ * Derive a meaningful category from the fund name + AMFI scheme_category.
+ * Passive funds (index/ETF) are categorised by strategy; active funds by asset class.
  * Order matters: multi-keyword combos before single-keyword checks.
  */
 function deriveCategory(name: string, rawCat?: string | null): string {
-  const n = name.toLowerCase()
-  // Commodity
+  const n   = name.toLowerCase()
+  const cat = (rawCat ?? "").toLowerCase()
+
+  // ── Commodities (always first, passive or active) ─────────────────────────
   if (n.includes("gold")) return "Gold"
   if (n.includes("silver")) return "Silver"
-  // International
+
+  // ── International / Global ────────────────────────────────────────────────
   if (n.includes("nasdaq") || n.includes("s&p 500") || n.includes("s&p500") ||
       n.includes("global") || n.includes("international") || n.includes("world") ||
-      n.includes("us equity") || n.includes("hangseng") || n.includes("nifty us"))
+      n.includes("us equity") || n.includes("hangseng") || n.includes("nifty us") ||
+      n.includes("dow jones") || n.includes("ftse") || n.includes("japan") ||
+      n.includes("china") || n.includes("taiwan") || n.includes("korea"))
     return "Global"
-  // Multi-factor (must come before single-factor checks)
-  if ((n.includes("alpha") && n.includes("low vol")) ||
-      (n.includes("quality") && n.includes("low vol")) ||
-      (n.includes("alpha") && n.includes("quality")) ||
-      n.includes("multi-factor") || n.includes("multifactor"))
-    return "Multi-Factor"
-  // Single factor strategies
-  if (n.includes("momentum")) return "Momentum"
-  if (n.includes("alpha")) return "Alpha"
-  if (n.includes("low vol") || n.includes("low-vol") || n.includes("low volatility"))
-    return "Low Vol"
-  if (n.includes("quality")) return "Quality"
-  if (n.includes("value")) return "Value"
-  if (n.includes("dividend")) return "Dividend"
-  // Sectoral / Thematic
-  if (n.includes("defence") || n.includes("defense") || n.includes("infra") ||
-      n.includes("infrastructure") || n.includes("energy") || n.includes("pharma") ||
-      n.includes("healthcare") || n.includes("health care") || n.includes("bank") ||
-      n.includes("financial") || n.includes("it index") || n.includes("technology") ||
-      n.includes("consumption") || n.includes("auto") || n.includes("realty") ||
-      n.includes("media") || n.includes("psu") || n.includes("cpse") ||
-      n.includes("housing") || n.includes("mfg") || n.includes("manufacturing"))
-    return "Thematic"
-  // Broad market indices
-  if (n.includes("nifty 50") || n.includes("nifty50") || n.includes("sensex") ||
-      n.includes("nifty 100") || n.includes("nifty100") || n.includes("bse 100") ||
-      n.includes("nifty 200") || n.includes("nifty200") || n.includes("nifty 500") ||
-      n.includes("nifty500") || n.includes("bse 500") || n.includes("next 50") ||
-      n.includes("next50") || n.includes("midcap") || n.includes("mid cap") ||
-      n.includes("smallcap") || n.includes("small cap") || n.includes("largecap") ||
-      n.includes("large cap") || n.includes("large & mid") || n.includes("microcap") ||
-      n.includes("equal weight") || n.includes("nifty india") || n.includes("bse 200"))
+
+  // ── Determine if this is a passive fund (index fund / ETF) ────────────────
+  // Uses scheme_category from AMFI (via mfapi.in) as the primary signal.
+  const isPassive =
+    cat.includes("index fund") || cat.includes("- index") ||
+    cat.includes("etf") || cat.includes("exchange traded") ||
+    n.includes("index fund") || n.includes(" etf") || n.endsWith(" etf")
+
+  if (isPassive) {
+    // Factor strategies — multi-factor combos before single factors
+    if ((n.includes("alpha") && n.includes("low vol")) ||
+        (n.includes("quality") && n.includes("low vol")) ||
+        (n.includes("alpha") && n.includes("quality")) ||
+        n.includes("multi-factor") || n.includes("multifactor") || n.includes("mqvlv"))
+      return "Multi-Factor"
+    if (n.includes("momentum"))   return "Momentum"
+    if (n.includes("alpha"))      return "Alpha"
+    if (n.includes("low vol") || n.includes("low-vol") || n.includes("low volatility"))
+      return "Low Vol"
+    if (n.includes("quality"))    return "Quality"
+    if (n.includes("value"))      return "Value"
+    if (n.includes("dividend"))   return "Dividend"
+    if (n.includes("equal weight") || n.includes("equal-cap")) return "Equal Weight"
+    if (n.includes("high beta"))  return "High Beta"
+
+    // Sectoral / Thematic passive (before broad-market fallback)
+    if (n.includes("defence") || n.includes("defense") || n.includes("infra") ||
+        n.includes("infrastructure") || n.includes("energy") || n.includes("pharma") ||
+        n.includes("healthcare") || n.includes("health care") || n.includes("bank") ||
+        n.includes("financial") || n.includes("nifty it") || n.includes("nifty media") ||
+        n.includes("technology") || n.includes("consumption") || n.includes("auto") ||
+        n.includes("realty") || n.includes("media") || n.includes("psu") ||
+        n.includes("cpse") || n.includes("housing") || n.includes("manufacturing") ||
+        n.includes("mfg") || n.includes("metal") || n.includes("oil") ||
+        n.includes("fmcg") || n.includes("chemical") || n.includes("mnc") ||
+        n.includes("pse") || n.includes("tourism") || n.includes("mobility") ||
+        n.includes("shariah") || n.includes("ev ") || n.includes("digital") ||
+        n.includes("rural") || n.includes("transport") || n.includes("capital market") ||
+        n.includes("ipo") || n.includes("commodit") || n.includes("service sector") ||
+        n.includes("private bank") || n.includes("psu bank") || n.includes("reits") ||
+        n.includes("conglomerate") || n.includes("waves") || n.includes("railways"))
+      return "Thematic"
+
     return "Broad Market"
-  // Fallback to cleaned-up AMFI category
+  }
+
+  // ── Active funds — categorise by AMFI scheme_category ────────────────────
   if (!rawCat) return "Other"
-  if (rawCat.includes("Index Funds")) return "Index Fund"
-  if (rawCat.includes("ETF")) return "ETF"
-  if (rawCat.includes("Fund of Funds")) return "FoF"
-  if (rawCat.includes("Thematic")) return "Thematic"
-  return rawCat
+
+  // Liquid / Overnight / Money Market
+  if (cat.includes("liquid") || cat.includes("overnight") || cat.includes("money market"))
+    return "Liquid"
+
+  // All other Debt
+  if (cat.includes("debt") || cat.includes("gilt") || cat.includes("bond") ||
+      cat.includes("duration") || cat.includes("credit") || cat.includes("floater") ||
+      cat.includes("banking and psu") || cat.includes("banking & psu"))
+    return "Debt"
+
+  // ELSS (tax-saving equity)
+  if (cat.includes("elss") || cat.includes("tax sav") ||
+      n.includes("tax sav") || n.includes("elss"))
+    return "ELSS"
+
+  // Hybrid schemes
+  if (cat.includes("hybrid") || cat.includes("balanced") || cat.includes("multi asset") ||
+      cat.includes("arbitrage") || cat.includes("equity savings") ||
+      cat.includes("dynamic asset"))
+    return "Hybrid"
+
+  // Fund of Funds
+  if (cat.includes("fund of fund") || cat.includes("fof"))
+    return "FoF"
+
+  // Solution-oriented
+  if (cat.includes("solution") || cat.includes("retirement") || cat.includes("children"))
+    return "Solution"
+
+  // Active Equity (large/mid/small/flexi/focused/contra/sectoral)
+  if (cat.includes("equity") || cat.includes("large cap") || cat.includes("mid cap") ||
+      cat.includes("small cap") || cat.includes("flexi cap") || cat.includes("multi cap") ||
+      cat.includes("focused") || cat.includes("contra") || cat.includes("sectoral") ||
+      cat.includes("thematic"))
+    return "Active Equity"
+
+  return "Other"
 }
 
 function catLabel(name: string, rawCat?: string | null): string {
@@ -189,11 +243,12 @@ function SkeletonRow() {
   )
 }
 
-export default function FundsPage() {
+function FundsPageInner() {
+  const searchParams = useSearchParams()
   const [funds,          setFunds]          = useState<MFFund[]>([])
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState<string | null>(null)
-  const [search,         setSearch]         = useState("")
+  const [search,         setSearch]         = useState(searchParams.get("search") ?? "")
   const [categoryFilter, setCategoryFilter] = useState("All")
   const [sortKey,        setSortKey]        = useState<SortKey>("return_3y")
   const [sortDir,        setSortDir]        = useState<SortDir>("desc")
@@ -437,7 +492,7 @@ export default function FundsPage() {
                             <div style={{
                               marginTop: 2, fontSize: 11.5,
                               color: "rgba(12,14,19,.4)",
-                              display: "flex", alignItems: "center", gap: 5,
+                              display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap",
                             }}>
                               {amcLogoUrl(fund.fund_house)
                                 ? <img
@@ -452,6 +507,28 @@ export default function FundsPage() {
                                   </svg>
                               }
                               {fund.fund_house}
+                              {(() => {
+                                const tracked = getTrackedIndex(fund.scheme_name)
+                                if (!tracked) return null
+                                return (
+                                  <Link
+                                    href={`/rankings/${tracked.code}`}
+                                    onClick={e => e.stopPropagation()}
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", gap: 3,
+                                      padding: "1px 6px", borderRadius: 4,
+                                      background: "rgba(26,86,219,.08)",
+                                      color: "#1A56DB", fontSize: 10, fontWeight: 600,
+                                      textDecoration: "none", whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    <svg viewBox="0 0 10 10" fill="none" style={{ width: 8, height: 8 }}>
+                                      <path d="M1 9L9 1M9 1H3M9 1V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                    {tracked.name}
+                                  </Link>
+                                )
+                              })()}
                             </div>
                           </td>
                           <td style={{ padding: "13px 16px" }}>
@@ -560,7 +637,7 @@ export default function FundsPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                         <span style={{
                           display: "inline-block", padding: "2px 7px",
                           borderRadius: 5, background: "rgba(12,14,19,.06)",
@@ -568,6 +645,25 @@ export default function FundsPage() {
                         }}>
                           {catLabel(fund.scheme_name, fund.scheme_category)}
                         </span>
+                        {(() => {
+                          const tracked = getTrackedIndex(fund.scheme_name)
+                          if (!tracked) return null
+                          return (
+                            <Link
+                              href={`/rankings/${tracked.code}`}
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 3,
+                                padding: "2px 7px", borderRadius: 5,
+                                background: "rgba(26,86,219,.08)",
+                                color: "#1A56DB", fontSize: 10, fontWeight: 600,
+                                textDecoration: "none",
+                              }}
+                            >
+                              ↗ {tracked.code}
+                            </Link>
+                          )
+                        })()}
                       </div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
@@ -614,5 +710,18 @@ export default function FundsPage() {
             )}
       </div>
     </div>
+  )
+}
+
+export default function FundsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", background: "#F5F5F3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(12,14,19,.1)", borderTopColor: "#1A56DB", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    }>
+      <FundsPageInner />
+    </Suspense>
   )
 }

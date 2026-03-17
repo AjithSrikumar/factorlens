@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip
 } from "recharts"
+import { getTrackedIndex } from "@/lib/index-fund-map"
 
 interface FundMeta {
   scheme_code:     number
@@ -385,8 +386,9 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   const { fund, metrics, nav_history, fy_data } = data
-  const chartData = thinHistory(nav_history)
-  const category  = deriveCategory(fund.scheme_name, fund.scheme_category)
+  const chartData    = thinHistory(nav_history)
+  const category     = deriveCategory(fund.scheme_name, fund.scheme_category)
+  const trackedIndex = getTrackedIndex(fund.scheme_name)
 
   const r1y   = fmt(metrics?.return_1y      ?? null)
   const r3y   = fmt(metrics?.return_3y      ?? null)
@@ -428,15 +430,32 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
         }}>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
             <div style={{ flex: 1, minWidth: 200 }}>
-              {/* Category badge */}
-              <span style={{
-                display: "inline-flex", alignItems: "center",
-                padding: "3px 10px", borderRadius: 100, fontSize: 10.5, fontWeight: 700,
-                background: "#EBF0FF", color: "#1A56DB", letterSpacing: ".3px",
-                marginBottom: 8,
-              }}>
-                {category}
-              </span>
+              {/* Category badge + tracked index link */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center",
+                  padding: "3px 10px", borderRadius: 100, fontSize: 10.5, fontWeight: 700,
+                  background: "#EBF0FF", color: "#1A56DB", letterSpacing: ".3px",
+                }}>
+                  {category}
+                </span>
+                {trackedIndex && (
+                  <Link
+                    href={`/rankings/${trackedIndex.code}`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      padding: "3px 10px", borderRadius: 100, fontSize: 10.5, fontWeight: 700,
+                      background: "rgba(16,185,129,.1)", color: "#0A7C4E",
+                      textDecoration: "none", letterSpacing: ".3px",
+                    }}
+                  >
+                    <svg viewBox="0 0 10 10" fill="none" style={{ width: 8, height: 8 }}>
+                      <path d="M1 9L9 1M9 1H3M9 1V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Tracks: {trackedIndex.name}
+                  </Link>
+                )}
+              </div>
               <h1 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0C0E13", lineHeight: 1.3, letterSpacing: "-.02em" }}>
                 {fund.scheme_name}
               </h1>
