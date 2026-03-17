@@ -11,14 +11,14 @@ interface Fund {
   name: string
   category: string
   inception_date: string
-  cagr: number
-  avg_3y_rolling_return: number
-  max_drawdown: number
-  volatility: number
-  sharpe_ratio: number
-  calmar_ratio: number
-  score: number
-  final_rank: number
+  cagr: number | null
+  avg_3y_rolling_return: number | null
+  max_drawdown: number | null
+  volatility: number | null
+  sharpe_ratio: number | null
+  calmar_ratio: number | null
+  score: number | null
+  final_rank: number | null
 }
 
 interface FYRawRow {
@@ -47,14 +47,21 @@ type SortKey = keyof Fund
 type SortDir = "asc" | "desc"
 
 const CAT_STYLE: Record<string, { bg: string; color: string }> = {
-  "Broad Market": { bg: "#EBF0FF", color: "#1A56DB" },
-  "Momentum": { bg: "#FFF3E6", color: "#B45309" },
-  "Multi-Factor": { bg: "#F3F0FF", color: "#6D28D9" },
-  "Quality": { bg: "#E6F4EE", color: "#0A7C4E" },
-  "Low Vol": { bg: "#E6F4EE", color: "#0A7C4E" },
-  "Alpha": { bg: "#FDE8F4", color: "#9D1769" },
-  "Value": { bg: "#FEF5E6", color: "#92400E" },
-  "Global/Other": { bg: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" },
+  "Broad Market":  { bg: "#EBF0FF", color: "#1A56DB" },
+  "Momentum":      { bg: "#FFF3E6", color: "#B45309" },
+  "Multi-Factor":  { bg: "#F3F0FF", color: "#6D28D9" },
+  "Quality":       { bg: "#E6F4EE", color: "#0A7C4E" },
+  "Low Vol":       { bg: "#E6F4EE", color: "#0A7C4E" },
+  "Alpha":         { bg: "#FDE8F4", color: "#9D1769" },
+  "Value":         { bg: "#FEF5E6", color: "#92400E" },
+  "Thematic":      { bg: "#FEF2F2", color: "#B91C1C" },
+  "Equal Weight":  { bg: "#F0FDF4", color: "#166534" },
+  "High Beta":     { bg: "#FFF1F2", color: "#BE123C" },
+  "Dividend":      { bg: "#FFFBEB", color: "#78350F" },
+  "Volatility":    { bg: "#F0F9FF", color: "#0369A1" },
+  "Fixed Income":  { bg: "#F5F3FF", color: "#5B21B6" },
+  "Leverage":      { bg: "#FFF7ED", color: "#C2410C" },
+  "Global/Other":  { bg: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" },
 }
 
 function catStyle(cat: string) {
@@ -82,7 +89,7 @@ function scoreBarWidth(raw: number | null | undefined): string {
   return `${Math.min(Math.max((100 - raw) / 10, 0), 10) * 10}%`
 }
 
-function RankBadge({ rank }: { rank: number }) {
+function RankBadge({ rank }: { rank: number | null }) {
   const style = rank === 1
     ? { background: "#FEF3C7", color: "#92400E" }
     : rank === 2
@@ -98,7 +105,7 @@ function RankBadge({ rank }: { rank: number }) {
       fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
       ...style, flexShrink: 0,
     }}>
-      {rank}
+      {rank ?? "—"}
     </span>
   )
 }
@@ -147,8 +154,9 @@ export default function RankingsPage() {
       return matchCat && matchSearch
     })
     filtered = [...filtered].sort((a, b) => {
-      const av = a[sortKey] as number
-      const bv = b[sortKey] as number
+      const av = a[sortKey] as number | null
+      const bv = b[sortKey] as number | null
+      if (av == null && bv == null) return 0
       if (av == null) return 1
       if (bv == null) return -1
       return sortDir === "asc" ? av - bv : bv - av
@@ -156,8 +164,13 @@ export default function RankingsPage() {
     return filtered
   }, [funds, search, catFilter, sortKey, sortDir])
 
-  // Top 3 funds for leader grid
-  const top3 = useMemo(() => [...funds].sort((a, b) => a.final_rank - b.final_rank).slice(0, 3), [funds])
+  const rankedCount = useMemo(() => sorted.filter(f => f.final_rank != null).length, [sorted])
+
+  // Top 3 ranked funds for leader grid (exclude unranked/pending indices)
+  const top3 = useMemo(
+    () => [...funds].filter(f => f.final_rank != null).sort((a, b) => (a.final_rank ?? 0) - (b.final_rank ?? 0)).slice(0, 3),
+    [funds]
+  )
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc")
@@ -230,7 +243,7 @@ export default function RankingsPage() {
                 Fund Rankings
               </h1>
               <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
-                28 NSE factor & broad-market funds ranked by composite score.
+                {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null).length} ranked · ${funds.length} total NSE indices`}
               </p>
             </div>
             <Link
@@ -462,8 +475,18 @@ export default function RankingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((fund) => (
+                    {sorted.map((fund, idx) => (
                       <>
+                        {/* Divider between ranked and unranked sections */}
+                        {idx === rankedCount && rankedCount > 0 && rankedCount < sorted.length && (
+                          <tr key="unranked-divider">
+                            <td colSpan={9} style={{ padding: "8px 16px", background: "#F5F5F3", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+                              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.35)" }}>
+                                Pending data — scraped soon
+                              </span>
+                            </td>
+                          </tr>
+                        )}
                         <tr
                           key={fund.id}
                           style={{
@@ -505,11 +528,11 @@ export default function RankingsPage() {
                           <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
                             <span style={{
                               fontFamily: "var(--font-mono)", fontSize: 13.5, fontWeight: 700,
-                              color: fund.cagr > 0.18 ? "#0A7C4E" : "#0C0E13",
+                              color: (fund.cagr ?? 0) > 0.18 ? "#0A7C4E" : "#0C0E13",
                             }}>
                               {pct(fund.cagr)}
                             </span>
-                            {nifty50 && fund.id !== nifty50.id && (
+                            {nifty50 && fund.id !== nifty50.id && fund.cagr != null && nifty50.cagr != null && (
                               <div style={{
                                 fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
                                 color: fund.cagr > nifty50.cagr ? "#0A7C4E" : "#C5271E",
@@ -523,7 +546,7 @@ export default function RankingsPage() {
                             {pct(fund.avg_3y_rolling_return)}
                           </td>
                           <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, verticalAlign: "middle" }}>
-                            <span style={{ color: fund.sharpe_ratio > 0.6 ? "#1A56DB" : "#0C0E13", fontWeight: fund.sharpe_ratio > 0.6 ? 700 : 400 }}>
+                            <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.6 ? "#1A56DB" : "#0C0E13", fontWeight: (fund.sharpe_ratio ?? 0) > 0.6 ? 700 : 400 }}>
                               {fixed(fund.sharpe_ratio)}
                             </span>
                           </td>
@@ -636,7 +659,7 @@ export default function RankingsPage() {
                     }}>
                       {pct(fund.cagr)}
                     </div>
-                    {nifty50 && fund.id !== nifty50.id && (
+                    {nifty50 && fund.id !== nifty50.id && fund.cagr != null && nifty50.cagr != null && (
                       <div style={{
                         fontSize: 10.5, fontWeight: 700, marginTop: 1,
                         color: fund.cagr > nifty50.cagr ? "#0A7C4E" : "#C5271E",
