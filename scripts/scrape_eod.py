@@ -14,10 +14,6 @@ Usage:
 
 import os, sys, json, time, math
 from datetime import datetime, timedelta, timezone
-try:
-    from zoneinfo import ZoneInfo
-except ModuleNotFoundError:
-    from backports.zoneinfo import ZoneInfo
 
 import requests
 import psycopg2
@@ -30,7 +26,7 @@ DB_URL = os.getenv(
     "postgresql://postgres.cxmaeueobsqrbivoqvry:74d4pPImwlV0sCH3LDrUUsB9OIkKHNzSrRZyht8OyWiWSGPr7uA8Iz1qRqlJCxQn@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 )
 
-IST = ZoneInfo("Asia/Kolkata")
+IST = timezone(timedelta(hours=5, minutes=30))
 
 NSE_INDICES = [
     # ── Broad Market ──────────────────────────────────────────────────────────
