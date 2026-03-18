@@ -144,7 +144,7 @@ export default function RankingsPage() {
       .catch(() => setChartLoading(false))
   }, [expandedId, chartCache])
 
-  const nifty50 = useMemo(() => funds.find(f => f.code === 'Nifty50' || f.id === 1), [funds])
+  const nifty50 = useMemo(() => funds.find(f => f.code === 'N50'), [funds])
   const categories = useMemo(() => ["All", ...Array.from(new Set(funds.map((f) => f.category)))], [funds])
 
   const sorted = useMemo(() => {
@@ -750,7 +750,7 @@ export default function RankingsPage() {
 
         {/* Footer note */}
         <p style={{ fontSize: 11.5, color: "rgba(12,14,19,.3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
-          {sorted.length} of {funds.length} funds shown · NSE India data (Apr 2005 – Feb 2026) · Past performance is not a guarantee of future returns.
+          {sorted.length} of {funds.length} funds shown · NSE India data · Past performance is not a guarantee of future returns.
         </p>
 
       </div>

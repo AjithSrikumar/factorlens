@@ -351,7 +351,10 @@ def ensure_funds_in_db(conn, cur) -> dict:
             """
             INSERT INTO funds (code, name, category, inception_date)
             VALUES %s
-            ON CONFLICT (code) DO NOTHING
+            ON CONFLICT (code) DO UPDATE
+              SET name           = EXCLUDED.name,
+                  category       = EXCLUDED.category,
+                  inception_date = EXCLUDED.inception_date
             """,
             to_insert,
         )
@@ -429,6 +432,12 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
                     continue
                 if date_iso and val > 0:
                     result.append((date_iso, val))
+            if not result and rows:
+                print(f"  [warn] {index_name}: API returned {len(rows)} rows but none parsed (check field names: {list(rows[0].keys()) if rows else []})")
+            elif not result:
+                print(f"  [warn] {index_name}: API returned empty data for {from_iso}→{to_iso}")
+            # Sort ascending so new_rows[-1] is the latest date
+            result.sort(key=lambda x: x[0])
             return result
         except Exception as e:
             print(f"  [attempt {attempt+1}/{retries}] {index_name}: {e}")
@@ -521,7 +530,11 @@ def fetch_mf_latest(scheme_code: int, retries: int = 3):
             )
             resp.raise_for_status()
             data = resp.json()
-            if data.get("status") != "SUCCESS" or not data.get("data"):
+            if data.get("status") != "SUCCESS":
+                print(f"  [mfapi] scheme {scheme_code}: status={data.get('status')} msg={data.get('message','')}")
+                return None
+            if not data.get("data"):
+                print(f"  [mfapi] scheme {scheme_code}: SUCCESS but empty data")
                 return None
             row = data["data"][0]
             date_iso = mfapi_date_to_iso(row.get("date", ""))
@@ -692,7 +705,11 @@ def main():
             "DELETE FROM nav_data WHERE fund_id = %s AND date BETWEEN %s AND %s",
             (fund_id, min_date, max_date)
         )
-        execute_values(cur, "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s", new_rows)
+        execute_values(
+            cur,
+            "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s ON CONFLICT (fund_id, date) DO UPDATE SET nav_value = EXCLUDED.nav_value",
+            new_rows,
+        )
         conn.commit()
         print(f"{len(new_rows)} rows → latest {new_rows[-1][1]}")
         total_inserted += len(new_rows)

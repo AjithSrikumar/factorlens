@@ -18,7 +18,7 @@ export async function GET() {
 
   await supabaseAdmin
     .from('funds')
-    .upsert(toInsert, { onConflict: 'code', ignoreDuplicates: true })
+    .upsert(toInsert, { onConflict: 'code' })
 
   // Fetch all funds — ranked first (nulls last), then unranked alphabetically.
   const { data, error } = await supabaseAdmin
