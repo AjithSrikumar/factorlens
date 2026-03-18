@@ -5,12 +5,10 @@ New indices are automatically inserted into the `funds` table if missing,
 and historical data is pulled from the index inception date on first run.
 
 Sources:
-  - NSE indices    : niftyindices.com POST API
-  - S&P 500 (SPX)  : Yahoo Finance  (^GSPC)
-  - Gold BeES      : Yahoo Finance  (GOLDBEES.NS)
+  - NSE indices : niftyindices.com POST API
 
 Usage:
-    pip install requests yfinance psycopg2-binary
+    pip install requests psycopg2-binary
     python scripts/scrape_eod.py
 """
 
@@ -21,12 +19,6 @@ from zoneinfo import ZoneInfo
 import requests
 import psycopg2
 from psycopg2.extras import execute_values
-
-try:
-    import yfinance as yf
-    _YFINANCE_OK = True
-except Exception:
-    _YFINANCE_OK = False
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -299,14 +291,7 @@ INCEPTION_DATES = {
     "NCGSEC":      "2001-01-01",  "NBB2030":     "2020-01-01",
     "NBB2031":     "2021-01-04",  "NBB2032":     "2022-01-03",
     "NBB2033":     "2023-01-02",
-    # Yahoo Finance
-    "SPX":         "1993-01-01",  "GOLD":        "2007-03-22",
 }
-
-YAHOO_FUNDS = [
-    ("SPX",  "^GSPC"),
-    ("GOLD", "GOLDBEES.NS"),
-]
 
 # ── Category helper for auto-insert ──────────────────────────────────────────
 
@@ -343,24 +328,18 @@ def derive_index_category(code: str, name: str) -> str:
 
 def ensure_funds_in_db(conn, cur) -> dict:
     """
-    Insert any index codes from NSE_INDICES / YAHOO_FUNDS that are not yet
+    Insert any index codes from NSE_INDICES that are not yet
     in the `funds` table.  Returns the refreshed code→id mapping.
     """
     cur.execute("SELECT code FROM funds")
     existing = {row[0] for row in cur.fetchall()}
 
-    all_indices = list(NSE_INDICES) + [(c, c) for c, _ in YAHOO_FUNDS]
     to_insert = []
     for code, name in NSE_INDICES:
         if code not in existing:
             inception = INCEPTION_DATES.get(code, "2000-01-01")
             category  = derive_index_category(code, name)
             to_insert.append((code, name, category, inception))
-    for code, _ in YAHOO_FUNDS:
-        if code not in existing:
-            display = "S&P 500" if code == "SPX" else "Gold (GOLDBEES)"
-            inception = INCEPTION_DATES.get(code, "2000-01-01")
-            to_insert.append((code, display, "Global/Other", inception))
 
     if to_insert:
         print(f"  Auto-inserting {len(to_insert)} new fund(s) into `funds` table …")
@@ -453,27 +432,6 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
     return []
-
-def fetch_yahoo(symbol: str, from_iso: str, to_iso: str):
-    """Return list of (date_iso, close_value) tuples via yfinance."""
-    if not _YFINANCE_OK:
-        print(f"  Yahoo {symbol}: yfinance not available, skipping")
-        return []
-    try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(start=from_iso, end=add_days(to_iso, 1), interval="1d", auto_adjust=True)
-        if df.empty:
-            return []
-        result = []
-        for ts, row in df.iterrows():
-            date_iso = ts.strftime("%Y-%m-%d")
-            val = float(row["Close"])
-            if val > 0:
-                result.append((date_iso, val))
-        return result
-    except Exception as e:
-        print(f"  Yahoo {symbol}: {e}")
-        return []
 
 # ── Metric computation ────────────────────────────────────────────────────────
 
@@ -735,41 +693,6 @@ def main():
         total_inserted += len(new_rows)
         funds_updated.append(fund_id)
         time.sleep(0.3)  # be polite to niftyindices
-
-    # ── Yahoo Finance funds ──────────────────────────────────────────────────
-    print("\n=== YAHOO FINANCE (SPX / Gold) ===")
-    for code, symbol in YAHOO_FUNDS:
-        fund_id = code_to_id.get(code)
-        if not fund_id:
-            print(f"  [{code}] not in DB, skipping")
-            continue
-
-        default_start = INCEPTION_DATES.get(code, "2000-01-01")
-        last_date = latest_by_fund.get(fund_id, default_start)
-        from_iso  = add_days(last_date, 1)
-
-        if from_iso > today:
-            print(f"  [{code}] up to date ({last_date})")
-            continue
-
-        print(f"  [{code}] {symbol}: fetching {from_iso} → {today} ...", end=" ", flush=True)
-        rows = fetch_yahoo(symbol, from_iso, today)
-
-        new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
-        if not new_rows:
-            print("no new data")
-            continue
-
-        min_date, max_date = new_rows[0][1], new_rows[-1][1]
-        cur.execute(
-            "DELETE FROM nav_data WHERE fund_id = %s AND date BETWEEN %s AND %s",
-            (fund_id, min_date, max_date)
-        )
-        execute_values(cur, "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s", new_rows)
-        conn.commit()
-        print(f"{len(new_rows)} rows → latest {new_rows[-1][1]}")
-        total_inserted += len(new_rows)
-        funds_updated.append(fund_id)
 
     print(f"\nTotal new rows inserted: {total_inserted}")
 
