@@ -14,7 +14,10 @@ Usage:
 
 import os, sys, json, time, math
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except ModuleNotFoundError:
+    from backports.zoneinfo import ZoneInfo
 
 import requests
 import psycopg2
