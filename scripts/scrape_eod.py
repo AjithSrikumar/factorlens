@@ -16,6 +16,10 @@ import os, sys, json, time, math
 from datetime import datetime, timedelta, timezone
 
 import requests
+import requests.packages.urllib3
+requests.packages.urllib3.disable_warnings(
+    requests.packages.urllib3.exceptions.InsecureRequestWarning
+)
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -531,6 +535,8 @@ def fetch_mf_latest(scheme_code: int, retries: int = 3):
         except Exception as e:
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
+            else:
+                print(f"  [mfapi] scheme {scheme_code} failed: {e}")
     return None
 
 def fetch_mf_since(scheme_code: int, after_date: str, retries: int = 3):
