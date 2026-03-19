@@ -129,7 +129,8 @@ export default function RankingsPage() {
   useEffect(() => {
     fetch("/api/funds")
       .then((r) => r.json())
-      .then((d) => { setFunds(d); setLoading(false) })
+      .then((d) => { setFunds(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {
