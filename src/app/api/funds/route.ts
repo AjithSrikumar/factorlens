@@ -24,7 +24,7 @@ export async function GET() {
   // Fetch all funds — ranked first (nulls last), then unranked alphabetically.
   const { data, error } = await supabaseAdmin
     .from('funds')
-    .select('id, code, name, category, inception_date, cagr, avg_3y_rolling_return, max_drawdown, volatility, sharpe_ratio, calmar_ratio, score, final_rank')
+    .select('id, code, name, category, inception_date, cagr, cagr_1y, cagr_3y, cagr_5y, cagr_10y, cagr_20y, avg_3y_rolling_return, max_drawdown, volatility, sharpe_ratio, calmar_ratio, score, final_rank')
     .order('final_rank', { ascending: true, nullsFirst: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

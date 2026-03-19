@@ -15,9 +15,21 @@ CREATE TABLE IF NOT EXISTS funds (
     volatility       NUMERIC,
     sharpe_ratio     NUMERIC,
     calmar_ratio     NUMERIC,
+    cagr_1y          NUMERIC,
+    cagr_3y          NUMERIC,
+    cagr_5y          NUMERIC,
+    cagr_10y         NUMERIC,
+    cagr_20y         NUMERIC,
     score            NUMERIC,
     final_rank       INTEGER
 );
+
+-- Migration: add period CAGR columns if upgrading an existing DB
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS cagr_1y  NUMERIC;
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS cagr_3y  NUMERIC;
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS cagr_5y  NUMERIC;
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS cagr_10y NUMERIC;
+ALTER TABLE funds ADD COLUMN IF NOT EXISTS cagr_20y NUMERIC;
 
 -- ── 2. nav_data ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS nav_data (

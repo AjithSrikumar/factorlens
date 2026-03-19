@@ -122,6 +122,27 @@ function computeAvg3yRolling(nav: Array<{ date: string; value: number }>): numbe
   return rolls.length ? rolls.reduce((s,r) => s+r, 0) / rolls.length / 100 : 0
 }
 
+/** Compute CAGR over the last `years` years from the most recent NAV.
+ *  Returns null if there is insufficient history (< 90% of the window). */
+function computePeriodCAGR(nav: Array<{ date: string; value: number }>, years: number): number | null {
+  if (nav.length < 2) return null
+  const endDate  = new Date(nav[nav.length - 1].date)
+  const endVal   = nav[nav.length - 1].value
+  const msWindow = years * 365.25 * 24 * 60 * 60 * 1000
+  const targetMs = endDate.getTime() - msWindow
+  const cutoffMs = endDate.getTime() - msWindow * 0.90  // must reach at least 90% of window
+  let best: { date: Date; value: number } | null = null
+  for (const { date, value } of nav) {
+    const dt = new Date(date)
+    if (dt.getTime() > cutoffMs) break
+    best = { date: dt, value }
+  }
+  if (!best) return null
+  const actualYears = (endDate.getTime() - best.date.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  if (actualYears <= 0) return null
+  return (endVal / best.value) ** (1 / actualYears) - 1
+}
+
 function computeMetrics(nav: Array<{ date: string; value: number }>) {
   const cagr  = computeCAGR(nav)
   const vol   = computeVolatility(nav)
@@ -133,6 +154,11 @@ function computeMetrics(nav: Array<{ date: string; value: number }>) {
     sharpe_ratio:          vol > 0 ? cagr / vol : 0,
     calmar_ratio:          maxDD !== 0 ? cagr / Math.abs(maxDD) : 0,
     avg_3y_rolling_return: computeAvg3yRolling(nav),
+    cagr_1y:               computePeriodCAGR(nav, 1),
+    cagr_3y:               computePeriodCAGR(nav, 3),
+    cagr_5y:               computePeriodCAGR(nav, 5),
+    cagr_10y:              computePeriodCAGR(nav, 10),
+    cagr_20y:              computePeriodCAGR(nav, 20),
   }
 }
 
@@ -240,33 +266,47 @@ export async function POST(req: NextRequest) {
     await new Promise(r => setTimeout(r, 300))
   }
 
-  // Step 4: recompute final_rank for all ranked funds
+  // Step 4: recompute final_rank — only for funds with at least 10y history
+  // First clear all existing ranks
+  await supabaseAdmin.from('funds').update({ score: null, final_rank: null }).not('id', 'is', null)
+
   const { data: rankedFunds } = await supabaseAdmin
     .from('funds')
-    .select('id, cagr, avg_3y_rolling_return, sharpe_ratio, max_drawdown')
-    .not('cagr', 'is', null)
+    .select('id, cagr_10y, cagr_20y, avg_3y_rolling_return, sharpe_ratio, max_drawdown')
+    .not('cagr_10y', 'is', null)
+    .not('avg_3y_rolling_return', 'is', null)
+    .not('sharpe_ratio', 'is', null)
+    .not('max_drawdown', 'is', null)
 
   if (rankedFunds && rankedFunds.length >= 2) {
-    // Normalise each metric to 0–100 rank (lower raw score = better)
-    type Metric = { id: number; cagr: number; avg_3y_rolling_return: number; sharpe_ratio: number; max_drawdown: number }
+    type Metric = {
+      id: number
+      cagr_10y: number; cagr_20y: number | null
+      avg_3y_rolling_return: number; sharpe_ratio: number; max_drawdown: number
+    }
     const funds = rankedFunds as Metric[]
     const n = funds.length
 
-    const rank = (arr: number[], ascending = false) => {
-      const sorted = [...arr].sort((a, b) => ascending ? a - b : b - a)
-      return arr.map(v => (sorted.indexOf(v) / (n - 1)) * 100)
+    // Percentile rank: 0 = best (higher raw value = better, sort descending)
+    const rank = (arr: number[]) => {
+      const sorted = [...arr].map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v)
+      const ranks = new Array(n).fill(0)
+      sorted.forEach(({ i }, pos) => { ranks[i] = (pos / (n - 1)) * 100 })
+      return ranks
     }
 
-    const cagrRanks   = rank(funds.map(f => f.cagr))
+    // Use 20Y CAGR if available, fall back to 10Y CAGR
+    const longCagrs   = funds.map(f => f.cagr_20y ?? f.cagr_10y)
+    const cagrRanks   = rank(longCagrs)
     const avg3yRanks  = rank(funds.map(f => f.avg_3y_rolling_return))
     const sharpeRanks = rank(funds.map(f => f.sharpe_ratio))
-    const ddRanks     = rank(funds.map(f => f.max_drawdown))   // max_drawdown is negative; less negative (higher) = better → ascending=false
+    const ddRanks     = rank(funds.map(f => f.max_drawdown))  // negative; less negative (higher) = better
 
     const scored = funds.map((f, i) => ({
       id:    f.id,
-      score: cagrRanks[i] * 0.3 + avg3yRanks[i] * 0.25 + sharpeRanks[i] * 0.3 + ddRanks[i] * 0.15,
+      score: cagrRanks[i] * 0.30 + avg3yRanks[i] * 0.25 + sharpeRanks[i] * 0.30 + ddRanks[i] * 0.15,
     }))
-    scored.sort((a, b) => a.score - b.score)  // lower score = better
+    scored.sort((a, b) => a.score - b.score)  // lower score = better rank
     for (let i = 0; i < scored.length; i++) {
       await supabaseAdmin.from('funds').update({ score: scored[i].score, final_rank: i + 1 }).eq('id', scored[i].id)
     }

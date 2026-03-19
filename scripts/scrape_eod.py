@@ -486,6 +486,30 @@ def compute_cagr(nav: list) -> float:
         return 0.0
     return (end_val / start_val) ** (1.0 / years) - 1.0
 
+def compute_period_cagr(nav: list, years: float) -> float | None:
+    """Compute CAGR over the last `years` years from the most recent NAV date.
+    Returns None if there is insufficient history (< 90% of the requested window)."""
+    if len(nav) < 2:
+        return None
+    end_dt  = datetime.strptime(nav[-1][0], "%Y-%m-%d")
+    end_val = nav[-1][1]
+    target  = end_dt - timedelta(days=int(years * 365.25))
+    # Need at least 90% of the window to be valid
+    cutoff  = end_dt - timedelta(days=int(years * 365.25 * 0.90))
+    # Find the NAV row closest to the target start date (without going past the cutoff)
+    best = None
+    for date_str, val in nav:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if dt > cutoff:
+            break
+        best = (dt, val)
+    if best is None:
+        return None
+    actual_years = (end_dt - best[0]).days / 365.25
+    if actual_years <= 0:
+        return None
+    return (end_val / best[1]) ** (1.0 / actual_years) - 1.0
+
 def compute_volatility(nav: list) -> float:
     if len(nav) < 2:
         return 0.0
@@ -523,8 +547,14 @@ def compute_metrics(nav: list) -> dict:
     calmar  = cagr / abs(max_dd) if max_dd != 0 else 0.0
     rolling = compute_rolling_3y(nav)
     avg3y   = (sum(rolling) / len(rolling) / 100) if rolling else 0.0
-    return dict(cagr=cagr, vol=vol, max_dd=max_dd, sharpe=sharpe,
-                calmar=calmar, avg3y=avg3y)
+    return dict(
+        cagr=cagr, vol=vol, max_dd=max_dd, sharpe=sharpe, calmar=calmar, avg3y=avg3y,
+        cagr_1y=compute_period_cagr(nav, 1),
+        cagr_3y=compute_period_cagr(nav, 3),
+        cagr_5y=compute_period_cagr(nav, 5),
+        cagr_10y=compute_period_cagr(nav, 10),
+        cagr_20y=compute_period_cagr(nav, 20),
+    )
 
 # ── mfapi.in EOD update ────────────────────────────────────────────────────────
 
@@ -683,24 +713,30 @@ def update_mf_nav(conn, cur) -> None:
 
 def _recompute_rankings(conn, cur):
     """
-    Read all funds that have a non-null cagr, compute a composite score, and
-    write score + final_rank back to the DB.
+    Rank only funds with at least 10 years of history (cagr_10y IS NOT NULL).
+    Funds with insufficient history get score=NULL, final_rank=NULL.
 
     Scoring weights (match the Next.js admin route):
-      CAGR                  30 %
+      20Y CAGR              30 %  (falls back to 10Y CAGR when 20Y not available)
       Avg 3Y rolling return 25 %
       Sharpe ratio          30 %
       Max drawdown          15 %  (less negative = better)
 
-    Each metric is percentile-ranked across the eligible fund universe
-    (0 = worst, 100 = best).  The composite score is a weighted average of
-    those percentile ranks; *lower* composite score → better final_rank.
+    Each metric is percentile-ranked across the eligible universe
+    (0 = best → lower composite score → better final_rank).
     """
     print("=== RECOMPUTING SCORES & RANKINGS ===")
+
+    # Clear existing ranks for all funds first
+    cur.execute("UPDATE funds SET score = NULL, final_rank = NULL")
+
+    # Only rank funds with at least 10 years of history
     cur.execute("""
-        SELECT id, code, cagr, avg_3y_rolling_return, sharpe_ratio, max_drawdown
+        SELECT id, code,
+               COALESCE(cagr_20y, cagr_10y) AS long_cagr,
+               avg_3y_rolling_return, sharpe_ratio, max_drawdown
         FROM funds
-        WHERE cagr IS NOT NULL
+        WHERE cagr_10y IS NOT NULL
           AND avg_3y_rolling_return IS NOT NULL
           AND sharpe_ratio IS NOT NULL
           AND max_drawdown IS NOT NULL
@@ -709,30 +745,31 @@ def _recompute_rankings(conn, cur):
     rows = cur.fetchall()
 
     if len(rows) < 2:
-        print("  Not enough funds with metrics to rank.")
+        print("  Not enough funds with 10y+ history to rank.")
+        conn.commit()
         return
 
-    ids, codes, cagrs, avg3ys, sharpes, dds = zip(*rows)
+    ids, codes, long_cagrs, avg3ys, sharpes, dds = zip(*rows)
     n = len(ids)
 
-    def percentile_rank(values, ascending=False):
-        """Return 0-100 rank where 0 = best (matches Next.js convention: lower score = better rank)."""
-        indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=not ascending)
+    def percentile_rank(values):
+        """Return 0-100 rank where 0 = best (higher raw value = better, sort descending)."""
+        indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=True)
         ranks = [0.0] * n
         for rank_pos, (orig_idx, _) in enumerate(indexed):
             ranks[orig_idx] = (rank_pos / (n - 1)) * 100
         return ranks
 
-    cagr_r   = percentile_rank(cagrs)            # higher CAGR = better → ascending=False
-    avg3y_r  = percentile_rank(avg3ys)            # higher avg3y = better → ascending=False
-    sharpe_r = percentile_rank(sharpes)           # higher Sharpe = better → ascending=False
-    dd_r     = percentile_rank(dds)  # max_drawdown is negative; less negative (higher) = better → ascending=False
+    cagr_r   = percentile_rank(long_cagrs)  # 20Y CAGR (or 10Y fallback); higher = better
+    avg3y_r  = percentile_rank(avg3ys)       # higher avg 3Y rolling = better
+    sharpe_r = percentile_rank(sharpes)      # higher Sharpe = better
+    dd_r     = percentile_rank(dds)          # max_drawdown is negative; less negative (higher) = better
 
     scored = [
         (ids[i], codes[i], cagr_r[i] * 0.30 + avg3y_r[i] * 0.25 + sharpe_r[i] * 0.30 + dd_r[i] * 0.15)
         for i in range(n)
     ]
-    scored.sort(key=lambda x: x[2])  # lower score = better rank (matches Next.js)
+    scored.sort(key=lambda x: x[2])  # lower score = better rank
 
     for rank_pos, (fund_id, code, score) in enumerate(scored, start=1):
         cur.execute(
@@ -741,7 +778,7 @@ def _recompute_rankings(conn, cur):
         )
 
     conn.commit()
-    print(f"  Ranked {n} funds.")
+    print(f"  Ranked {n} funds (10y+ history).  Unranked: funds with <10y history.")
     print(f"\n  Top 10:")
     for rank_pos, (fund_id, code, score) in enumerate(scored[:10], start=1):
         print(f"    #{rank_pos:>3}  {code:<14}  score={score:6.2f}")
@@ -809,9 +846,11 @@ def main():
             cur.execute("""
                 UPDATE funds SET
                     cagr = %s, volatility = %s, max_drawdown = %s,
-                    sharpe_ratio = %s, calmar_ratio = %s, avg_3y_rolling_return = %s
+                    sharpe_ratio = %s, calmar_ratio = %s, avg_3y_rolling_return = %s,
+                    cagr_1y = %s, cagr_3y = %s, cagr_5y = %s, cagr_10y = %s, cagr_20y = %s
                 WHERE id = %s
-            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"], fund_id))
+            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"],
+                  m["cagr_1y"], m["cagr_3y"], m["cagr_5y"], m["cagr_10y"], m["cagr_20y"], fund_id))
             conn.commit()   # commit after each fund so connection stays alive
 
             print(f"  [{code:12}] CAGR={m['cagr']*100:6.2f}%  Sharpe={m['sharpe']:5.2f}  MaxDD={m['max_dd']*100:6.2f}%  rows={len(nav)}")
@@ -943,9 +982,11 @@ def main():
                     max_drawdown = %s,
                     sharpe_ratio = %s,
                     calmar_ratio = %s,
-                    avg_3y_rolling_return = %s
+                    avg_3y_rolling_return = %s,
+                    cagr_1y = %s, cagr_3y = %s, cagr_5y = %s, cagr_10y = %s, cagr_20y = %s
                 WHERE id = %s
-            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"], fund_id))
+            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"],
+                  m["cagr_1y"], m["cagr_3y"], m["cagr_5y"], m["cagr_10y"], m["cagr_20y"], fund_id))
             code = next((c for c, i in code_to_id.items() if i == fund_id), str(fund_id))
             print(f"  [{code}] CAGR={m['cagr']*100:.2f}%  Sharpe={m['sharpe']:.2f}  MaxDD={m['max_dd']*100:.2f}%")
 

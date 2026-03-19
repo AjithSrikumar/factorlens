@@ -12,6 +12,11 @@ interface Fund {
   category: string
   inception_date: string
   cagr: number | null
+  cagr_1y: number | null
+  cagr_3y: number | null
+  cagr_5y: number | null
+  cagr_10y: number | null
+  cagr_20y: number | null
   avg_3y_rolling_return: number | null
   max_drawdown: number | null
   volatility: number | null
@@ -147,24 +152,24 @@ export default function RankingsPage() {
   const nifty50 = useMemo(() => funds.find(f => f.code === 'N50'), [funds])
   const categories = useMemo(() => ["All", ...Array.from(new Set(funds.map((f) => f.category)))], [funds])
 
-  const sorted = useMemo(() => {
-    let filtered = funds.filter((f) => {
-      const matchCat = catFilter === "All" || f.category === catFilter
-      const matchSearch = f.name.toLowerCase().includes(search.toLowerCase())
-      return matchCat && matchSearch
-    })
-    filtered = [...filtered].sort((a, b) => {
-      const av = a[sortKey] as number | null
-      const bv = b[sortKey] as number | null
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      return sortDir === "asc" ? av - bv : bv - av
-    })
-    return filtered
-  }, [funds, search, catFilter, sortKey, sortDir])
+  const filterFund = (f: Fund) => {
+    const matchCat = catFilter === "All" || f.category === catFilter
+    const matchSearch = f.name.toLowerCase().includes(search.toLowerCase())
+    return matchCat && matchSearch
+  }
 
-  const rankedCount = useMemo(() => sorted.filter(f => f.final_rank != null).length, [sorted])
+  const applySort = (arr: Fund[]) => [...arr].sort((a, b) => {
+    const av = a[sortKey] as number | null
+    const bv = b[sortKey] as number | null
+    if (av == null && bv == null) return 0
+    if (av == null) return 1
+    if (bv == null) return -1
+    return sortDir === "asc" ? av - bv : bv - av
+  })
+
+  // Ranked = has final_rank (10y+ history). Unranked = insufficient history.
+  const rankedSorted   = useMemo(() => applySort(funds.filter(f => f.final_rank != null && filterFund(f))), [funds, search, catFilter, sortKey, sortDir])
+  const unrankedSorted = useMemo(() => funds.filter(f => f.final_rank == null && filterFund(f)).sort((a,b) => a.name.localeCompare(b.name)), [funds, search, catFilter])
 
   // Top 3 ranked funds for leader grid (exclude unranked/pending indices)
   const top3 = useMemo(
@@ -218,14 +223,19 @@ export default function RankingsPage() {
     )
   }
 
-  const tableColumns: { key: SortKey; label: string }[] = [
-    { key: "final_rank", label: "Rank" },
-    { key: "name", label: "Fund" },
-    { key: "category", label: "Category" },
-    { key: "cagr", label: "CAGR" },
-    { key: "avg_3y_rolling_return", label: "Avg 3Y" },
-    { key: "sharpe_ratio", label: "Sharpe" },
-    { key: "max_drawdown", label: "Max DD" },
+  const tableColumns: { key: SortKey; label: string; title?: string }[] = [
+    { key: "final_rank",            label: "Rank" },
+    { key: "name",                  label: "Fund" },
+    { key: "category",              label: "Category" },
+    { key: "cagr",                  label: "Inception",  title: "CAGR since inception" },
+    { key: "cagr_20y",              label: "20Y",        title: "20-year CAGR" },
+    { key: "cagr_10y",              label: "10Y",        title: "10-year CAGR" },
+    { key: "cagr_5y",               label: "5Y",         title: "5-year CAGR" },
+    { key: "cagr_3y",               label: "3Y",         title: "3-year CAGR" },
+    { key: "cagr_1y",               label: "1Y",         title: "1-year CAGR" },
+    { key: "avg_3y_rolling_return", label: "Avg 3Y Roll", title: "Average 3-year rolling return" },
+    { key: "sharpe_ratio",          label: "Sharpe" },
+    { key: "max_drawdown",          label: "Max DD" },
   ]
 
   return (
@@ -243,7 +253,7 @@ export default function RankingsPage() {
                 Fund Rankings
               </h1>
               <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
-                {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null).length} ranked · ${funds.length} total NSE indices`}
+                {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null).length} ranked · ${funds.filter(f => f.final_rank == null).length} unranked · ${funds.length} total NSE indices`}
               </p>
             </div>
             <Link
@@ -376,7 +386,8 @@ export default function RankingsPage() {
             </svg>
           </div>
           <p style={{ fontSize: 13, color: "rgba(12,14,19,.5)", lineHeight: 1.6 }}>
-            <strong style={{ color: "#0C0E13" }}>Score out of 10</strong> — composite of CAGR, 3Y rolling, Sharpe, and drawdown protection. Higher is better.{" "}
+            <strong style={{ color: "#0C0E13" }}>Score out of 10</strong> — composite of 20Y CAGR (30%), 3Y rolling return (25%), Sharpe ratio (30%), and drawdown protection (15%). Higher is better.{" "}
+            Only indices with <strong style={{ color: "#0C0E13" }}>at least 10 years of history</strong> are ranked.{" "}
             <strong style={{ color: "#0C0E13" }}>Tap any row</strong> to expand.{" "}
             <strong style={{ color: "#0C0E13" }}>Fund name →</strong> opens full detail page.
           </p>
@@ -475,18 +486,8 @@ export default function RankingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((fund, idx) => (
+                    {rankedSorted.map((fund) => (
                       <>
-                        {/* Divider between ranked and unranked sections */}
-                        {idx === rankedCount && rankedCount > 0 && rankedCount < sorted.length && (
-                          <tr key="unranked-divider">
-                            <td colSpan={9} style={{ padding: "8px 16px", background: "#F5F5F3", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
-                              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.35)" }}>
-                                Pending data — scraped soon
-                              </span>
-                            </td>
-                          </tr>
-                        )}
                         <tr
                           key={fund.id}
                           style={{
@@ -525,44 +526,34 @@ export default function RankingsPage() {
                               {fund.category}
                             </span>
                           </td>
+                          {/* Inception CAGR */}
                           <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                            <span style={{
-                              fontFamily: "var(--font-mono)", fontSize: 13.5, fontWeight: 700,
-                              color: (fund.cagr ?? 0) > 0.18 ? "#0A7C4E" : "#0C0E13",
-                            }}>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: (fund.cagr ?? 0) > 0.18 ? "#0A7C4E" : "#0C0E13" }}>
                               {pct(fund.cagr)}
                             </span>
-                            {nifty50 && fund.id !== nifty50.id && fund.cagr != null && nifty50.cagr != null && (
-                              <div style={{
-                                fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700,
-                                color: fund.cagr > nifty50.cagr ? "#0A7C4E" : "#C5271E",
-                                marginTop: 1,
-                              }}>
-                                {fund.cagr > nifty50.cagr ? "+" : ""}{((fund.cagr - nifty50.cagr) * 100).toFixed(1)}% vs N50
-                              </div>
-                            )}
                           </td>
-                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>
+                          {/* Period CAGRs */}
+                          {([fund.cagr_20y, fund.cagr_10y, fund.cagr_5y, fund.cagr_3y, fund.cagr_1y] as (number | null)[]).map((v, i) => (
+                            <td key={i} style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.65)", verticalAlign: "middle" }}>
+                              {pct(v)}
+                            </td>
+                          ))}
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>
                             {pct(fund.avg_3y_rolling_return)}
                           </td>
-                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, verticalAlign: "middle" }}>
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle" }}>
                             <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.6 ? "#1A56DB" : "#0C0E13", fontWeight: (fund.sharpe_ratio ?? 0) > 0.6 ? 700 : 400 }}>
                               {fixed(fund.sharpe_ratio)}
                             </span>
                           </td>
-                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13.5, color: "#C5271E", verticalAlign: "middle" }}>
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E", verticalAlign: "middle" }}>
                             {pct(fund.max_drawdown)}
                           </td>
                           {/* Score bar */}
                           <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 90 }}>
                               <div style={{ flex: 1, height: 5, background: "rgba(12,14,19,.08)", borderRadius: 3, overflow: "hidden" }}>
-                                <div style={{
-                                  height: "100%",
-                                  background: "linear-gradient(90deg, #1A56DB, #22c55e)",
-                                  borderRadius: 3,
-                                  width: scoreBarWidth(fund.score),
-                                }} />
+                                <div style={{ height: "100%", background: "linear-gradient(90deg, #1A56DB, #22c55e)", borderRadius: 3, width: scoreBarWidth(fund.score) }} />
                               </div>
                               <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "#0C0E13", whiteSpace: "nowrap" as const }}>
                                 {displayScore(fund.score)} / 10
@@ -578,19 +569,12 @@ export default function RankingsPage() {
 
                         {expandedId === fund.id && (
                           <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
-                            <td colSpan={9} style={{ padding: "22px 24px" }}>
-                              <div style={{
-                                background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                                borderRadius: 16, overflow: "hidden",
-                              }}>
+                            <td colSpan={14} style={{ padding: "22px 24px" }}>
+                              <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.12)", borderRadius: 16, overflow: "hidden" }}>
                                 <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                                   <span style={{ fontWeight: 700, fontSize: 14 }}>{fund.name}</span>
-                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>
-                                    {fund.category}
-                                  </span>
-                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }}>
-                                    vs Nifty 50
-                                  </span>
+                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }}>vs Nifty 50</span>
                                 </div>
                                 <div style={{ padding: "20px" }}>
                                   <FundCharts fund={fund} />
@@ -608,6 +592,113 @@ export default function RankingsPage() {
           </div>
         </div>
 
+        {/* Unranked section — insufficient history */}
+        {!loading && unrankedSorted.length > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <div style={{ marginBottom: 12 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: "#0C0E13", marginBottom: 3 }}>
+                Not Ranked — Insufficient History
+              </h2>
+              <p style={{ fontSize: 12.5, color: "rgba(12,14,19,.4)" }}>
+                These {unrankedSorted.length} indices have less than 10 years of data and are excluded from the ranking.
+              </p>
+            </div>
+            <div className="hidden md:block" style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.10)", borderRadius: 16, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#F5F5F3" }}>
+                      {[
+                        { label: "Fund" }, { label: "Category" },
+                        { label: "Inception CAGR" }, { label: "20Y" }, { label: "10Y" },
+                        { label: "5Y" }, { label: "3Y" }, { label: "1Y" },
+                        { label: "Avg 3Y Roll" }, { label: "Sharpe" }, { label: "Max DD" },
+                      ].map(col => (
+                        <th key={col.label} style={{
+                          padding: "9px 16px", textAlign: "left",
+                          fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+                          textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)",
+                          borderBottom: "1px solid rgba(12,14,19,.10)", whiteSpace: "nowrap" as const,
+                        }}>
+                          {col.label}
+                        </th>
+                      ))}
+                      <th style={{ width: 32, borderBottom: "1px solid rgba(12,14,19,.10)" }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unrankedSorted.map((fund) => (
+                      <>
+                        <tr
+                          key={fund.id}
+                          style={{ borderBottom: "1px solid rgba(12,14,19,.06)", cursor: "pointer", background: expandedId === fund.id ? "#EBF0FF" : undefined }}
+                          className={expandedId !== fund.id ? "hover:bg-[#F5F5F3]" : ""}
+                          onClick={() => handleToggleExpand(fund.id)}
+                        >
+                          <td style={{ padding: "12px 16px", maxWidth: 220, fontSize: 13.5, verticalAlign: "middle" }}>
+                            <Link href={`/rankings/${fund.id}`} style={{ fontWeight: 600, color: "#0C0E13", textDecoration: "none" }} className="hover:!text-[#1A56DB]" onClick={e => e.stopPropagation()}>
+                              <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>{fund.name}</span>
+                            </Link>
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>{fund.code}</div>
+                          </td>
+                          <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                            <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle", color: "#0C0E13" }}>{pct(fund.cagr)}</td>
+                          {([fund.cagr_20y, fund.cagr_10y, fund.cagr_5y, fund.cagr_3y, fund.cagr_1y] as (number | null)[]).map((v, i) => (
+                            <td key={i} style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>{pct(v)}</td>
+                          ))}
+                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>{pct(fund.avg_3y_rolling_return)}</td>
+                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle" }}>
+                            <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.6 ? "#1A56DB" : "#0C0E13" }}>{fixed(fund.sharpe_ratio)}</span>
+                          </td>
+                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E", verticalAlign: "middle" }}>{pct(fund.max_drawdown)}</td>
+                          <td style={{ padding: "12px 16px", color: "rgba(12,14,19,.3)", verticalAlign: "middle" }}>
+                            <svg style={{ width: 18, height: 18, transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                              <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </td>
+                        </tr>
+                        {expandedId === fund.id && (
+                          <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
+                            <td colSpan={12} style={{ padding: "22px 24px" }}>
+                              <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.12)", borderRadius: 16, overflow: "hidden" }}>
+                                <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                  <span style={{ fontWeight: 700, fontSize: 14 }}>{fund.name}</span>
+                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                                </div>
+                                <div style={{ padding: "20px" }}><FundCharts fund={fund} /></div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {/* Mobile unranked list */}
+            <div className="md:hidden" style={{ border: "1px solid rgba(12,14,19,.10)", borderRadius: 16, overflow: "hidden", background: "#ffffff" }}>
+              {unrankedSorted.map(fund => (
+                <div key={fund.id} style={{ borderBottom: "1px solid rgba(12,14,19,.08)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Link href={`/rankings/${fund.id}`} style={{ fontSize: 13.5, fontWeight: 700, color: "#0C0E13", textDecoration: "none", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fund.name}</Link>
+                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                      <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", background: "rgba(12,14,19,.06)", padding: "1px 6px", borderRadius: 4 }}>{fund.code}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#0C0E13" }}>{pct(fund.cagr)}</div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.4)", marginTop: 2 }}>Inception CAGR</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Mobile Cards */}
         <div className="md:hidden" style={{ border: "1px solid rgba(12,14,19,.12)", borderRadius: 20, overflow: "hidden", background: "#ffffff" }}>
           {loading ? (
@@ -615,7 +706,7 @@ export default function RankingsPage() {
               <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
             </div>
           ) : (
-            sorted.map((fund) => (
+            rankedSorted.map((fund) => (
               <div
                 key={fund.id}
                 style={{
@@ -680,8 +771,33 @@ export default function RankingsPage() {
                 {/* Expanded content */}
                 {expandedId === fund.id && (
                   <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", background: "#F5F5F3" }}>
+                    {/* CAGR periods grid */}
+                    <div style={{ margin: "14px 20px 0" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 8 }}>
+                        CAGR by Period
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", background: "#ffffff" }}>
+                        {[
+                          { label: "Inception", value: pct(fund.cagr) },
+                          { label: "20 Year",   value: pct(fund.cagr_20y) },
+                          { label: "10 Year",   value: pct(fund.cagr_10y) },
+                          { label: "5 Year",    value: pct(fund.cagr_5y) },
+                          { label: "3 Year",    value: pct(fund.cagr_3y) },
+                          { label: "1 Year",    value: pct(fund.cagr_1y) },
+                        ].map((m, i) => (
+                          <div key={m.label} style={{
+                            padding: "11px 13px",
+                            borderRight: i % 3 !== 2 ? "1px solid rgba(12,14,19,.12)" : undefined,
+                            borderBottom: i < 3 ? "1px solid rgba(12,14,19,.12)" : undefined,
+                          }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 4 }}>{m.label}</div>
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0A7C4E" }}>{m.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                     {/* 2×2 metrics grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", margin: "14px 20px", background: "#ffffff" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", margin: "10px 20px", background: "#ffffff" }}>
                       {[
                         { label: "3Y Avg Rolling", value: pct(fund.avg_3y_rolling_return) },
                         { label: "Sharpe Ratio", value: fixed(fund.sharpe_ratio) },
@@ -750,7 +866,7 @@ export default function RankingsPage() {
 
         {/* Footer note */}
         <p style={{ fontSize: 11.5, color: "rgba(12,14,19,.3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
-          {sorted.length} of {funds.length} funds shown · NSE India data · Past performance is not a guarantee of future returns.
+          {rankedSorted.length} ranked · {unrankedSorted.length} unranked · {funds.length} total NSE indices · NSE India data · Past performance is not a guarantee of future returns.
         </p>
 
       </div>
