@@ -716,23 +716,23 @@ def _recompute_rankings(conn, cur):
     n = len(ids)
 
     def percentile_rank(values, ascending=False):
-        """Return 0-100 percentile rank; higher = better."""
+        """Return 0-100 rank where 0 = best (matches Next.js convention: lower score = better rank)."""
         indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=not ascending)
         ranks = [0.0] * n
         for rank_pos, (orig_idx, _) in enumerate(indexed):
-            ranks[orig_idx] = ((n - 1 - rank_pos) / (n - 1)) * 100
+            ranks[orig_idx] = (rank_pos / (n - 1)) * 100
         return ranks
 
-    cagr_r   = percentile_rank(cagrs)
-    avg3y_r  = percentile_rank(avg3ys)
-    sharpe_r = percentile_rank(sharpes)
-    dd_r     = percentile_rank(dds, ascending=True)  # less negative = better
+    cagr_r   = percentile_rank(cagrs)            # higher CAGR = better → ascending=False
+    avg3y_r  = percentile_rank(avg3ys)            # higher avg3y = better → ascending=False
+    sharpe_r = percentile_rank(sharpes)           # higher Sharpe = better → ascending=False
+    dd_r     = percentile_rank(dds, ascending=True)  # lower (less negative) drawdown = better
 
     scored = [
         (ids[i], codes[i], cagr_r[i] * 0.30 + avg3y_r[i] * 0.25 + sharpe_r[i] * 0.30 + dd_r[i] * 0.15)
         for i in range(n)
     ]
-    scored.sort(key=lambda x: x[2], reverse=True)  # higher score = better rank
+    scored.sort(key=lambda x: x[2])  # lower score = better rank (matches Next.js)
 
     for rank_pos, (fund_id, code, score) in enumerate(scored, start=1):
         cur.execute(
