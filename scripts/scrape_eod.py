@@ -671,7 +671,7 @@ def update_mf_nav(conn, cur) -> None:
             """
             INSERT INTO mf_nav_data (scheme_code, date, nav)
             VALUES %s
-            ON CONFLICT (scheme_code, date) DO UPDATE SET nav = EXCLUDED.nav
+            ON CONFLICT DO NOTHING
             """,
             to_insert,
         )
@@ -780,7 +780,7 @@ def main():
 
         execute_values(
             cur,
-            "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s ON CONFLICT (fund_id, date) DO UPDATE SET nav_value = EXCLUDED.nav_value",
+            "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s",
             new_rows,
         )
         conn.commit()
