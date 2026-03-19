@@ -9,10 +9,12 @@ Sources:
 
 Usage:
     pip install requests psycopg2-binary
-    python scripts/scrape_eod.py
+    python scripts/scrape_eod.py                          # normal EOD update
+    python scripts/scrape_eod.py --backfill               # re-fetch ALL indices from inception
+    python scripts/scrape_eod.py --backfill NSC100 NDIV50 # re-fetch specific indices from inception
 """
 
-import os, sys, json, time, math
+import os, sys, json, time, math, argparse
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -366,7 +368,11 @@ def ensure_funds_in_db(conn, cur) -> dict:
     cur.execute("SELECT id, code FROM funds")
     return {row[1]: row[0] for row in cur.fetchall()}
 
-NIFTY_HEADERS = {
+# niftyindices API is limited in how much data it returns per request.
+# We chunk large date ranges into CHUNK_DAYS-day windows to fetch full history.
+CHUNK_DAYS = 365
+
+
     "Content-Type":     "application/json; charset=utf-8",
     "Accept":           "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
@@ -444,6 +450,27 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
             if attempt < retries - 1:
                 time.sleep(2 ** attempt)
     return []
+
+def fetch_nifty_index_chunked(index_name: str, from_iso: str, to_iso: str) -> list:
+    """
+    Fetch a potentially multi-year date range by splitting into CHUNK_DAYS-day
+    windows and merging results.  Deduplicates on date and returns sorted list.
+    """
+    all_rows: dict = {}
+    chunk_start = from_iso
+    while chunk_start <= to_iso:
+        chunk_end_dt = datetime.strptime(chunk_start, "%Y-%m-%d") + timedelta(days=CHUNK_DAYS - 1)
+        chunk_end = min(chunk_end_dt.strftime("%Y-%m-%d"), to_iso)
+
+        rows = fetch_nifty_index(index_name, chunk_start, chunk_end)
+        for d, v in rows:
+            all_rows[d] = v          # last write wins on duplicates
+
+        chunk_start = add_days(chunk_end, 1)
+        if rows:
+            time.sleep(0.3)          # be polite between chunks
+
+    return sorted(all_rows.items())  # [(date_iso, value), ...] ascending
 
 # ── Metric computation ────────────────────────────────────────────────────────
 
@@ -654,8 +681,25 @@ def update_mf_nav(conn, cur) -> None:
 
 
 def main():
+    # ── CLI args ──────────────────────────────────────────────────────────────
+    parser = argparse.ArgumentParser(description="FactorLens EOD scraper")
+    parser.add_argument(
+        "--backfill", nargs="*", metavar="CODE",
+        help="Re-fetch from inception date. No codes = all indices; else space-separated codes."
+    )
+    args = parser.parse_args()
+
+    # Determine which codes to backfill (empty set = normal run)
+    backfill_all   = args.backfill is not None and len(args.backfill) == 0
+    backfill_codes = set(c.upper() for c in (args.backfill or []))
+    is_backfill    = backfill_all or bool(backfill_codes)
+
     today = today_ist()
-    print(f"EOD scraper — {today} IST\n")
+    print(f"EOD scraper — {today} IST")
+    if is_backfill:
+        label = "ALL indices" if backfill_all else ", ".join(sorted(backfill_codes))
+        print(f"  *** BACKFILL MODE: {label} ***")
+    print()
 
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
@@ -672,6 +716,10 @@ def main():
     """)
     latest_by_fund = {row[0]: row[1].strftime("%Y-%m-%d") for row in cur.fetchall()}
 
+    # Row count per fund (to detect suspiciously sparse data)
+    cur.execute("SELECT fund_id, COUNT(*) FROM nav_data GROUP BY fund_id")
+    row_count_by_fund = {row[0]: row[1] for row in cur.fetchall()}
+
     total_inserted = 0
     funds_updated = []
 
@@ -683,35 +731,59 @@ def main():
             print(f"  [{code}] not in DB, skipping")
             continue
 
-        # For funds with no data yet, pull from inception date; otherwise +1 day
-        default_start = INCEPTION_DATES.get(code, "2000-01-01")
-        last_date = latest_by_fund.get(fund_id, default_start)
-        from_iso  = add_days(last_date, 1)
+        # Decide whether to backfill this specific index
+        do_backfill = backfill_all or (code in backfill_codes)
+
+        inception     = INCEPTION_DATES.get(code, "2000-01-01")
+        last_date     = latest_by_fund.get(fund_id)
+
+        if do_backfill:
+            # Delete all existing data so we start fresh from inception
+            cur.execute("DELETE FROM nav_data WHERE fund_id = %s", (fund_id,))
+            conn.commit()
+            from_iso  = inception
+            last_date = add_days(inception, -1)   # sentinel: accept all rows
+            print(f"  [{code}] BACKFILL from {inception} (deleted existing rows)")
+        elif last_date is None:
+            # No data at all — fetch from inception
+            from_iso  = inception
+            last_date = add_days(inception, -1)
+        else:
+            from_iso = add_days(last_date, 1)
 
         if from_iso > today:
             print(f"  [{code}] up to date ({last_date})")
             continue
 
-        print(f"  [{code}] {index_name}: fetching {from_iso} → {today} ...", end=" ", flush=True)
-        rows = fetch_nifty_index(index_name, from_iso, today)
+        # Determine fetch strategy (chunked for large ranges)
+        span_days = (
+            datetime.strptime(today, "%Y-%m-%d") -
+            datetime.strptime(from_iso, "%Y-%m-%d")
+        ).days
+
+        chunked = span_days > CHUNK_DAYS
+        if chunked:
+            print(f"  [{code}] {index_name}: chunked fetch {from_iso} → {today} ({span_days}d) …")
+            rows = fetch_nifty_index_chunked(index_name, from_iso, today)
+        else:
+            print(f"  [{code}] {index_name}: fetching {from_iso} → {today} ...", end=" ", flush=True)
+            rows = fetch_nifty_index(index_name, from_iso, today)
 
         new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
         if not new_rows:
-            print("no new data")
+            if not chunked:
+                print("no new data")
+            else:
+                print(f"  [{code}] no new data")
             continue
 
-        min_date, max_date = new_rows[0][1], new_rows[-1][1]
-        cur.execute(
-            "DELETE FROM nav_data WHERE fund_id = %s AND date BETWEEN %s AND %s",
-            (fund_id, min_date, max_date)
-        )
         execute_values(
             cur,
             "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s ON CONFLICT (fund_id, date) DO UPDATE SET nav_value = EXCLUDED.nav_value",
             new_rows,
         )
         conn.commit()
-        print(f"{len(new_rows)} rows → latest {new_rows[-1][1]}")
+        print(f"  [{code}] {len(new_rows)} rows → {new_rows[0][1]} … {new_rows[-1][1]}")
         total_inserted += len(new_rows)
         funds_updated.append(fund_id)
         time.sleep(0.3)  # be polite to niftyindices
