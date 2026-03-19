@@ -820,6 +820,11 @@ def main():
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
 
+    # ── Schema migration: add period-CAGR columns if they don't exist yet ────
+    for col in ("cagr_1y", "cagr_3y", "cagr_5y", "cagr_10y", "cagr_20y"):
+        cur.execute(f"ALTER TABLE funds ADD COLUMN IF NOT EXISTS {col} NUMERIC")
+    conn.commit()
+
     # ── Fast path: recompute metrics only ────────────────────────────────────
     if recompute_all:
         print("=== RECOMPUTING METRICS FOR ALL FUNDS ===")
