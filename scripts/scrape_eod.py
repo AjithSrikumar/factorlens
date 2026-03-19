@@ -720,7 +720,7 @@ def _recompute_rankings(conn, cur):
         indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=not ascending)
         ranks = [0.0] * n
         for rank_pos, (orig_idx, _) in enumerate(indexed):
-            ranks[orig_idx] = (rank_pos / (n - 1)) * 100
+            ranks[orig_idx] = ((n - 1 - rank_pos) / (n - 1)) * 100
         return ranks
 
     cagr_r   = percentile_rank(cagrs)
