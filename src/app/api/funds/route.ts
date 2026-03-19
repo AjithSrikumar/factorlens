@@ -7,8 +7,9 @@ export async function GET() {
     return NextResponse.json([])
   }
 
-  // Auto-insert any indices from NSE_INDEX_LIST that are not yet in Supabase.
-  // ignoreDuplicates: true → ON CONFLICT (code) DO NOTHING
+  // Insert any indices from NSE_INDEX_LIST that are not yet in Supabase.
+  // ignoreDuplicates: true → ON CONFLICT DO NOTHING, so existing rows
+  // (including computed metrics) are never overwritten.
   const toInsert = NSE_INDEX_LIST.map(idx => ({
     code:           idx.code,
     name:           idx.name,
@@ -18,7 +19,7 @@ export async function GET() {
 
   await supabaseAdmin
     .from('funds')
-    .upsert(toInsert, { onConflict: 'code' })
+    .upsert(toInsert, { onConflict: 'code', ignoreDuplicates: true })
 
   // Fetch all funds — ranked first (nulls last), then unranked alphabetically.
   const { data, error } = await supabaseAdmin
