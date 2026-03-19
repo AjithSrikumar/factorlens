@@ -688,7 +688,13 @@ def main():
         "--backfill", nargs="*", metavar="CODE",
         help="Re-fetch from inception date. No codes = all indices; else space-separated codes."
     )
+    parser.add_argument(
+        "--recompute-all", action="store_true",
+        help="Recompute metrics for ALL funds in the DB (no scraping)."
+    )
     args = parser.parse_args()
+
+    recompute_all = args.recompute_all
 
     # Determine which codes to backfill (empty set = normal run)
     backfill_all   = args.backfill is not None and len(args.backfill) == 0
@@ -704,6 +710,41 @@ def main():
 
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
+
+    # ── Fast path: recompute metrics only ────────────────────────────────────
+    if recompute_all:
+        print("=== RECOMPUTING METRICS FOR ALL FUNDS ===")
+        cur.execute("SELECT id, code FROM funds")
+        code_to_id = {row[1]: row[0] for row in cur.fetchall()}
+
+        cur.execute("SELECT fund_id, date, nav_value FROM nav_data ORDER BY fund_id, date")
+        nav_rows = cur.fetchall()
+
+        nav_by_fund: dict = {}
+        for fid, dt, val in nav_rows:
+            nav_by_fund.setdefault(fid, []).append((dt.strftime("%Y-%m-%d"), float(val)))
+
+        updated = 0
+        for fund_id, nav in nav_by_fund.items():
+            if len(nav) < 2:
+                continue
+            m = compute_metrics(nav)
+            cur.execute("""
+                UPDATE funds SET
+                    cagr = %s, volatility = %s, max_drawdown = %s,
+                    sharpe_ratio = %s, calmar_ratio = %s, avg_3y_rolling_return = %s
+                WHERE id = %s
+            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"], fund_id))
+            code = next((c for c, i in code_to_id.items() if i == fund_id), str(fund_id))
+            print(f"  [{code:12}] CAGR={m['cagr']*100:6.2f}%  Sharpe={m['sharpe']:5.2f}  MaxDD={m['max_dd']*100:6.2f}%  rows={len(nav)}")
+            updated += 1
+
+        conn.commit()
+        print(f"\nUpdated metrics for {updated} funds.")
+        cur.close()
+        conn.close()
+        print("Done!")
+        return
 
     # ── Ensure all index entries exist in the `funds` table ──────────────────
     print("=== ENSURING FUND ENTRIES IN DB ===")
