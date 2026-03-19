@@ -726,7 +726,7 @@ def _recompute_rankings(conn, cur):
     cagr_r   = percentile_rank(cagrs)            # higher CAGR = better → ascending=False
     avg3y_r  = percentile_rank(avg3ys)            # higher avg3y = better → ascending=False
     sharpe_r = percentile_rank(sharpes)           # higher Sharpe = better → ascending=False
-    dd_r     = percentile_rank(dds, ascending=True)  # lower (less negative) drawdown = better
+    dd_r     = percentile_rank(dds)  # max_drawdown is negative; less negative (higher) = better → ascending=False
 
     scored = [
         (ids[i], codes[i], cagr_r[i] * 0.30 + avg3y_r[i] * 0.25 + sharpe_r[i] * 0.30 + dd_r[i] * 0.15)

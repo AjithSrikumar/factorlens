@@ -260,7 +260,7 @@ export async function POST(req: NextRequest) {
     const cagrRanks   = rank(funds.map(f => f.cagr))
     const avg3yRanks  = rank(funds.map(f => f.avg_3y_rolling_return))
     const sharpeRanks = rank(funds.map(f => f.sharpe_ratio))
-    const ddRanks     = rank(funds.map(f => f.max_drawdown), true)   // less negative = better
+    const ddRanks     = rank(funds.map(f => f.max_drawdown))   // max_drawdown is negative; less negative (higher) = better → ascending=false
 
     const scored = funds.map((f, i) => ({
       id:    f.id,
