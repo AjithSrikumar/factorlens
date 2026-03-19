@@ -681,6 +681,72 @@ def update_mf_nav(conn, cur) -> None:
     print(f"  Inserted {inserted} rows | skipped {skipped} (up to date) | errors {errors}")
 
 
+def _recompute_rankings(conn, cur):
+    """
+    Read all funds that have a non-null cagr, compute a composite score, and
+    write score + final_rank back to the DB.
+
+    Scoring weights (match the Next.js admin route):
+      CAGR                  30 %
+      Avg 3Y rolling return 25 %
+      Sharpe ratio          30 %
+      Max drawdown          15 %  (less negative = better)
+
+    Each metric is percentile-ranked across the eligible fund universe
+    (0 = worst, 100 = best).  The composite score is a weighted average of
+    those percentile ranks; *lower* composite score → better final_rank.
+    """
+    print("=== RECOMPUTING SCORES & RANKINGS ===")
+    cur.execute("""
+        SELECT id, code, cagr, avg_3y_rolling_return, sharpe_ratio, max_drawdown
+        FROM funds
+        WHERE cagr IS NOT NULL
+          AND avg_3y_rolling_return IS NOT NULL
+          AND sharpe_ratio IS NOT NULL
+          AND max_drawdown IS NOT NULL
+        ORDER BY id
+    """)
+    rows = cur.fetchall()
+
+    if len(rows) < 2:
+        print("  Not enough funds with metrics to rank.")
+        return
+
+    ids, codes, cagrs, avg3ys, sharpes, dds = zip(*rows)
+    n = len(ids)
+
+    def percentile_rank(values, ascending=False):
+        """Return 0-100 percentile rank; higher = better."""
+        indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=not ascending)
+        ranks = [0.0] * n
+        for rank_pos, (orig_idx, _) in enumerate(indexed):
+            ranks[orig_idx] = (rank_pos / (n - 1)) * 100
+        return ranks
+
+    cagr_r   = percentile_rank(cagrs)
+    avg3y_r  = percentile_rank(avg3ys)
+    sharpe_r = percentile_rank(sharpes)
+    dd_r     = percentile_rank(dds, ascending=True)  # less negative = better
+
+    scored = [
+        (ids[i], codes[i], cagr_r[i] * 0.30 + avg3y_r[i] * 0.25 + sharpe_r[i] * 0.30 + dd_r[i] * 0.15)
+        for i in range(n)
+    ]
+    scored.sort(key=lambda x: x[2], reverse=True)  # higher score = better rank
+
+    for rank_pos, (fund_id, code, score) in enumerate(scored, start=1):
+        cur.execute(
+            "UPDATE funds SET score = %s, final_rank = %s WHERE id = %s",
+            (score, rank_pos, fund_id)
+        )
+
+    conn.commit()
+    print(f"  Ranked {n} funds.")
+    print(f"\n  Top 10:")
+    for rank_pos, (fund_id, code, score) in enumerate(scored[:10], start=1):
+        print(f"    #{rank_pos:>3}  {code:<14}  score={score:6.2f}")
+
+
 def main():
     # ── CLI args ──────────────────────────────────────────────────────────────
     parser = argparse.ArgumentParser(description="FactorLens EOD scraper")
@@ -692,9 +758,14 @@ def main():
         "--recompute-all", action="store_true",
         help="Recompute metrics for ALL funds in the DB (no scraping)."
     )
+    parser.add_argument(
+        "--rank-only", action="store_true",
+        help="Recompute score + final_rank for all funds that have metrics (no scraping, no metric recalc)."
+    )
     args = parser.parse_args()
 
     recompute_all = args.recompute_all
+    rank_only     = args.rank_only
 
     # Determine which codes to backfill (empty set = normal run)
     backfill_all   = args.backfill is not None and len(args.backfill) == 0
@@ -747,6 +818,15 @@ def main():
             updated += 1
 
         print(f"\nUpdated metrics for {updated} funds.")
+        _recompute_rankings(conn, cur)
+        cur.close()
+        conn.close()
+        print("Done!")
+        return
+
+    # ── Fast path: recompute score + final_rank only ──────────────────────────
+    if rank_only:
+        _recompute_rankings(conn, cur)
         cur.close()
         conn.close()
         print("Done!")
