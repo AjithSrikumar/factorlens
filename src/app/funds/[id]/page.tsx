@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip
 } from "recharts"
 import { getTrackedIndex } from "@/lib/index-fund-map"
+import { amcSlug, amcLogoUrl } from "@/lib/amc"
 
 interface FundMeta {
   scheme_code:     number
@@ -459,13 +460,24 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               <h1 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#0C0E13", lineHeight: 1.3, letterSpacing: "-.02em" }}>
                 {fund.scheme_name}
               </h1>
-              <p style={{ margin: 0, fontSize: 13, color: "rgba(12,14,19,.45)", display: "flex", alignItems: "center", gap: 5 }}>
-                <svg viewBox="0 0 14 14" fill="none" style={{ width: 12, height: 12, flexShrink: 0 }}>
-                  <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                </svg>
+              <Link
+                href={`/amc/${amcSlug(fund.fund_house)}`}
+                style={{ margin: 0, fontSize: 13, color: "rgba(12,14,19,.45)", display: "flex", alignItems: "center", gap: 5, textDecoration: "none" }}
+              >
+                {amcLogoUrl(fund.fund_house)
+                  ? <img
+                      src={amcLogoUrl(fund.fund_house)!}
+                      alt=""
+                      width={16} height={16}
+                      style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
+                    />
+                  : <svg viewBox="0 0 14 14" fill="none" style={{ width: 12, height: 12, flexShrink: 0 }}>
+                      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
+                      <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                    </svg>
+                }
                 {fund.fund_house}
-              </p>
+              </Link>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
               <p style={{ margin: "0 0 2px", fontSize: 10.5, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".7px" }}>
@@ -614,13 +626,13 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
           <p style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, color: "#0C0E13" }}>Fund Details</p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
             {[
-              { label: "Fund House",  value: fund.fund_house },
-              { label: "Category",    value: category },
-              { label: "Type",        value: fund.scheme_type },
-              { label: "Inception",   value: formatDate(fund.inception_date) },
-              { label: "Scheme Code", value: String(fund.scheme_code) },
+              { label: "Fund House",    value: fund.fund_house, link: `/amc/${amcSlug(fund.fund_house)}` },
+              { label: "Category",      value: category },
+              { label: "Type",          value: fund.scheme_type },
+              { label: "Inception",     value: formatDate(fund.inception_date) },
+              { label: "Scheme Code",   value: String(fund.scheme_code) },
               { label: "AMFI Category", value: fund.scheme_category },
-            ].map(({ label, value }, i) => (
+            ].map(({ label, value, link }, i) => (
               <div key={label} style={{
                 padding: "10px 0",
                 borderBottom: i < 4 ? "1px solid rgba(12,14,19,.07)" : "none",
@@ -628,7 +640,10 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
                 <p style={{ margin: "0 0 2px", fontSize: 10.5, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".6px" }}>
                   {label}
                 </p>
-                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500, color: "#0C0E13" }}>{value || "—"}</p>
+                {link
+                  ? <Link href={link} style={{ margin: 0, fontSize: 13.5, fontWeight: 500, color: "#1A56DB", textDecoration: "none" }}>{value || "—"}</Link>
+                  : <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500, color: "#0C0E13" }}>{value || "—"}</p>
+                }
               </div>
             ))}
           </div>

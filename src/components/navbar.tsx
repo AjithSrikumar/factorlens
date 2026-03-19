@@ -8,6 +8,7 @@ const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/funds", label: "Funds" },
   { href: "/rankings", label: "Rankings" },
+  { href: "/amc", label: "AMC" },
   { href: "/academy", label: "Academy" },
 ]
 
@@ -38,13 +39,18 @@ const IconLearn = () => (
     <path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
   </svg>
 )
+const IconAmc = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
+    <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" /><line x1="12" y1="12" x2="12" y2="16" /><line x1="10" y1="14" x2="14" y2="14" />
+  </svg>
+)
 
 const bottomNavLinks = [
   { href: "/", label: "Home", Icon: IconHome, exact: true },
   { href: "/dashboard", label: "Dashboard", Icon: IconDash },
   { href: "/funds", label: "Funds", Icon: IconFunds },
   { href: "/rankings", label: "Rankings", Icon: IconRank },
-  { href: "/academy", label: "Learn", Icon: IconLearn },
+  { href: "/amc", label: "AMC", Icon: IconAmc },
 ]
 
 export function Navbar() {

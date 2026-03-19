@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { getTrackedIndex } from "@/lib/index-fund-map"
+import { amcLogoUrl, amcSlug } from "@/lib/amc"
 
 interface MFFund {
   scheme_code:     number
@@ -45,10 +46,15 @@ function deriveCategory(name: string, rawCat?: string | null): string {
 
   // ── Determine if this is a passive fund (index fund / ETF) ────────────────
   // Uses scheme_category from AMFI (via mfapi.in) as the primary signal.
-  const isPassive =
+  // Also falls back to name-based detection when scheme_category is absent.
+  const catPassive =
     cat.includes("index fund") || cat.includes("- index") ||
-    cat.includes("etf") || cat.includes("exchange traded") ||
-    n.includes("index fund") || n.includes(" etf") || n.endsWith(" etf")
+    cat.includes("etf") || cat.includes("exchange traded")
+  const namePassive =
+    n.includes("index fund") || n.includes(" etf") || n.endsWith(" etf") ||
+    // Broad name-based detection for missing categories (nifty/sensex funds are always passive)
+    (!rawCat && (n.includes("nifty") || n.includes("sensex") || n.includes("bse ") || n.includes("nasdaq") || n.includes("s&p")))
+  const isPassive = catPassive || namePassive
 
   if (isPassive) {
     // Factor strategies — multi-factor combos before single factors
@@ -147,67 +153,6 @@ function ReturnBadge({ value }: { value: number | null }) {
   )
 }
 
-// ── AMC logo mapping (Groww CDN) ───────────────────────────────────────────────
-// Keywords are intentionally short so they match regardless of whether
-// fund_house is "Axis Asset Management Company Ltd." or "Axis AMC" etc.
-// Order matters: more-specific entries must come before shorter ones that
-// would otherwise shadow them (e.g. "quantum" before "quant").
-const GROWW_LOGO = "https://assets-netstorage.groww.in/mf-assets/logos/"
-const AMC_LOGOS: Array<[string[], string]> = [
-  [["sbi"],                                          "sbi_groww.png"],
-  [["hdfc"],                                         "hdfc_groww.png"],
-  [["icici"],                                        "icici_groww.png"],
-  [["nippon"],                                       "nippon_groww.png"],
-  [["mirae"],                                        "mirae_groww.png"],
-  [["axis"],                                         "axis_groww.png"],
-  [["kotak"],                                        "kotak_groww.png"],
-  [["dsp"],                                          "dsp_groww.png"],
-  [["motilal"],                                      "motilal_groww.png"],
-  [["uti"],                                          "uti_groww.png"],
-  [["tata"],                                         "tata_groww.png"],
-  [["aditya birla", "birla sun"],                    "aditya_groww.png"],
-  [["franklin"],                                     "franklin_groww.png"],
-  [["pgim"],                                         "pgim_groww.png"],
-  [["bandhan"],                                      "bandhan_groww.png"],
-  [["canara"],                                       "canara_groww.png"],
-  [["invesco"],                                      "invesco_groww.png"],
-  [["lic"],                                          "lic_groww.png"],
-  [["ppfas", "parag parikh"],                        "ppfas_groww.png"],
-  [["quantum"],                                      "quantum_groww.png"],  // before "quant"
-  [["quant"],                                        "quant_groww.png"],
-  [["sundaram"],                                     "sundaram_groww.png"],
-  [["union"],                                        "union_groww.png"],
-  [["whiteoak", "white oak"],                        "whiteoak_groww.png"],
-  [["edelweiss"],                                    "edelweiss_groww.png"],
-  [["jm financial"],                                 "jm_groww.png"],
-  [["360 one"],                                      "360_groww.png"],
-  [["zerodha"],                                      "zerodha_groww.png"],
-  [["groww"],                                        "indiabulls_groww.png"],
-  [["baroda", "bnp paribas"],                        "barodabnpparibasmutualfund_groww.png"],
-  [["bank of india"],                                "bank_groww.png"],
-  [["mahindra"],                                     "mahindra_groww.png"],
-  [["nj asset", "nj mutual"],                        "nj_groww.png"],
-  [["bajaj"],                                        "bajaj_groww.png"],
-  [["navi"],                                         "navi_groww.png"],
-  [["hsbc"],                                         "hsbc_groww.png"],
-  [["helios"],                                       "helios_groww.png"],
-  [["jio"],                                          "jioblackrock_groww.png"],
-  [["shriram"],                                      "shriram_groww.png"],
-  [["taurus"],                                       "taurus_groww.png"],
-  [["the wealth"],                                   "the_groww.png"],
-  [["samco"],                                        "samco_groww.png"],
-  [["iti mutual", "iti asset"],                      "iti_groww.png"],
-  [["trust mutual", "trust asset"],                  "trust_groww.png"],
-]
-
-function amcLogoUrl(fundHouse: string): string | null {
-  if (!fundHouse) return null
-  const h = fundHouse.toLowerCase()
-  for (const [keywords, file] of AMC_LOGOS) {
-    if (keywords.some(k => h.includes(k))) return GROWW_LOGO + file
-  }
-  return null
-}
 
 function SortArrow({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
   if (col !== sortKey) return (
@@ -506,7 +451,13 @@ function FundsPageInner() {
                                     <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
                                   </svg>
                               }
-                              {fund.fund_house}
+                              <Link
+                                href={`/amc/${amcSlug(fund.fund_house)}`}
+                                onClick={e => e.stopPropagation()}
+                                style={{ color: "inherit", textDecoration: "none" }}
+                              >
+                                {fund.fund_house}
+                              </Link>
                               {(() => {
                                 const tracked = getTrackedIndex(fund.scheme_name)
                                 if (!tracked) return null
@@ -617,9 +568,13 @@ function FundsPageInner() {
                                 style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
                               />
                             )}
-                            <span style={{ fontSize: 11.5, color: "rgba(12,14,19,.4)" }}>
+                            <Link
+                              href={`/amc/${amcSlug(fund.fund_house)}`}
+                              onClick={e => e.stopPropagation()}
+                              style={{ fontSize: 11.5, color: "rgba(12,14,19,.4)", textDecoration: "none" }}
+                            >
                               {fund.fund_house}
-                            </span>
+                            </Link>
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
