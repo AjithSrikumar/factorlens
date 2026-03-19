@@ -715,31 +715,37 @@ def main():
     if recompute_all:
         print("=== RECOMPUTING METRICS FOR ALL FUNDS ===")
         cur.execute("SELECT id, code FROM funds")
-        code_to_id = {row[1]: row[0] for row in cur.fetchall()}
-
-        cur.execute("SELECT fund_id, date, nav_value FROM nav_data ORDER BY fund_id, date")
-        nav_rows = cur.fetchall()
-
-        nav_by_fund: dict = {}
-        for fid, dt, val in nav_rows:
-            nav_by_fund.setdefault(fid, []).append((dt.strftime("%Y-%m-%d"), float(val)))
+        funds_list = cur.fetchall()   # [(id, code), ...]
+        code_by_id = {row[0]: row[1] for row in funds_list}
 
         updated = 0
-        for fund_id, nav in nav_by_fund.items():
-            if len(nav) < 2:
+        for fund_id, code in funds_list:
+            # Fetch nav_data for one fund at a time to avoid connection timeout
+            cur2 = conn.cursor()
+            cur2.execute(
+                "SELECT date, nav_value FROM nav_data WHERE fund_id = %s ORDER BY date",
+                (fund_id,)
+            )
+            rows = cur2.fetchall()
+            cur2.close()
+
+            if len(rows) < 2:
                 continue
+
+            nav = [(dt.strftime("%Y-%m-%d"), float(val)) for dt, val in rows]
             m = compute_metrics(nav)
+
             cur.execute("""
                 UPDATE funds SET
                     cagr = %s, volatility = %s, max_drawdown = %s,
                     sharpe_ratio = %s, calmar_ratio = %s, avg_3y_rolling_return = %s
                 WHERE id = %s
             """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"], fund_id))
-            code = next((c for c, i in code_to_id.items() if i == fund_id), str(fund_id))
+            conn.commit()   # commit after each fund so connection stays alive
+
             print(f"  [{code:12}] CAGR={m['cagr']*100:6.2f}%  Sharpe={m['sharpe']:5.2f}  MaxDD={m['max_dd']*100:6.2f}%  rows={len(nav)}")
             updated += 1
 
-        conn.commit()
         print(f"\nUpdated metrics for {updated} funds.")
         cur.close()
         conn.close()
