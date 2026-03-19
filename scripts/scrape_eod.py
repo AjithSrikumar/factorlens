@@ -373,6 +373,7 @@ def ensure_funds_in_db(conn, cur) -> dict:
 CHUNK_DAYS = 365
 
 
+NIFTY_HEADERS = {
     "Content-Type":     "application/json; charset=utf-8",
     "Accept":           "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
