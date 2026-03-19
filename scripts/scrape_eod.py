@@ -16,6 +16,7 @@ Usage:
 
 import os, sys, json, time, math, argparse
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import requests
 import requests.packages.urllib3
@@ -486,7 +487,7 @@ def compute_cagr(nav: list) -> float:
         return 0.0
     return (end_val / start_val) ** (1.0 / years) - 1.0
 
-def compute_period_cagr(nav: list, years: float) -> float | None:
+def compute_period_cagr(nav: list, years: float) -> Optional[float]:
     """Compute CAGR over the last `years` years from the most recent NAV date.
     Returns None if there is insufficient history (< 90% of the requested window)."""
     if len(nav) < 2:
