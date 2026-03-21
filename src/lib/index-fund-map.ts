@@ -267,6 +267,19 @@ export function getTrackedIndex(fundName: string): IndexEntry | undefined {
  */
 export function getIndexSearchTerms(indexName: string): string[] {
   const base = indexName.toLowerCase().trim()
+
+  // Special override for Gold commodity fund
+  if (base === 'mcx gold' || base === 'gold') {
+    return [
+      'nippon india etf gold bees',
+      'nippon india etf gold',
+      'gold bees',
+      'sbi gold etf',
+      'hdfc gold etf',
+      'axis gold etf',
+    ]
+  }
+
   const add  = new Set<string>([base])
 
   // 1. De-hyphenated variant

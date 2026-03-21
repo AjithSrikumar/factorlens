@@ -126,6 +126,20 @@ export const MF_ELIGIBLE_CODES = new Set([
   'N50V20', 'N200V30', 'N500V50',
 ])
 
+/** Code for the Gold commodity fund (Yahoo Finance: GC=F) */
+export const GOLD_CODE = 'GOLD'
+
+/** Preferred Low-Volatility index codes, in order of preference */
+export const LOW_VOL_CODES = ['N100LV30', 'NLV50', 'NALV30', 'NQLV30']
+
+/** Fixed allocation weights (%) for Gold and Low-Vol slots, by risk category */
+const FIXED_ALLOC: Record<RiskCategory, { gold: number; lowvol: number }> = {
+  Conservative: { gold: 15, lowvol: 25 },
+  Balanced:     { gold: 10, lowvol: 15 },
+  Growth:       { gold:  5, lowvol: 10 },
+  Aggressive:   { gold:  5, lowvol:  5 },
+}
+
 // ─── Fund data shape (matches Supabase select in /api/recommend) ──────────────
 export interface FundData {
   id: number
@@ -146,65 +160,74 @@ export interface RecommendedFund {
   code: string
   name: string
   category: string
-  weight: number        // 0–100
+  weight: number        // 0–100, always a multiple of 5
   reason: string
   scoreBreakdown: { label: string; value: string }[]
 }
 
-// ─── Category preference multipliers ─────────────────────────────────────────
+// ─── Category preference multipliers (differentiated) ────────────────────────
 const CATEGORY_PREF: Record<RiskCategory, Record<string, number>> = {
   Conservative: {
-    'Broad Market': 1.0, 'Low Vol': 1.3, 'Quality': 1.2, 'Multi-Factor': 0.9,
-    'Value': 0.8, 'Dividend': 0.9, 'Momentum': 0.5, 'Alpha': 0.5,
-    'Equal Weight': 0.7, 'High Beta': 0.2, 'Thematic': 0.3,
+    'Broad Market': 0.8, 'Low Vol': 2.0, 'Quality': 1.5, 'Multi-Factor': 0.8,
+    'Value': 0.7, 'Dividend': 0.8, 'Momentum': 0.2, 'Alpha': 0.3,
+    'Equal Weight': 0.6, 'High Beta': 0.1, 'Thematic': 0.2,
   },
   Balanced: {
-    'Broad Market': 1.0, 'Low Vol': 0.9, 'Quality': 1.1, 'Multi-Factor': 1.1,
-    'Value': 0.9, 'Dividend': 0.8, 'Momentum': 0.9, 'Alpha': 0.9,
-    'Equal Weight': 0.8, 'High Beta': 0.5, 'Thematic': 0.6,
+    'Broad Market': 1.0, 'Low Vol': 0.9, 'Quality': 1.2, 'Multi-Factor': 1.1,
+    'Value': 1.0, 'Dividend': 0.8, 'Momentum': 0.8, 'Alpha': 0.8,
+    'Equal Weight': 0.7, 'High Beta': 0.4, 'Thematic': 0.5,
   },
   Growth: {
-    'Broad Market': 0.8, 'Low Vol': 0.5, 'Quality': 0.9, 'Multi-Factor': 1.1,
-    'Value': 0.9, 'Dividend': 0.7, 'Momentum': 1.2, 'Alpha': 1.2,
-    'Equal Weight': 0.8, 'High Beta': 0.9, 'Thematic': 1.0,
+    'Broad Market': 0.7, 'Low Vol': 0.4, 'Quality': 0.9, 'Multi-Factor': 1.1,
+    'Value': 0.9, 'Dividend': 0.6, 'Momentum': 1.4, 'Alpha': 1.3,
+    'Equal Weight': 0.7, 'High Beta': 0.8, 'Thematic': 0.9,
   },
   Aggressive: {
-    'Broad Market': 0.6, 'Low Vol': 0.3, 'Quality': 0.7, 'Multi-Factor': 1.0,
-    'Value': 0.8, 'Dividend': 0.5, 'Momentum': 1.3, 'Alpha': 1.4,
-    'Equal Weight': 0.7, 'High Beta': 1.2, 'Thematic': 1.1,
+    'Broad Market': 0.3, 'Low Vol': 0.05, 'Quality': 0.5, 'Multi-Factor': 0.9,
+    'Value': 0.7, 'Dividend': 0.4, 'Momentum': 1.8, 'Alpha': 2.0,
+    'Equal Weight': 0.6, 'High Beta': 1.3, 'Thematic': 1.0,
   },
 }
 
+// Reasons for the 3 variable slots
 const REASONS: Record<RiskCategory, string[]> = {
   Conservative: [
-    'Top-ranked for drawdown protection and Sharpe ratio in its category',
-    'Low volatility with consistent long-term rolling returns',
-    'Stable quality factor — historically holds up in market downturns',
-    'Broad large-cap diversification to anchor the portfolio',
-    'Proven capital preservation track record over 10+ years',
+    'Drawdown leader — top Sharpe ratio and max-drawdown protection in its category',
+    'Quality factor tilt provides earnings stability during volatile markets',
+    'Broad large-cap diversification to anchor the core portfolio',
   ],
   Balanced: [
     'Best risk-adjusted returns in its category across market cycles',
     'Strong 10Y CAGR with a moderate drawdown profile',
-    'Quality tilt provides stability without sacrificing growth',
     'Factor diversification for resilience across economic regimes',
-    'Consistent outperformer vs NIFTY 50 over rolling 3-year periods',
   ],
   Growth: [
     'High 10Y CAGR — top-tier long-term compounder in its factor class',
     'Strong rolling returns indicate persistent outperformance',
-    'Factor alpha over broad market with managed max drawdown',
-    'Momentum exposure captures growth in sustained market upcycles',
-    'Multi-factor diversification for risk-adjusted alpha generation',
+    'Momentum or multi-factor exposure for growth in sustained upcycles',
   ],
   Aggressive: [
-    'Maximum 10Y CAGR — the highest compounder in the eligible universe',
-    'Pure momentum — systematically rides the strongest market trends',
+    'Maximum 10Y CAGR — highest compounder in the eligible universe',
+    'Pure alpha or momentum — systematically rides the strongest market trends',
     'Small/mid-cap factor tilt for superior long-run wealth creation',
-    'High-alpha strategy that consistently beats the broad market',
-    'Aggressive multi-factor diversification across high-growth indices',
   ],
 }
+
+const GOLD_REASON: Record<RiskCategory, string> = {
+  Conservative: 'Safe-haven asset — gold preserves capital during equity drawdowns and inflationary periods',
+  Balanced:     'Portfolio diversifier — gold provides inflation hedge and crisis protection',
+  Growth:       'Tail-risk hedge — small gold allocation reduces portfolio correlation and peak drawdowns',
+  Aggressive:   'Crisis buffer — minimal gold allocation as insurance against systemic risk',
+}
+
+const LOWVOL_REASON: Record<RiskCategory, string> = {
+  Conservative: 'Core defensive holding — low volatility factor with superior drawdown protection and Sharpe ratio',
+  Balanced:     'Stability anchor — low volatility index smooths portfolio returns across economic cycles',
+  Growth:       'Volatility dampener — balances the higher-risk factor tilts in the portfolio',
+  Aggressive:   'Minimal hedging — small low-vol position to reduce peak-to-trough drawdowns',
+}
+
+// ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /** Compute a risk-category-adjusted score for a single fund */
 function computeFundScore(fund: FundData, cat: RiskCategory): number {
@@ -218,95 +241,179 @@ function computeFundScore(fund: FundData, cat: RiskCategory): number {
   let raw: number
   switch (cat) {
     case 'Conservative':
-      raw = sharpe * 0.40 + ddProt * 0.40 + cagr * 0.20; break
+      raw = ddProt * 0.50 + rolling * 0.30 + sharpe * 0.15 + cagr * 0.05; break
     case 'Balanced':
-      raw = sharpe * 0.25 + ddProt * 0.25 + cagr * 0.30 + rolling * 0.20; break
+      raw = rolling * 0.35 + sharpe * 0.30 + cagr * 0.25 + ddProt * 0.10; break
     case 'Growth':
-      raw = cagr * 0.35 + rolling * 0.30 + sharpe * 0.20 + ddProt * 0.15; break
+      raw = cagr * 0.40 + rolling * 0.35 + sharpe * 0.20 + ddProt * 0.05; break
     case 'Aggressive':
-      raw = cagr * 0.45 + rolling * 0.35 + sharpe * 0.15 + ddProt * 0.05; break
+      raw = cagr * 0.60 + rolling * 0.30 + sharpe * 0.08 + ddProt * 0.02; break
   }
   return raw * catMult
 }
 
-/** Cap-at-35% weight optimisation with iterative redistribution */
-function optimiseWeights(scores: number[]): number[] {
-  const totalScore = scores.reduce((s, v) => s + v, 0)
-  if (totalScore === 0) {
-    const eq = parseFloat((100 / scores.length).toFixed(1))
-    return scores.map(() => eq)
+// ─── Weight distribution ──────────────────────────────────────────────────────
+
+/**
+ * Distribute a budget (multiple of 5) across funds proportional to scores,
+ * rounding each to the nearest multiple of 5 using the largest-remainder method.
+ */
+function distributeToNearest5(scores: number[], target: number): number[] {
+  if (scores.length === 0) return []
+  if (scores.length === 1) return [target]
+
+  const total = scores.reduce((s, v) => s + Math.max(0, v), 0)
+  if (total === 0) {
+    // Equal split
+    const eq = Math.floor(target / scores.length / 5) * 5
+    const result = scores.map(() => eq)
+    const deficit = Math.round((target - result.reduce((s, v) => s + v, 0)) / 5)
+    for (let k = 0; k < deficit; k++) result[k % scores.length] += 5
+    return result
   }
 
-  let w = scores.map(s => (s / totalScore) * 100)
+  const raw     = scores.map(s => (Math.max(0, s) / total) * target)
+  const floored = raw.map(v => Math.floor(v / 5) * 5)
+  const sumFloor = floored.reduce((s, v) => s + v, 0)
+  const deficit  = Math.round((target - sumFloor) / 5)
 
-  // Iteratively push excess from capped funds to uncapped ones
-  for (let iter = 0; iter < 10; iter++) {
-    const excess = w.reduce((s, v) => s + Math.max(0, v - 35), 0)
-    if (excess < 0.01) break
-    const capped = w.map(v => Math.min(v, 35))
-    const uncapSum = capped.reduce((s, v, i) => s + (w[i] < 35 ? v : 0), 0)
-    if (uncapSum < 0.01) break
-    w = capped.map((v, i) =>
-      w[i] < 35 ? v + (v / uncapSum) * excess : v
-    )
+  // Sort indices by remainder descending, add 5 to the top `deficit` entries
+  const order = raw
+    .map((v, i) => ({ i, r: v - floored[i] }))
+    .sort((a, b) => b.r - a.r)
+
+  const result = [...floored]
+  for (let k = 0; k < deficit && k < order.length; k++) {
+    result[order[k].i] += 5
   }
-
-  // Round to 1 decimal and fix sum
-  const rounded = w.map(v => Math.round(v * 10) / 10)
-  const diff = parseFloat((100 - rounded.reduce((s, v) => s + v, 0)).toFixed(1))
-  if (diff !== 0) rounded[0] = parseFloat((rounded[0] + diff).toFixed(1))
-  return rounded
+  return result
 }
 
-/** Select 5 MF-eligible funds and compute optimised weights for a risk category */
+// ─── Fund selection ───────────────────────────────────────────────────────────
+
+/**
+ * Select a 5-fund portfolio with optimised weights for a risk category.
+ *
+ * Layout:
+ *   • Slot 1–3: top-scored MF-eligible index funds (max-2-per-category diversity)
+ *   • Slot 4:   best Low-Volatility index (fixed weight from FIXED_ALLOC)
+ *   • Slot 5:   Gold commodity fund       (fixed weight from FIXED_ALLOC)
+ *
+ * All weights are multiples of 5, summing to 100.
+ */
 export function selectAndWeightFunds(
   funds: FundData[],
   cat: RiskCategory,
+  goldFund?: FundData | null,
 ): RecommendedFund[] {
-  // Filter to MF-eligible indices that have at least some metric data
-  const eligible = funds.filter(f =>
-    MF_ELIGIBLE_CODES.has(f.code) &&
+  const { gold: goldW, lowvol: lowvolW } = FIXED_ALLOC[cat]
+
+  // ── Find the best Low-Vol fund ────────────────────────────────────────────
+  const lowVolCandidates = funds.filter(f =>
+    LOW_VOL_CODES.includes(f.code) &&
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
 
-  // Score and rank
+  // Sort by preference order first (N100LV30 preferred), then by score
+  lowVolCandidates.sort((a, b) => {
+    const ai = LOW_VOL_CODES.indexOf(a.code)
+    const bi = LOW_VOL_CODES.indexOf(b.code)
+    const scoreDiff = computeFundScore(b, cat) - computeFundScore(a, cat)
+    // If both are preferred codes, pick by score; otherwise keep preference order
+    if (ai !== bi && (ai === 0 || bi === 0)) return ai - bi
+    return scoreDiff
+  })
+  const bestLowVol = lowVolCandidates[0] ?? null
+
+  const actualGoldW   = goldFund ? goldW : 0
+  const actualLowVolW = bestLowVol ? lowvolW : 0
+  const remainingBudget = 100 - actualGoldW - actualLowVolW
+
+  // ── Build scoring pool (exclude Gold + LowVol codes) ─────────────────────
+  const excludeCodes = new Set<string>([
+    GOLD_CODE,
+    ...(bestLowVol ? [bestLowVol.code] : []),
+  ])
+
+  const eligible = funds.filter(f =>
+    MF_ELIGIBLE_CODES.has(f.code) &&
+    !excludeCodes.has(f.code) &&
+    (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
+  )
+
   const scored = eligible
     .map(f => ({ ...f, rs: computeFundScore(f, cat) }))
     .sort((a, b) => b.rs - a.rs)
 
-  // Pick top 5 with max-2-per-category diversification
+  // ── Pick top 3 with max-2-per-category diversification ───────────────────
   const selected: typeof scored = []
   const catCount: Record<string, number> = {}
   for (const fund of scored) {
-    if (selected.length >= 5) break
+    if (selected.length >= 3) break
     const c = fund.category
     if ((catCount[c] ?? 0) >= 2) continue
     catCount[c] = (catCount[c] ?? 0) + 1
     selected.push(fund)
   }
-  // Relax constraint if we still need more funds
-  if (selected.length < 5) {
+  // Relax constraint if we need more
+  if (selected.length < 3) {
     for (const fund of scored) {
-      if (selected.length >= 5) break
+      if (selected.length >= 3) break
       if (selected.some(s => s.id === fund.id)) continue
       selected.push(fund)
     }
   }
 
-  const weights = optimiseWeights(selected.map(f => f.rs))
+  // ── Distribute remaining budget to the 3 scored slots ────────────────────
+  const weights3 = distributeToNearest5(selected.map(f => f.rs), remainingBudget)
 
-  return selected.map((fund, i) => ({
-    id:       fund.id,
-    code:     fund.code,
-    name:     fund.name,
-    category: fund.category,
-    weight:   weights[i],
-    reason:   REASONS[cat][i] ?? 'Strong risk-adjusted performance in its factor class',
-    scoreBreakdown: [
-      { label: '10Y CAGR',   value: fund.cagr_10y             != null ? `${(fund.cagr_10y * 100).toFixed(1)}%`             : '—' },
-      { label: '3Y Rolling', value: fund.avg_3y_rolling_return != null ? `${(fund.avg_3y_rolling_return * 100).toFixed(1)}%` : '—' },
-      { label: 'Sharpe',     value: fund.sharpe_ratio          != null ? fund.sharpe_ratio.toFixed(2)                        : '—' },
-      { label: 'Max DD',     value: fund.max_drawdown          != null ? `${(fund.max_drawdown * 100).toFixed(1)}%`          : '—' },
-    ],
-  }))
+  const mkBreakdown = (f: FundData) => [
+    { label: '10Y CAGR',   value: f.cagr_10y             != null ? `${(f.cagr_10y * 100).toFixed(1)}%`             : '—' },
+    { label: '3Y Rolling', value: f.avg_3y_rolling_return != null ? `${(f.avg_3y_rolling_return * 100).toFixed(1)}%` : '—' },
+    { label: 'Sharpe',     value: f.sharpe_ratio          != null ? f.sharpe_ratio.toFixed(2)                        : '—' },
+    { label: 'Max DD',     value: f.max_drawdown          != null ? `${(f.max_drawdown * 100).toFixed(1)}%`          : '—' },
+  ]
+
+  const result: RecommendedFund[] = []
+
+  // 3 scored funds
+  selected.forEach((fund, i) => {
+    result.push({
+      id:       fund.id,
+      code:     fund.code,
+      name:     fund.name,
+      category: fund.category,
+      weight:   weights3[i],
+      reason:   REASONS[cat][i] ?? 'Strong risk-adjusted performance in its factor class',
+      scoreBreakdown: mkBreakdown(fund),
+    })
+  })
+
+  // Low-Vol fund (fixed weight)
+  if (bestLowVol) {
+    result.push({
+      id:       bestLowVol.id,
+      code:     bestLowVol.code,
+      name:     bestLowVol.name,
+      category: bestLowVol.category,
+      weight:   actualLowVolW,
+      reason:   LOWVOL_REASON[cat],
+      scoreBreakdown: mkBreakdown(bestLowVol),
+    })
+  }
+
+  // Gold fund (fixed weight)
+  if (goldFund) {
+    result.push({
+      id:       goldFund.id,
+      code:     GOLD_CODE,
+      name:     goldFund.name,
+      category: 'Commodity',
+      weight:   actualGoldW,
+      reason:   GOLD_REASON[cat],
+      scoreBreakdown: mkBreakdown(goldFund),
+    })
+  }
+
+  return result
 }

@@ -9,6 +9,7 @@ import {
   RiskCategory,
   RecommendedFund,
 } from "@/lib/risk-engine"
+import { amcLogoUrl } from "@/lib/amc"
 
 export interface RiskProfile {
   answers: { q1: number; q2: number; q3: number; q4: number }
@@ -16,6 +17,12 @@ export interface RiskProfile {
   category: RiskCategory
   funds: RecommendedFund[]
   timestamp: number
+}
+
+interface MFTracker {
+  schemeName: string
+  amcLogo: string | null
+  fundHouse: string
 }
 
 interface Props {
@@ -28,16 +35,17 @@ interface Props {
 type Stage = 'questions' | 'computing' | 'result'
 
 export function RiskQuestionnaire({ onComplete, onSkip }: Props) {
-  const [currentQ, setCurrentQ]     = useState(0)
-  const [answers, setAnswers]       = useState<Partial<{ q1: number; q2: number; q3: number; q4: number }>>({})
-  const [stage, setStage]           = useState<Stage>('questions')
-  const [animOut, setAnimOut]       = useState(false)
-  const [score, setScore]           = useState(0)
-  const [category, setCategory]     = useState<RiskCategory>('Balanced')
-  const [funds, setFunds]           = useState<RecommendedFund[]>([])
-  const [apiError, setApiError]     = useState<string | null>(null)
-  // score bar animation
-  const [barWidth, setBarWidth]     = useState(0)
+  const [currentQ, setCurrentQ]         = useState(0)
+  const [answers, setAnswers]           = useState<Partial<{ q1: number; q2: number; q3: number; q4: number }>>({})
+  const [stage, setStage]               = useState<Stage>('questions')
+  const [animOut, setAnimOut]           = useState(false)
+  const [score, setScore]               = useState(0)
+  const [category, setCategory]         = useState<RiskCategory>('Balanced')
+  const [funds, setFunds]               = useState<RecommendedFund[]>([])
+  const [apiError, setApiError]         = useState<string | null>(null)
+  const [barWidth, setBarWidth]         = useState(0)
+  const [mfTrackers, setMfTrackers]     = useState<Record<string, MFTracker>>({})
+  const [trackersLoading, setTrackersLoading] = useState(false)
 
   useEffect(() => {
     if (stage === 'result') {
@@ -50,6 +58,32 @@ export function RiskQuestionnaire({ onComplete, onSkip }: Props) {
   function animateNext(cb: () => void) {
     setAnimOut(true)
     setTimeout(() => { setAnimOut(false); cb() }, 220)
+  }
+
+  async function fetchMFTrackers(recommendedFunds: RecommendedFund[]) {
+    setTrackersLoading(true)
+    const trackers: Record<string, MFTracker> = {}
+    await Promise.allSettled(
+      recommendedFunds.map(async (f) => {
+        try {
+          const r = await fetch(`/api/mffunds/byindex?indexName=${encodeURIComponent(f.name)}`)
+          if (!r.ok) return
+          const mfs = await r.json() as Array<{ scheme_name: string; fund_house: string; nav: number | null; return_3y: number | null }>
+          if (!Array.isArray(mfs) || mfs.length === 0) return
+          // Pick the one with the best 3Y return, falling back to first
+          const top = mfs.reduce((best, cur) =>
+            (cur.return_3y ?? -Infinity) > (best.return_3y ?? -Infinity) ? cur : best
+          )
+          trackers[f.code] = {
+            schemeName: top.scheme_name,
+            fundHouse:  top.fund_house,
+            amcLogo:    amcLogoUrl(top.fund_house),
+          }
+        } catch { /* ignore */ }
+      })
+    )
+    setMfTrackers(trackers)
+    setTrackersLoading(false)
   }
 
   async function handleAnswer(value: number) {
@@ -80,6 +114,8 @@ export function RiskQuestionnaire({ onComplete, onSkip }: Props) {
       if (!res.ok) throw new Error(data.error ?? 'Recommendation failed')
       setFunds(data.funds)
       setStage('result')
+      // Fetch MF trackers in background
+      fetchMFTrackers(data.funds)
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Something went wrong')
       setStage('result')
@@ -96,6 +132,7 @@ export function RiskQuestionnaire({ onComplete, onSkip }: Props) {
     setStage('questions')
     setApiError(null)
     setBarWidth(0)
+    setMfTrackers({})
   }
 
   function handleProceed() {
@@ -198,39 +235,70 @@ export function RiskQuestionnaire({ onComplete, onSkip }: Props) {
                   Recommended Portfolio
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 7 }}>
-                  {funds.map((f) => (
-                    <div key={f.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      background: meta.bg, border: `1px solid ${meta.border}`,
-                      borderRadius: 10, padding: '10px 13px',
-                    }}>
-                      {/* Weight pill */}
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
-                        color: meta.color, background: '#ffffff',
-                        padding: '2px 7px', borderRadius: 5, flexShrink: 0,
-                        border: `1px solid ${meta.border}`,
+                  {funds.map((f) => {
+                    const tracker = mfTrackers[f.code]
+                    return (
+                      <div key={f.id} style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 10,
+                        background: meta.bg, border: `1px solid ${meta.border}`,
+                        borderRadius: 10, padding: '10px 13px',
                       }}>
-                        {f.weight.toFixed(0)}%
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#0C0E13', lineHeight: 1.3 }}>
-                          {toTitleCase(f.name)}
-                        </div>
-                        <div style={{ fontSize: 10.5, color: 'rgba(12,14,19,.4)', marginTop: 1 }}>{f.reason}</div>
-                      </div>
-                      {/* Key metric */}
-                      <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-                        <div style={{
-                          fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
-                          color: '#0A7C4E',
+                        {/* Weight pill */}
+                        <span style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                          color: meta.color, background: '#ffffff',
+                          padding: '2px 7px', borderRadius: 5, flexShrink: 0,
+                          border: `1px solid ${meta.border}`, marginTop: 2,
                         }}>
-                          {f.scoreBreakdown[0].value}
+                          {f.weight.toFixed(0)}%
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {/* Index name */}
+                          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#0C0E13', lineHeight: 1.3 }}>
+                            {toTitleCase(f.name)}
+                          </div>
+                          {/* MF tracker row */}
+                          {tracker ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                              {tracker.amcLogo && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={tracker.amcLogo}
+                                  alt={tracker.fundHouse}
+                                  style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 2, flexShrink: 0 }}
+                                />
+                              )}
+                              <span style={{
+                                fontSize: 10.5, color: 'rgba(12,14,19,.45)',
+                                overflow: 'hidden', textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap' as const,
+                              }}>
+                                {tracker.schemeName}
+                              </span>
+                            </div>
+                          ) : trackersLoading ? (
+                            <div style={{ fontSize: 10, color: 'rgba(12,14,19,.25)', marginTop: 4 }}>
+                              Loading MF data…
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 10.5, color: 'rgba(12,14,19,.35)', marginTop: 3 }}>
+                              {f.category}
+                            </div>
+                          )}
                         </div>
-                        <div style={{ fontSize: 9.5, color: 'rgba(12,14,19,.35)' }}>10Y CAGR</div>
+                        {/* Key metric */}
+                        <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
+                          <div style={{
+                            fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700,
+                            color: '#0A7C4E',
+                          }}>
+                            {f.scoreBreakdown[0].value}
+                          </div>
+                          <div style={{ fontSize: 9.5, color: 'rgba(12,14,19,.35)' }}>10Y CAGR</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
