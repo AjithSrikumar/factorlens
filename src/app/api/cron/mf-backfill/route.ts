@@ -1,22 +1,32 @@
 /**
- * GET /api/cron/mf-backfill?year=2021
+ * GET /api/cron/mf-backfill?batch=N
  *
- * Fetches every trading day's NAV for all 286 funds from AMFI for the given
- * year, and upserts into mf_nav_data.  Run once per year going back to the
- * earliest fund inception (~2000).
+ * Fetches the COMPLETE NAV history for a batch of funds from mfapi.in and
+ * upserts into mf_nav_data.
  *
- * Usage — call once per year (can run in parallel in separate tabs):
- *   for year in 2000 2001 ... 2025 2026; do
- *     curl -H "Authorization: Bearer <CRON_SECRET>" \
- *          "https://factorlens.vercel.app/api/cron/mf-backfill?year=$year"
- *   done
+ * Why mfapi.in instead of portal.amfiindia.com?
+ *   portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx blocks requests from
+ *   Vercel's server IPs (returns an empty HTML page).  mfapi.in is a public
+ *   AMFI mirror that works fine from server environments.
  *
- * Then trigger mf-eod once to recompute 1y/3y/5y returns.
+ * Batching — each call processes BATCH_SIZE funds to stay within Vercel's 300 s limit.
  *
- * Strategy: for each month in the year, one AMFI history fetch (≈ 14 000
- * funds × 22 days ≈ 25 MB).  Filters to our 286 scheme codes before
- * upserting, so DB writes are small.  12 months × ~10 s each ≈ 120 s well
- * within Vercel's 300 s limit.
+ *   batch=1  → funds  1–30
+ *   batch=2  → funds 31–60
+ *   …
+ *   (ceil(286/30) = 10 batches total)
+ *
+ * Usage (PowerShell):
+ *   $secret = "<CRON_SECRET>"
+ *   1..10 | ForEach-Object {
+ *     Write-Host "Batch $_..."
+ *     curl.exe -s -H "Authorization: Bearer $secret" `
+ *       "https://factorlens.vercel.app/api/cron/mf-backfill?batch=$_"
+ *     Write-Host ""
+ *     Start-Sleep -Seconds 3
+ *   }
+ *
+ * After all batches complete, trigger mf-eod once to recompute 1y/3y/5y returns.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -32,95 +42,72 @@ const supabase = createClient(
     : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 )
 
-// ── Date helpers ──────────────────────────────────────────────────────────────
+const BATCH_SIZE  = 30   // funds per Vercel invocation
+const CONCURRENCY = 5    // parallel mfapi.in requests at a time
 
-const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const MON_MAP: Record<string, string> = {
-  Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
-  Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12',
-}
-
-/** '2025-03-21' → '21-Mar-2025' */
-function isoToAmfi(iso: string): string {
-  const [yyyy, mm, dd] = iso.split('-')
-  return `${dd}-${MON_NAMES[parseInt(mm, 10) - 1]}-${yyyy}`
-}
-
-/** '21-Mar-2025' → '2025-03-21', '' on failure */
-function amfiToISO(s: string): string {
-  const p = s.trim().split('-')
-  if (p.length !== 3) return ''
-  const mm = MON_MAP[p[1]]
-  if (!mm) return ''
-  return `${p[2]}-${mm}-${p[0].padStart(2, '0')}`
-}
-
-/** Last day of month, e.g. (2020, 2) → '2020-02-29' */
-function lastDayOfMonth(year: number, month: number): string {
-  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
-}
-
-function todayIST(): string {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
-// ── AMFI fetcher ──────────────────────────────────────────────────────────────
+// ── Date helper ───────────────────────────────────────────────────────────────
 
 /**
- * Fetch AMFI historical NAV for [fromISO, toISO] (inclusive).
- * Returns rows only for the scheme codes in `filter`.
- *
- * AMFI historical format (semicolon-delimited, 8 fields):
- *   SchemeCode ; ISIN1 ; ISIN2 ; SchemeName ; NAV ; Repurchase ; Sale ; Date
- *
- * Falls back to 6-field format (same as NAVAll.txt):
- *   SchemeCode ; ISIN1 ; ISIN2 ; SchemeName ; NAV ; Date
+ * mfapi.in returns dates as "DD-MM-YYYY" (e.g. "21-03-2025").
+ * Converts to ISO "YYYY-MM-DD". Returns '' on failure.
  */
-async function fetchAmfiMonth(
-  fromISO: string,
-  toISO: string,
-  filter: Set<number>,
-): Promise<{ rows: Array<{ scheme_code: number; date: string; nav: number }>; rawLines: number; firstLine: string }> {
-  const url =
-    `https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx` +
-    `?mf=0&frmdt=${isoToAmfi(fromISO)}&todt=${isoToAmfi(toISO)}`
+function mfapiDateToISO(s: string): string {
+  const p = s.trim().split('-')
+  if (p.length !== 3) return ''
+  const [dd, mm, yyyy] = p
+  if (!/^\d{2}$/.test(dd) || !/^\d{2}$/.test(mm) || !/^\d{4}$/.test(yyyy)) return ''
+  return `${yyyy}-${mm}-${dd}`
+}
 
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(60_000),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': 'https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
-    },
-  })
-  if (!res.ok) throw new Error(`AMFI HTTP ${res.status} for ${fromISO}→${toISO}`)
+// ── mfapi.in fetcher ──────────────────────────────────────────────────────────
 
-  const text = await res.text()
-  const lines = text.split('\n')
-  const firstLine = lines[0]?.trim().slice(0, 200) ?? ''
+interface MfapiResponse {
+  data: Array<{ date: string; nav: string }>
+}
 
-  // Detect HTML error page — AMFI returns HTML when blocking automated requests
-  if (text.trimStart().startsWith('<') || text.includes('<!DOCTYPE') || text.includes('<html')) {
-    throw new Error(`AMFI returned HTML (likely blocked/error page) for ${fromISO}→${toISO}. First line: ${firstLine}`)
-  }
+async function fetchFundHistory(
+  schemeCode: number,
+): Promise<Array<{ scheme_code: number; date: string; nav: number }>> {
+  const url = `https://api.mfapi.in/mf/${schemeCode}`
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`mfapi HTTP ${res.status} for scheme ${schemeCode}`)
+
+  const json = await res.json() as MfapiResponse
+  if (!Array.isArray(json.data)) throw new Error(`unexpected response for scheme ${schemeCode}`)
 
   const rows: Array<{ scheme_code: number; date: string; nav: number }> = []
-
-  for (const line of lines) {
-    const p = line.trim().split(';')
-    // Support both 8-field (historical) and 6-field (NAVAll.txt) formats
-    if (p.length < 6) continue
-    const code = parseInt(p[0], 10)
-    if (isNaN(code) || !filter.has(code)) continue
-    const nav  = parseFloat(p[4])
-    // 8-field: date is p[7]; 6-field: date is p[5]
-    const date = p.length >= 8 ? amfiToISO(p[7]) : amfiToISO(p[5])
+  for (const entry of json.data) {
+    const date = mfapiDateToISO(entry.date)
+    const nav  = parseFloat(entry.nav)
     if (!date || isNaN(nav) || nav <= 0) continue
-    rows.push({ scheme_code: code, date, nav })
+    rows.push({ scheme_code: schemeCode, date, nav })
+  }
+  return rows
+}
+
+// ── Concurrency helper ────────────────────────────────────────────────────────
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<Array<{ item: T; result?: R; error?: string }>> {
+  const results: Array<{ item: T; result?: R; error?: string }> = []
+  let idx = 0
+
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++
+      try {
+        results[i] = { item: items[i], result: await fn(items[i]) }
+      } catch (e) {
+        results[i] = { item: items[i], error: e instanceof Error ? e.message : String(e) }
+      }
+    }
   }
 
-  return { rows, rawLines: lines.length, firstLine }
+  await Promise.all(Array.from({ length: concurrency }, worker))
+  return results
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -132,79 +119,92 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Parse ?year=
-  const yearParam = req.nextUrl.searchParams.get('year')
-  const year = yearParam ? parseInt(yearParam, 10) : new Date().getUTCFullYear()
-  if (isNaN(year) || year < 1990 || year > 2100) {
-    return NextResponse.json({ error: 'Invalid year' }, { status: 400 })
+  // Parse ?batch=
+  const batchParam = req.nextUrl.searchParams.get('batch')
+  const batch = batchParam ? parseInt(batchParam, 10) : 1
+  if (isNaN(batch) || batch < 1) {
+    return NextResponse.json({ error: 'Invalid batch (must be >= 1)' }, { status: 400 })
   }
 
-  const currentYear  = parseInt(todayIST().slice(0, 4), 10)
-  const currentMonth = parseInt(todayIST().slice(5, 7), 10)
-  const lastMonth    = year < currentYear ? 12 : currentMonth  // don't exceed today
+  const log: string[] = [`mf-backfill batch=${batch} | fetching from mfapi.in`]
 
-  const log: string[] = [`mf-backfill year=${year} | processing months 1–${lastMonth}`]
-
-  // 1. Load our 286 scheme codes
+  // 1. Load scheme codes from mf_funds
   const { data: funds, error: fundsErr } = await supabase
     .from('mf_funds')
     .select('scheme_code')
+    .order('scheme_code')
   if (fundsErr || !funds) {
     return NextResponse.json({ error: `load mf_funds: ${fundsErr?.message}`, log }, { status: 500 })
   }
-  const ourCodes = new Set(funds.map(f => f.scheme_code as number))
-  log.push(`Filtering to ${ourCodes.size} scheme codes`)
 
-  // 2. Month-by-month fetch + upsert
-  let totalInserted = 0
-  let totalRows     = 0
-  const monthErrors: string[] = []
+  const totalFunds   = funds.length
+  const totalBatches = Math.ceil(totalFunds / BATCH_SIZE)
+  const start        = (batch - 1) * BATCH_SIZE
+  const end          = Math.min(start + BATCH_SIZE, totalFunds)
+  const batchFunds   = funds.slice(start, end)
 
-  for (let month = 1; month <= lastMonth; month++) {
-    const fromISO = `${year}-${String(month).padStart(2, '0')}-01`
-    const toISO   = lastDayOfMonth(year, month)
+  log.push(`${totalFunds} funds total | batch ${batch}/${totalBatches} → funds ${start + 1}–${end} (${batchFunds.length} funds)`)
 
-    let fetched: Awaited<ReturnType<typeof fetchAmfiMonth>>
-    try {
-      fetched = await fetchAmfiMonth(fromISO, toISO, ourCodes)
-    } catch (e) {
-      const msg = `month ${month}: ${e instanceof Error ? e.message : String(e)}`
-      monthErrors.push(msg)
-      log.push(`  ERROR ${msg}`)
-      continue
-    }
-
-    const { rows, rawLines, firstLine } = fetched
-    log.push(`  ${fromISO}→${toISO}: ${rawLines} raw lines → ${rows.length} rows for our funds${rawLines < 500 ? ` [first: ${firstLine}]` : ''}`)
-
-    if (rows.length === 0) continue
-
-    // Upsert in chunks of 500
-    const CHUNK = 500
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const { error } = await supabase
-        .from('mf_nav_data')
-        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'scheme_code,date' })
-      if (error) {
-        monthErrors.push(`upsert chunk @ month ${month}+${i}: ${error.message}`)
-        log.push(`  upsert error: ${error.message}`)
-      } else {
-        totalInserted += Math.min(CHUNK, rows.length - i)
-      }
-    }
-    totalRows += rows.length
+  if (batchFunds.length === 0) {
+    log.push('No funds in this batch — all done.')
+    return NextResponse.json({ ok: true, batch, totalBatches, totalFetched: 0, totalInserted: 0, errors: [], log })
   }
 
-  log.push(
-    `Done — year=${year} | ${totalRows} rows fetched | ${totalInserted} upserted | ${monthErrors.length} errors`,
-  )
+  // 2. Fetch NAV history from mfapi.in (CONCURRENCY at a time)
+  const schemeCodes = batchFunds.map(f => f.scheme_code as number)
+  log.push(`Fetching ${schemeCodes.length} funds (concurrency=${CONCURRENCY})…`)
+
+  const fetchResults = await runWithConcurrency(schemeCodes, CONCURRENCY, fetchFundHistory)
+
+  let totalRows      = 0
+  let totalInserted  = 0
+  const fetchErrors: string[] = []
+  const allRows: Array<{ scheme_code: number; date: string; nav: number }> = []
+
+  for (const r of fetchResults) {
+    if (r.error) {
+      fetchErrors.push(`scheme ${r.item}: ${r.error}`)
+      log.push(`  SKIP scheme ${r.item}: ${r.error}`)
+    } else {
+      const rows = r.result!
+      log.push(`  scheme ${r.item}: ${rows.length} nav entries`)
+      allRows.push(...rows)
+      totalRows += rows.length
+    }
+  }
+
+  log.push(`Fetched ${totalRows} rows across ${schemeCodes.length - fetchErrors.length} funds`)
+
+  // 3. Upsert in chunks of 500
+  if (allRows.length > 0) {
+    const CHUNK = 500
+    for (let i = 0; i < allRows.length; i += CHUNK) {
+      const { error } = await supabase
+        .from('mf_nav_data')
+        .upsert(allRows.slice(i, i + CHUNK), { onConflict: 'scheme_code,date' })
+      if (error) {
+        fetchErrors.push(`upsert chunk @${i}: ${error.message}`)
+        log.push(`  upsert ERROR @${i}: ${error.message}`)
+      } else {
+        totalInserted += Math.min(CHUNK, allRows.length - i)
+      }
+    }
+  }
+
+  log.push(`Done — batch ${batch}/${totalBatches} | ${totalRows} rows fetched | ${totalInserted} upserted | ${fetchErrors.length} errors`)
+  if (batch < totalBatches) {
+    log.push(`Next: call ?batch=${batch + 1} to continue`)
+  } else {
+    log.push('All batches complete! Run mf-eod to recompute 1y/3y/5y returns.')
+  }
 
   return NextResponse.json({
-    ok:            monthErrors.length === 0,
-    year,
+    ok:            fetchErrors.length === 0,
+    batch,
+    totalBatches,
     totalFetched:  totalRows,
     totalInserted,
-    errors:        monthErrors,
+    errors:        fetchErrors,
     log,
   })
 }
