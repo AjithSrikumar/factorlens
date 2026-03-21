@@ -280,14 +280,15 @@ export async function GET(req: NextRequest) {
     // ── 1. Load funds ────────────────────────────────────────────────────────
     const { data: funds, error: fundsErr } = await supabase
       .from('funds')
-      .select('id, code')
+      .select('id, code, inception_date')
 
     if (fundsErr || !funds) {
       return NextResponse.json({ error: 'Failed to load funds: ' + fundsErr?.message }, { status: 500 })
     }
 
-    const codeToId = new Map<string, number>(funds.map((f) => [f.code, f.id]))
-    const fundIds  = funds.map((f) => f.id)
+    const codeToId        = new Map<string, number>(funds.map((f) => [f.code, f.id]))
+    const codeToInception = new Map<string, string>(funds.map((f) => [f.code, (f.inception_date as string | null) ?? '2005-01-03']))
+    const fundIds         = funds.map((f) => f.id)
 
     // ── 2. In cleanup mode: delete incorrectly-scaled records ────────────────
     if (cleanupMode) {
@@ -322,10 +323,50 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const DEFAULT_LAST = { date: '2026-02-27', value: 100 }
     // Overlap window: fetch 20 calendar days before lastDbDate so it is
     // included in the scraped batch for anchor computation
     const OVERLAP_DAYS = 20
+
+    // ── 3b. Detect funds bootstrapped with stale DEFAULT_LAST date ────────────
+    // Previously the code used a hardcoded DEFAULT_LAST = { date: '2026-02-27' }
+    // for funds with no DB data, causing them to only get ~3 weeks of history.
+    // Detect such funds: have data but their latest date is suspiciously close to
+    // the old DEFAULT_LAST date AND their inception was years before that.
+    // These need a full re-scrape from inception.
+    const BOOTSTRAP_SENTINEL = '2026-02-27'           // the old DEFAULT_LAST date
+    const BOOTSTRAP_WINDOW_DAYS = 45                  // ±45d around sentinel date
+    const bootstrapCutoffLow  = addDays(BOOTSTRAP_SENTINEL, -BOOTSTRAP_WINDOW_DAYS)
+    const bootstrapCutoffHigh = addDays(BOOTSTRAP_SENTINEL, +BOOTSTRAP_WINDOW_DAYS)
+
+    const fundsNeedingBackfill = new Set<number>()
+    for (const { code, indexName: _idx } of NSE_INDICES) {
+      const fundId    = codeToId.get(code)
+      const inception = codeToInception.get(code) ?? '2005-01-03'
+      if (!fundId) continue
+      const last = latestByFund.get(fundId)
+      if (!last) continue   // no data → handled below by inception logic
+      // Bootstrap pattern: latest date is within the sentinel window BUT inception was much earlier
+      const inceptionYearsAgo = (new Date(today).getTime() - new Date(inception).getTime()) / (365.25 * 86400e3)
+      if (
+        last.date >= bootstrapCutoffLow &&
+        last.date <= bootstrapCutoffHigh &&
+        inceptionYearsAgo > 2   // inception was >2 years ago — shouldn't have just 3 weeks of data
+      ) {
+        fundsNeedingBackfill.add(fundId)
+        log.push(`[${code}] BACKFILL: detected DEFAULT_LAST bootstrap (latest=${last.date}, inception=${inception}) — clearing and re-scraping from inception`)
+      }
+    }
+
+    // Clear corrupted data for funds needing backfill
+    if (fundsNeedingBackfill.size > 0) {
+      for (const fundId of fundsNeedingBackfill) {
+        await supabase.from('nav_data').delete().eq('fund_id', fundId)
+      }
+      // Re-build latestByFund: remove cleared funds so they're treated as brand-new
+      for (const fundId of fundsNeedingBackfill) {
+        latestByFund.delete(fundId)
+      }
+    }
 
     // ── 4. Fetch NSE indices sequentially (avoid rate limiting) ──────────────
     // Skipped in recompute_all mode (no new data needed, only metrics refresh).
@@ -343,24 +384,32 @@ export async function GET(req: NextRequest) {
       const fundId = codeToId.get(code)
       if (!fundId) { nseResults.push({ code, rows: [], error: 'Fund not found in DB' }); continue }
 
-      const last     = latestByFund.get(fundId) ?? DEFAULT_LAST
-      const fromISO  = addDays(last.date, -OVERLAP_DAYS) // overlap for anchor
-      const newAfter = last.date                          // only insert dates after this
+      const last      = latestByFund.get(fundId)   // undefined if new or just-cleared
+      const inception = codeToInception.get(code) ?? '2005-01-03'
 
-      if (addDays(last.date, 1) > today) {
+      // New fund (no data): fetch full history from inception date, scale = 1
+      // Existing fund: fetch with overlap window for anchor, scale for continuity
+      const isNew    = !last
+      const fromISO  = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
+      const newAfter = isNew ? ''         : last.date  // '' means accept all dates
+
+      if (!isNew && addDays(last.date, 1) > today) {
         nseResults.push({ code, rows: [], error: null, skipped: true })
         continue
       }
 
       try {
         const rawRows = await fetchNiftyIndex(indexName, fromISO, today)
-        const scale   = computeScale(rawRows, last.date, last.value)
-        const rows    = rawRows
+        // For new funds, scale = 1 (store raw index values); otherwise normalise for continuity
+        const scale = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
+        const rows  = rawRows
           .filter((r) => r.date > newAfter)
           .map((r)   => ({ date: r.date, value: r.value * scale }))
         // Debug: log raw count to help diagnose empty results
         if (rawRows.length === 0) {
           log.push(`[${code}] WARNING: API returned 0 rows for range ${fromISO}→${today} (indexName="${indexName}")`)
+        } else if (isNew) {
+          log.push(`[${code}] BACKFILL from ${inception}: ${rawRows.length} raw rows, inserting ${rows.length}`)
         }
         nseResults.push({ code, fundId, rows, error: null })
       } catch (e) {
@@ -376,17 +425,19 @@ export async function GET(req: NextRequest) {
         const fundId = codeToId.get(code)
         if (!fundId) return { code, rows: [] as { date: string; value: number }[], error: 'Fund not found in DB' }
 
-        const last     = latestByFund.get(fundId) ?? DEFAULT_LAST
-        const fromISO  = addDays(last.date, -OVERLAP_DAYS)
-        const newAfter = last.date
+        const last      = latestByFund.get(fundId)
+        const inception = codeToInception.get(code) ?? '2007-01-01'  // sensible Yahoo fallback
+        const isNew     = !last
+        const fromISO   = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
+        const newAfter  = isNew ? ''        : last.date
 
-        if (addDays(last.date, 1) > today) {
+        if (!isNew && addDays(last.date, 1) > today) {
           return { code, rows: [] as { date: string; value: number }[], error: null, skipped: true }
         }
 
         try {
           const rawRows = await fetchYahoo(symbol, fromISO, today)
-          const scale   = computeScale(rawRows, last.date, last.value)
+          const scale   = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
           const rows    = rawRows
             .filter((r) => r.date > newAfter)
             .map((r)   => ({ date: r.date, value: r.value * scale }))
