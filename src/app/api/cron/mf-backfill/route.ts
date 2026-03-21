@@ -70,37 +70,57 @@ function todayIST(): string {
  * Fetch AMFI historical NAV for [fromISO, toISO] (inclusive).
  * Returns rows only for the scheme codes in `filter`.
  *
- * AMFI response format per line (semicolon-delimited):
+ * AMFI historical format (semicolon-delimited, 8 fields):
  *   SchemeCode ; ISIN1 ; ISIN2 ; SchemeName ; NAV ; Repurchase ; Sale ; Date
+ *
+ * Falls back to 6-field format (same as NAVAll.txt):
+ *   SchemeCode ; ISIN1 ; ISIN2 ; SchemeName ; NAV ; Date
  */
 async function fetchAmfiMonth(
   fromISO: string,
   toISO: string,
   filter: Set<number>,
-): Promise<{ rows: Array<{ scheme_code: number; date: string; nav: number }>; rawLines: number }> {
+): Promise<{ rows: Array<{ scheme_code: number; date: string; nav: number }>; rawLines: number; firstLine: string }> {
   const url =
     `https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx` +
     `?mf=0&frmdt=${isoToAmfi(fromISO)}&todt=${isoToAmfi(toISO)}`
 
-  const res = await fetch(url, { signal: AbortSignal.timeout(60_000) })
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(60_000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+    },
+  })
   if (!res.ok) throw new Error(`AMFI HTTP ${res.status} for ${fromISO}→${toISO}`)
 
   const text = await res.text()
   const lines = text.split('\n')
+  const firstLine = lines[0]?.trim().slice(0, 200) ?? ''
+
+  // Detect HTML error page — AMFI returns HTML when blocking automated requests
+  if (text.trimStart().startsWith('<') || text.includes('<!DOCTYPE') || text.includes('<html')) {
+    throw new Error(`AMFI returned HTML (likely blocked/error page) for ${fromISO}→${toISO}. First line: ${firstLine}`)
+  }
+
   const rows: Array<{ scheme_code: number; date: string; nav: number }> = []
 
   for (const line of lines) {
     const p = line.trim().split(';')
-    if (p.length < 8) continue
+    // Support both 8-field (historical) and 6-field (NAVAll.txt) formats
+    if (p.length < 6) continue
     const code = parseInt(p[0], 10)
     if (isNaN(code) || !filter.has(code)) continue
     const nav  = parseFloat(p[4])
-    const date = amfiToISO(p[7])
+    // 8-field: date is p[7]; 6-field: date is p[5]
+    const date = p.length >= 8 ? amfiToISO(p[7]) : amfiToISO(p[5])
     if (!date || isNaN(nav) || nav <= 0) continue
     rows.push({ scheme_code: code, date, nav })
   }
 
-  return { rows, rawLines: lines.length }
+  return { rows, rawLines: lines.length, firstLine }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -144,18 +164,18 @@ export async function GET(req: NextRequest) {
     const fromISO = `${year}-${String(month).padStart(2, '0')}-01`
     const toISO   = lastDayOfMonth(year, month)
 
-    let fetched: { rows: Array<{ scheme_code: number; date: string; nav: number }>; rawLines: number }
+    let fetched: Awaited<ReturnType<typeof fetchAmfiMonth>>
     try {
       fetched = await fetchAmfiMonth(fromISO, toISO, ourCodes)
     } catch (e) {
       const msg = `month ${month}: ${e instanceof Error ? e.message : String(e)}`
       monthErrors.push(msg)
-      log.push(`  SKIP ${msg}`)
+      log.push(`  ERROR ${msg}`)
       continue
     }
 
-    const { rows, rawLines } = fetched
-    log.push(`  ${fromISO}→${toISO}: ${rawLines} raw lines → ${rows.length} rows for our funds`)
+    const { rows, rawLines, firstLine } = fetched
+    log.push(`  ${fromISO}→${toISO}: ${rawLines} raw lines → ${rows.length} rows for our funds${rawLines < 500 ? ` [first: ${firstLine}]` : ''}`)
 
     if (rows.length === 0) continue
 
