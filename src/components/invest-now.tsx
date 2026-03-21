@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { amcLogoUrl } from "@/lib/amc"
 
 interface Fund {
   id: number
@@ -111,8 +112,11 @@ export function InvestNow({ allocations }: Props) {
 
   const totalActual    = rows.reduce((s, r) => s + (r.actualInvestment ?? r.allocated), 0)
   const leftover       = investAmount > 0 ? investAmount - totalActual : null
-  const minPerFund     = rows.map(r => r.chosen?.nav ?? 100)
-  const minimumNeeded  = minPerFund.reduce((s, v) => s + v, 0)
+  // Minimum total investment so every fund gets at least 1 unit at its weight allocation
+  // For fund i: need weight_i/100 * totalAmount >= nav_i  →  totalAmount >= nav_i * 100 / weight_i
+  const minimumNeeded  = rows.length > 0
+    ? Math.max(...rows.map(r => (r.chosen?.nav != null && r.weight > 0) ? (r.chosen.nav * 100) / r.weight : 0))
+    : 0
 
   return (
     <div style={{
@@ -199,7 +203,7 @@ export function InvestNow({ allocations }: Props) {
                 <div style={{ fontSize: 12.5, color: 'rgba(12,14,19,.45)', lineHeight: 1.5 }}>
                   Minimum suggested:{' '}
                   <strong style={{ color: '#0C0E13' }}>₹{fmt(Math.ceil(minimumNeeded))}</strong>
-                  {' '}(1 unit per fund)
+                  {' '}(1 unit of each fund at target weights)
                 </div>
               )}
             </div>
@@ -274,8 +278,17 @@ export function InvestNow({ allocations }: Props) {
                                   {row.chosen!.scheme_name}
                                 </div>
                                 {row.chosen!.fund_house && (
-                                  <div style={{ fontSize: 11, color: 'rgba(12,14,19,.38)', marginTop: 2 }}>
-                                    {row.chosen!.fund_house}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                                    {amcLogoUrl(row.chosen!.fund_house) && (
+                                      <img
+                                        src={amcLogoUrl(row.chosen!.fund_house)!}
+                                        alt=""
+                                        style={{ width: 18, height: 18, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+                                      />
+                                    )}
+                                    <span style={{ fontSize: 11, color: 'rgba(12,14,19,.38)' }}>
+                                      {row.chosen!.fund_house}
+                                    </span>
                                   </div>
                                 )}
                               </div>
@@ -347,7 +360,14 @@ export function InvestNow({ allocations }: Props) {
                                     >
                                       <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontSize: 12, fontWeight: 600, color: '#0C0E13', lineHeight: 1.3 }}>{mf.scheme_name}</div>
-                                        <div style={{ fontSize: 10.5, color: 'rgba(12,14,19,.38)', marginTop: 1 }}>{mf.fund_house}</div>
+                                        {mf.fund_house && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                            {amcLogoUrl(mf.fund_house) && (
+                                              <img src={amcLogoUrl(mf.fund_house)!} alt="" style={{ width: 14, height: 14, objectFit: 'contain', borderRadius: 2, flexShrink: 0 }} />
+                                            )}
+                                            <span style={{ fontSize: 10.5, color: 'rgba(12,14,19,.38)' }}>{mf.fund_house}</span>
+                                          </div>
+                                        )}
                                       </div>
                                       <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
                                         {mf.return_3y != null && (

@@ -8,6 +8,7 @@ import { Info, TrendingUp } from "lucide-react"
 import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
 import { RISK_CATEGORY_META, RiskCategory } from "@/lib/risk-engine"
+import { amcLogoUrl } from "@/lib/amc"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
 
@@ -30,6 +31,7 @@ interface FundAllocation {
 
 interface PortfolioMetrics {
   cagr: number
+  cagr_10y: number | null
   volatility: number
   sharpe: number
   maxDrawdown: number
@@ -64,6 +66,7 @@ interface PortfolioResult {
     funds: Record<number, FYRawRow[]>
     benchmark: FYRawRow[]
   }
+  skippedFundIds?: number[]
 }
 
 /* ── v4-style Portfolio Snapshot ──────────────────────────────────────────── */
@@ -156,15 +159,18 @@ function PortfolioSnapshot({
         </div>
       </div>
 
-      {/* Big 3 tiles */}
+      {/* Big 3 tiles — 10Y CAGR | Sharpe | Max Drawdown */}
       <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
         className="snap-3-grid">
         {[
           {
-            label: "CAGR", info: "Compound Annual Growth Rate — the annualised return of your portfolio since inception.",
-            value: pct(metrics.cagr), cls: "pos",
-            benchV: benchmark ? pct(benchmark.cagr) : null,
-            delta: benchmark ? ((metrics.cagr - benchmark.cagr) * 100) : null,
+            label: "10Y CAGR", info: "Compound Annual Growth Rate over the last 10 years. The key long-term performance metric.",
+            value: metrics.cagr_10y != null ? pct(metrics.cagr_10y) : pct(metrics.cagr),
+            cls: "pos",
+            benchV: benchmark ? (benchmark.cagr_10y != null ? pct(benchmark.cagr_10y) : pct(benchmark.cagr)) : null,
+            delta: benchmark
+              ? ((metrics.cagr_10y ?? metrics.cagr) - (benchmark.cagr_10y ?? benchmark.cagr)) * 100
+              : null,
           },
           {
             label: "Sharpe Ratio", info: "Risk-adjusted return. Higher = better. Measures excess return per unit of volatility.",
@@ -240,11 +246,11 @@ function PortfolioSnapshot({
       <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
         className="snap-6-grid">
         {[
+          { label: "Since-Inception CAGR", info: "Compound Annual Growth Rate since the portfolio's earliest common start date.", value: pct(metrics.cagr), benchV: benchmark ? pct(benchmark.cagr) : null, pos: true },
           { label: "Volatility", info: "Annualised standard deviation of daily returns.", value: pct(metrics.volatility), benchV: benchmark ? pct(benchmark.volatility) : null },
           { label: "Sortino", info: "Like Sharpe, but only penalises downside volatility. More relevant for equity portfolios.", value: fixed(metrics.sortino), benchV: benchmark ? fixed(benchmark.sortino) : null },
           { label: "Calmar", info: "CAGR ÷ Max Drawdown. Higher means better risk-adjusted compounding.", value: fixed(metrics.calmar), benchV: benchmark ? fixed(benchmark.calmar) : null },
-          { label: "Avg 3Y CAGR", info: "Average of all rolling 3-year CAGR windows.", value: avgRolling != null ? `${avgRolling.toFixed(1)}%` : "—", benchV: null },
-          { label: "Total Return", info: "Total return since inception.", value: `${metrics.totalReturn.toFixed(0)}%`, benchV: benchmark ? `${benchmark.totalReturn.toFixed(0)}%` : null, pos: true },
+          { label: "Avg 3Y Rolling", info: "Average of all rolling 3-year CAGR windows.", value: avgRolling != null ? `${avgRolling.toFixed(1)}%` : "—", benchV: null },
           { label: "₹100 Became", info: "What ₹100 invested at inception grew to.", value: `₹${r100}`, benchV: null, pos: true },
         ].map((m, i) => (
           <div
@@ -406,12 +412,13 @@ function toTitleCase(s: string) {
 
 // ─── Risk profile banner ──────────────────────────────────────────────────────
 function RiskBanner({
-  profile, onRetake, onWhy, whyOpen,
+  profile, onRetake, onWhy, whyOpen, mfTrackers,
 }: {
   profile: RiskProfile
   onRetake: () => void
   onWhy: () => void
   whyOpen: boolean
+  mfTrackers?: Record<number, { schemeName: string; amcLogo: string | null }>
 }) {
   const meta = RISK_CATEGORY_META[profile.category as RiskCategory]
   return (
@@ -490,7 +497,22 @@ function RiskBanner({
                       fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: meta.color,
                     }}>{f.weight.toFixed(0)}%</span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(12,14,19,.5)', marginTop: 2, lineHeight: 1.4 }}>{f.reason}</div>
+                  {/* MF tracker — AMC logo + scheme name */}
+                  {mfTrackers?.[f.id]?.schemeName && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      {mfTrackers[f.id].amcLogo && (
+                        <img
+                          src={mfTrackers[f.id].amcLogo!}
+                          alt=""
+                          style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
+                        />
+                      )}
+                      <span style={{ fontSize: 11, color: 'rgba(12,14,19,.55)', lineHeight: 1.3 }}>
+                        {mfTrackers[f.id].schemeName}
+                      </span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: 'rgba(12,14,19,.5)', marginTop: 4, lineHeight: 1.4 }}>{f.reason}</div>
                   <div style={{ display: 'flex', gap: 7, marginTop: 6, flexWrap: 'wrap' as const }}>
                     {f.scoreBreakdown.map(m => (
                       <span key={m.label} style={{
@@ -524,6 +546,9 @@ export default function DashboardPage() {
   const [isDefault, setIsDefault] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)  // closed by default
   const resultsRef = useRef<HTMLDivElement>(null)
+  // MF trackers for risk profile funds (shown in RiskBanner "Why this portfolio")
+  const [riskMfTrackers, setRiskMfTrackers] = useState<Record<number, { schemeName: string; amcLogo: string | null }>>({})
+
   // pendingRun: set to true when we want the next allocation load to auto-trigger a backtest
   const pendingRun = useRef(false)
   // generateRef always points to the latest handleGenerate so auto-run never has stale closures
@@ -540,6 +565,31 @@ export default function DashboardPage() {
       }
     } catch { /* ignore */ }
   }, [])
+
+  // Fetch MF trackers for risk profile funds when profile is set
+  useEffect(() => {
+    if (!riskProfile) { setRiskMfTrackers({}); return }
+    Promise.all(
+      riskProfile.funds.map(f =>
+        fetch(`/api/mffunds/byindex?indexName=${encodeURIComponent(f.name)}`)
+          .then(r => r.json())
+          .then((d: unknown) => {
+            const arr = Array.isArray(d) ? d : []
+            const top = arr[0] as { scheme_name?: string; fund_house?: string } | undefined
+            return {
+              id: f.id,
+              schemeName: top?.scheme_name ?? '',
+              amcLogo: top?.fund_house ? amcLogoUrl(top.fund_house) : null,
+            }
+          })
+          .catch(() => ({ id: f.id, schemeName: '', amcLogo: null }))
+      )
+    ).then(results => {
+      const map: Record<number, { schemeName: string; amcLogo: string | null }> = {}
+      results.forEach(r => { map[r.id] = { schemeName: r.schemeName, amcLogo: r.amcLogo } })
+      setRiskMfTrackers(map)
+    })
+  }, [riskProfile])
 
   useEffect(() => {
     fetch("/api/funds")
@@ -684,6 +734,7 @@ export default function DashboardPage() {
             onRetake={handleRetakeQuestionnaire}
             onWhy={() => setWhyOpen(v => !v)}
             whyOpen={whyOpen}
+            mfTrackers={riskMfTrackers}
           />
         )}
 

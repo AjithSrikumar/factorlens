@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { X, Plus, ChevronDown, Search, Equal } from "lucide-react"
+import { amcLogoUrl } from "@/lib/amc"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -47,6 +48,39 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [catFilter, setCatFilter] = useState("All")
+  // MF trackers: keyed by fund code
+  const [mfTrackers, setMfTrackers] = useState<Record<string, { schemeName: string; amcLogo: string | null }>>({})
+  const fetchedCodes = useRef<Set<string>>(new Set())
+
+  // Fetch MF tracker for any newly added fund
+  useEffect(() => {
+    const toFetch = allocations.filter(a => !fetchedCodes.current.has(a.fund.code))
+    if (toFetch.length === 0) return
+    toFetch.forEach(a => fetchedCodes.current.add(a.fund.code))
+    Promise.all(
+      toFetch.map(a =>
+        fetch(`/api/mffunds/byindex?indexName=${encodeURIComponent(a.fund.name)}`)
+          .then(r => r.json())
+          .then((d: unknown) => {
+            const arr = Array.isArray(d) ? d : []
+            const top = arr[0] as { scheme_name?: string; fund_house?: string } | undefined
+            return {
+              code: a.fund.code,
+              schemeName: top?.scheme_name ?? '',
+              amcLogo: top?.fund_house ? amcLogoUrl(top.fund_house) : null,
+            }
+          })
+          .catch(() => ({ code: a.fund.code, schemeName: '', amcLogo: null }))
+      )
+    ).then(results => {
+      setMfTrackers(prev => {
+        const next = { ...prev }
+        results.forEach(r => { next[r.code] = { schemeName: r.schemeName, amcLogo: r.amcLogo } })
+        return next
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allocations.length])
 
   const categories = ["All", ...Array.from(new Set(funds.map((f) => f.category)))]
   const totalWeight = allocations.reduce((sum, a) => sum + a.weight, 0)
@@ -157,6 +191,21 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
                       {a.fund.code}
                     </span>
                   </div>
+                  {/* MF tracker — AMC logo + scheme name */}
+                  {mfTrackers[a.fund.code]?.schemeName && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      {mfTrackers[a.fund.code].amcLogo && (
+                        <img
+                          src={mfTrackers[a.fund.code].amcLogo!}
+                          alt=""
+                          style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+                        />
+                      )}
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        {mfTrackers[a.fund.code].schemeName}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <div className="text-right">

@@ -7,6 +7,7 @@ export interface NavPoint {
 
 export interface PortfolioMetrics {
   cagr: number
+  cagr_10y: number | null   // CAGR over last 10 years (null if < 10Y of data)
   volatility: number
   sharpe: number
   maxDrawdown: number
@@ -245,8 +246,20 @@ export function computeAllMetrics(navSeries: NavPoint[]): PortfolioMetrics {
     ? (navSeries[navSeries.length - 1].value / navSeries[0].value - 1) * 100
     : 0
 
+  // 10-year CAGR: slice the last 10 calendar years
+  let cagr_10y: number | null = null
+  if (navSeries.length > 1) {
+    const endDate = navSeries[navSeries.length - 1].date
+    const tenYAgo = endDate.slice(0, 4).replace(/\d{4}/, y => String(parseInt(y) - 10)) + endDate.slice(4)
+    const from10y = navSeries.filter(n => n.date >= tenYAgo)
+    if (from10y.length >= 200) {   // at least ~200 trading days of 10Y window
+      cagr_10y = computeCAGR(from10y)
+    }
+  }
+
   return {
     cagr,
+    cagr_10y,
     volatility: vol,
     sharpe,
     maxDrawdown: maxDD,

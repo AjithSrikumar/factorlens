@@ -23,9 +23,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No allocations provided' }, { status: 400 })
     }
 
-    const totalWeight = allocations.reduce((sum, a) => sum + a.weight, 0)
-    if (Math.abs(totalWeight - 100) > 0.5) {
-      return NextResponse.json({ error: 'Weights must sum to 100' }, { status: 400 })
+    // Normalise weights in case of small floating-point drift (e.g. 99.97 → 100)
+    const rawTotal = allocations.reduce((sum, a) => sum + a.weight, 0)
+    if (rawTotal <= 0 || Math.abs(rawTotal - 100) > 2) {
+      return NextResponse.json({ error: 'Weights must sum to approximately 100' }, { status: 400 })
+    }
+    if (Math.abs(rawTotal - 100) > 0.01) {
+      allocations.forEach(a => { a.weight = (a.weight / rawTotal) * 100 })
     }
 
     // Look up Nifty 50 (N50) by code to avoid hardcoding ID
@@ -131,6 +135,8 @@ export async function POST(req: NextRequest) {
         funds:      fyTableFunds,
         benchmark:  fyTableBenchmark,
       },
+      // Funds excluded from backtest due to no NAV data (e.g. not yet scraped)
+      skippedFundIds: missingFunds.map(f => f.fundId),
     })
   } catch (e) {
     console.error(e)
