@@ -11,7 +11,7 @@ const supabase = createClient(
     : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-const MFAPI_BASE = 'https://api.mfapi.in/mf'
+const AMFI_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt'
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -46,85 +46,34 @@ function mfapiDateToISO(s: string): string {
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
 }
 
-// ── mfapi fetchers ────────────────────────────────────────────────────────────
+// ── AMFI NAV fetcher ──────────────────────────────────────────────────────────
+//
+// AMFI publishes all fund NAVs in a single text file daily.
+// Format per data line: SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date
+// e.g.  120503;INF174KA1LS2;INF174KA1LT0;Kotak Banking and PSU Debt;10.2958;22-Mar-2026
+//
+// One request replaces 286 individual mfapi.in calls (which time out from Vercel).
 
-interface MfLatest {
-  date: string   // ISO
-  nav:  number
-}
+async function fetchAmfiNavs(
+  log: string[],
+): Promise<Map<number, { date: string; nav: number }>> {
+  const res = await fetch(AMFI_NAV_URL, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`AMFI HTTP ${res.status}`)
+  const text = await res.text()
 
-
-interface FetchFullResult {
-  latest:         MfLatest | null
-  rows:           MfLatest[]   // all entries after `afterDate`, newest-first
-  fundHouse:      string
-  schemeCategory: string
-}
-
-/**
- * Single fetch per fund: downloads full history from mfapi.in once and
- * returns the latest NAV, all rows newer than `afterDate`, and fund metadata.
- *
- * We use the full /{code} endpoint (not /{code}/latest) because Vercel's IPs
- * can reliably reach it — the /latest endpoint appears to be blocked.
- */
-// Captures the first fetch error for diagnostics (logged in the cron response)
-let _firstFetchError = ''
-
-async function fetchFull(
-  schemeCode: number,
-  afterDate: string,
-): Promise<FetchFullResult> {
-  const empty: FetchFullResult = { latest: null, rows: [], fundHouse: '', schemeCategory: '' }
-  try {
-    const res = await fetch(`${MFAPI_BASE}/${schemeCode}`, {
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!res.ok) {
-      if (!_firstFetchError) _firstFetchError = `HTTP ${res.status} for ${schemeCode}`
-      return empty
-    }
-    const json = await res.json() as {
-      status: string
-      data:   Array<{ date: string; nav: string }>
-      meta:   Record<string, string | number>
-    }
-    if (json.status !== 'SUCCESS' || !json.data?.length) {
-      if (!_firstFetchError) _firstFetchError = `status=${json.status} dataLen=${json.data?.length ?? 0} for ${schemeCode}`
-      return empty
-    }
-
-    const rows: MfLatest[] = []
-    for (const entry of json.data) {
-      const date = mfapiDateToISO(entry.date)
-      const nav  = parseFloat(entry.nav)
-      if (date && !isNaN(nav) && nav > 0 && date > afterDate) {
-        rows.push({ date, nav })
-      }
-    }
-
-    // data[0] is the most recent entry (mfapi returns newest-first)
-    const first = json.data[0]
-    const latestDate = mfapiDateToISO(first.date)
-    const latestNav  = parseFloat(first.nav)
-    const latest: MfLatest | null =
-      latestDate && !isNaN(latestNav) && latestNav > 0
-        ? { date: latestDate, nav: latestNav }
-        : null
-    if (!latest && !_firstFetchError) {
-      _firstFetchError = `latest=null rawDate=${first.date} rawNav=${first.nav} for ${schemeCode}`
-    }
-
-    return {
-      latest,
-      rows,
-      fundHouse:      String(json.meta?.['fund_house']      ?? ''),
-      schemeCategory: String(json.meta?.['scheme_category'] ?? ''),
-    }
-  } catch (e) {
-    if (!_firstFetchError) _firstFetchError = String(e)
-    return empty
+  const navMap = new Map<number, { date: string; nav: number }>()
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split(';')
+    if (parts.length < 6) continue
+    const schemeCode = parseInt(parts[0], 10)
+    if (isNaN(schemeCode)) continue
+    const nav  = parseFloat(parts[4])
+    const date = mfapiDateToISO(parts[5])
+    if (!date || isNaN(nav) || nav <= 0) continue
+    navMap.set(schemeCode, { date, nav })
   }
+  log.push(`[mf-eod] AMFI: parsed ${navMap.size} NAV entries`)
+  return navMap
 }
 
 // ── Returns computation from stored mf_nav_data ────────────────────────────
@@ -313,57 +262,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 3. Fetch latest NAV from mfapi in batches of 20 ───────────────────
-    const BATCH_SIZE     = 20
-    const BATCH_DELAY_MS = 500   // ms between batches (be polite to mfapi)
+    // ── 3. Fetch all NAVs from AMFI in one request ────────────────────────
+    let amfiNavs: Map<number, { date: string; nav: number }>
+    try {
+      amfiNavs = await fetchAmfiNavs(log)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      log.push(`[mf-eod] AMFI fetch failed: ${msg}`)
+      return NextResponse.json({ ok: false, error: msg, log }, { status: 500 })
+    }
 
-    _firstFetchError = ''
     let totalInserted  = 0
     let totalSkipped   = 0
     let totalErrors    = 0
     const toInsert: Array<{ scheme_code: number; date: string; nav: number }> = []
-    // Metadata captured during full backfill fetches
     const metaBySch = new Map<number, { fundHouse: string; schemeCategory: string }>()
 
-    for (let i = 0; i < mfFunds.length; i += BATCH_SIZE) {
-      const batch = mfFunds.slice(i, i + BATCH_SIZE)
-
-      await Promise.all(
-        batch.map(async ({ scheme_code }) => {
-          const lastDate = latestDateByScheme.get(scheme_code) ?? '2000-01-01'
-
-          // Single fetch per fund — returns latest NAV + new rows + metadata
-          const result = await fetchFull(scheme_code, lastDate)
-
-          if (!result.latest) {
-            totalErrors++
-            return
-          }
-
-          // Already up to date
-          if (result.latest.date <= lastDate) {
-            totalSkipped++
-            return
-          }
-
-          // Store all rows newer than lastDate (handles both daily update and backfill)
-          for (const r of result.rows) {
-            toInsert.push({ scheme_code, date: r.date, nav: r.nav })
-          }
-
-          // Capture metadata (fund_house, scheme_category) from every fetch
-          if (result.fundHouse || result.schemeCategory) {
-            metaBySch.set(scheme_code, {
-              fundHouse:      result.fundHouse,
-              schemeCategory: result.schemeCategory,
-            })
-          }
-        })
-      )
-
-      if (i + BATCH_SIZE < mfFunds.length) {
-        await new Promise((r) => setTimeout(r, BATCH_DELAY_MS))
+    for (const { scheme_code } of mfFunds) {
+      const entry = amfiNavs.get(scheme_code)
+      if (!entry) {
+        totalErrors++
+        continue
       }
+      const lastDate = latestDateByScheme.get(scheme_code) ?? '2000-01-01'
+      if (entry.date <= lastDate) {
+        totalSkipped++
+        continue
+      }
+      toInsert.push({ scheme_code, date: entry.date, nav: entry.nav })
     }
 
     // ── 4. Upsert collected rows into mf_nav_data ─────────────────────────
@@ -399,7 +325,6 @@ export async function GET(req: NextRequest) {
 
     await computeAndStoreReturns(latestBySch, metaBySch, log)
 
-    if (_firstFetchError) log.push(`[mf-eod] first fetch error: ${_firstFetchError}`)
     log.push(
       `[mf-eod] done — inserted ${totalInserted} nav rows | skipped ${totalSkipped} (up to date) | errors ${totalErrors}`
     )
