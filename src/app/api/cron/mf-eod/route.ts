@@ -68,6 +68,9 @@ interface FetchFullResult {
  * We use the full /{code} endpoint (not /{code}/latest) because Vercel's IPs
  * can reliably reach it — the /latest endpoint appears to be blocked.
  */
+// Captures the first fetch error for diagnostics (logged in the cron response)
+let _firstFetchError = ''
+
 async function fetchFull(
   schemeCode: number,
   afterDate: string,
@@ -77,7 +80,10 @@ async function fetchFull(
     const res = await fetch(`${MFAPI_BASE}/${schemeCode}`, {
       signal: AbortSignal.timeout(30_000),
     })
-    if (!res.ok) return empty
+    if (!res.ok) {
+      if (!_firstFetchError) _firstFetchError = `HTTP ${res.status} for ${schemeCode}`
+      return empty
+    }
     const json = await res.json() as {
       status: string
       data:   Array<{ date: string; nav: string }>
@@ -109,7 +115,8 @@ async function fetchFull(
       fundHouse:      String(json.meta?.['fund_house']      ?? ''),
       schemeCategory: String(json.meta?.['scheme_category'] ?? ''),
     }
-  } catch {
+  } catch (e) {
+    if (!_firstFetchError) _firstFetchError = String(e)
     return empty
   }
 }
@@ -385,6 +392,7 @@ export async function GET(req: NextRequest) {
 
     await computeAndStoreReturns(latestBySch, metaBySch, log)
 
+    if (_firstFetchError) log.push(`[mf-eod] first fetch error: ${_firstFetchError}`)
     log.push(
       `[mf-eod] done — inserted ${totalInserted} nav rows | skipped ${totalSkipped} (up to date) | errors ${totalErrors}`
     )
