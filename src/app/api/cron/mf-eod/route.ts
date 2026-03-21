@@ -139,8 +139,6 @@ async function computeAndStoreReturns(
     fetchWindow(addDays(today, -365 * 5 - 45), addDays(today, -365 * 5 + 45)),
   ])
 
-  const nowISO = new Date().toISOString()
-
   // Build upsert records
   const fundUpdates: Array<{
     scheme_code:     number
@@ -149,7 +147,6 @@ async function computeAndStoreReturns(
     return_1y:       number | null
     return_3y:       number | null
     return_5y:       number | null
-    last_sync:       string
     fund_house?:     string
     scheme_category?: string
   }> = []
@@ -166,7 +163,6 @@ async function computeAndStoreReturns(
       return_1y: nav1y ? cagrPct(nav1y, latest.nav, 1) : null,
       return_3y: nav3y ? cagrPct(nav3y, latest.nav, 3) : null,
       return_5y: nav5y ? cagrPct(nav5y, latest.nav, 5) : null,
-      last_sync: nowISO,
     }
 
     const meta = metaBySch.get(scheme_code)
