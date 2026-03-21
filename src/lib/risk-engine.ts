@@ -119,7 +119,7 @@ export const MF_ELIGIBLE_CODES = new Set([
   // Quality factor
   'N100Q30', 'MC150Q50', 'N200Q30', 'N500Q50',
   // Low-Volatility / Alpha-LowVol / Quality-LowVol
-  'N100LV30', 'NALV30', 'NQLV30', 'NLV50',
+  'N500LV50', 'NALV30', 'NQLV30', 'NLV50',
   // Alpha factor
   'NALPHA50', 'N100A30',
   // Value factor
@@ -130,7 +130,7 @@ export const MF_ELIGIBLE_CODES = new Set([
 export const GOLD_CODE = 'GOLD'
 
 /** Preferred Low-Volatility index codes, in order of preference */
-export const LOW_VOL_CODES = ['N100LV30', 'NLV50', 'NALV30', 'NQLV30']
+export const LOW_VOL_CODES = ['N500LV50', 'NLV50', 'NALV30', 'NQLV30']
 
 /** Fixed allocation weights (%) for Gold and Low-Vol slots, by risk category */
 const FIXED_ALLOC: Record<RiskCategory, { gold: number; lowvol: number }> = {
@@ -314,7 +314,7 @@ export function selectAndWeightFunds(
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
 
-  // Sort by preference order first (N100LV30 preferred), then by score
+  // Sort by preference order first (N500LV50 preferred), then by score
   lowVolCandidates.sort((a, b) => {
     const ai = LOW_VOL_CODES.indexOf(a.code)
     const bi = LOW_VOL_CODES.indexOf(b.code)
