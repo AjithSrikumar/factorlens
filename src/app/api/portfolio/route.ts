@@ -67,13 +67,22 @@ export async function POST(req: NextRequest) {
         navSeries: navByFund.get(a.fundId) ?? [],
       }))
 
-      // Validate all funds have NAV data
+      // Separate funds with and without NAV data
       const missingFunds = fundNavs.filter((f) => f.navSeries.length === 0)
-      if (missingFunds.length > 0) {
-        return NextResponse.json({ error: `No NAV data found for fund ID(s): ${missingFunds.map(f => f.fundId).join(', ')}` }, { status: 400 })
+      const validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
+
+      if (validFundNavs.length === 0) {
+        return NextResponse.json({ error: 'No NAV data found for any selected funds' }, { status: 400 })
       }
 
-    const portfolioNav = computePortfolioNav(fundNavs)
+      // If some funds have no NAV data, redistribute their weights proportionally among valid funds
+      if (missingFunds.length > 0) {
+        const validTotalWeight = validFundNavs.reduce((s, f) => s + f.weight, 0)
+        validFundNavs.forEach(f => { f.weight = (f.weight / validTotalWeight) * 100 })
+        console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
+      }
+
+    const portfolioNav = computePortfolioNav(validFundNavs)
     const metrics = computeAllMetrics(portfolioNav)
     const drawdownSeries = computeDrawdownSeries(portfolioNav)
     const rollingReturns = computeRolling3YCAGR(portfolioNav)
@@ -97,10 +106,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Compute FY raw data for the detail table (done server-side to keep response small)
+    // Compute FY raw data for the detail table — use validFundNavs so missing funds are excluded
     const today = new Date().toISOString().slice(0, 10)
     const fyTableFunds: Record<number, FYRawRow[]> = {}
-    for (const alloc of allocations) {
+    for (const alloc of validFundNavs) {
       const raw = navByFund.get(alloc.fundId) ?? []
       fyTableFunds[alloc.fundId] = computeFYRawRows(raw, today)
     }

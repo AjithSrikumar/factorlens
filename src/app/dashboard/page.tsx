@@ -524,7 +524,10 @@ export default function DashboardPage() {
   const [isDefault, setIsDefault] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)  // closed by default
   const resultsRef = useRef<HTMLDivElement>(null)
-  const hasAutoRun = useRef(false)
+  // pendingRun: set to true when we want the next allocation load to auto-trigger a backtest
+  const pendingRun = useRef(false)
+  // generateRef always points to the latest handleGenerate so auto-run never has stale closures
+  const generateRef = useRef<() => void>(() => {})
 
   // Check localStorage for existing risk profile on mount
   useEffect(() => {
@@ -546,7 +549,7 @@ export default function DashboardPage() {
         setFundsLoading(false)
 
         if (riskProfile) {
-          // Populate from risk recommendation
+          // Populate from risk recommendation — only include funds found in the DB
           const allocs = riskProfile.funds
             .map(rf => {
               const f = data.find((d) => d.id === rf.id)
@@ -554,7 +557,13 @@ export default function DashboardPage() {
             })
             .filter(Boolean) as FundAllocation[]
           if (allocs.length > 0) {
-            setAllocations(allocs)
+            // Re-normalise weights in case some funds were missing
+            const totalW = allocs.reduce((s, a) => s + a.weight, 0)
+            const normalised = totalW > 0 && Math.abs(totalW - 100) > 0.5
+              ? allocs.map(a => ({ ...a, weight: Math.round((a.weight / totalW) * 100) }))
+              : allocs
+            setAllocations(normalised)
+            pendingRun.current = true   // trigger auto-backtest once allocations arrive
             return
           }
         }
@@ -566,6 +575,7 @@ export default function DashboardPage() {
         if (defaultFunds.length === DEFAULT_FUND_IDS.length) {
           setAllocations(defaultFunds.map((f) => ({ fund: f, weight: 100 / DEFAULT_FUND_IDS.length })))
           setIsDefault(true)
+          pendingRun.current = true   // trigger auto-backtest for default portfolio
         }
       })
       .catch(() => setFundsLoading(false))
@@ -595,34 +605,32 @@ export default function DashboardPage() {
     }
   }, [allocations])
 
-  // Auto-run when default portfolio is pre-loaded
-  useEffect(() => {
-    if (isDefault && allocations.length === DEFAULT_FUND_IDS.length && !result) {
-      handleGenerate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDefault, allocations.length])
+  // Keep generateRef pointing to the latest handleGenerate on every render
+  generateRef.current = handleGenerate
 
-  // Auto-run when risk-recommended portfolio is loaded
+  // Single auto-run: fires whenever allocations change.
+  // Uses pendingRun (a ref, not state) so it never causes stale-closure issues.
+  // generateRef always holds the latest handleGenerate with up-to-date allocations.
   useEffect(() => {
-    if (riskProfile && allocations.length > 0 && !result && !loading && !hasAutoRun.current) {
-      hasAutoRun.current = true
-      handleGenerate()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [riskProfile, allocations.length])
+    if (!pendingRun.current || allocations.length === 0) return
+    pendingRun.current = false
+    generateRef.current()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allocations.length])   // fire when allocation count changes (0 → N after fund fetch)
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
-    hasAutoRun.current = false
+    pendingRun.current = true    // backtest will run once new allocations arrive
     setResult(null)
+    setAllocations([])           // clear stale allocations so old data never triggers the run
+    setIsDefault(false)
     setRiskProfile(profile)
     setStep('portfolio')
   }, [])
 
   const handleRetakeQuestionnaire = useCallback(() => {
     try { localStorage.removeItem('fl_risk_profile') } catch { /* ignore */ }
-    hasAutoRun.current = false
+    pendingRun.current = false   // cancel any pending auto-run
     setRiskProfile(null)
     setResult(null)
     setAllocations([])
@@ -647,7 +655,7 @@ export default function DashboardPage() {
     return (
       <RiskQuestionnaire
         onComplete={handleQuestionnaireComplete}
-        onSkip={() => { hasAutoRun.current = false; setStep('portfolio') }}
+        onSkip={() => { pendingRun.current = false; setResult(null); setAllocations([]); setIsDefault(false); setStep('portfolio') }}
       />
     )
   }
