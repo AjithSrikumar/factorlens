@@ -317,13 +317,24 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 5. Compute & store 1y/3y/5y returns → mf_funds ───────────────────
-    // Build the latest-nav map for all schemes that received new NAV data.
-    // This replaces the old step that wrote to the `funds` (NSE indices) table.
+    // Build the latest-nav map for ALL funds (not just today's inserts) so
+    // that returns are recomputed even on holidays / already-up-to-date days.
     const latestBySch = new Map<number, { date: string; nav: number }>()
+
+    // Prefer today's fresh inserts first
     for (const r of toInsert) {
       const prev = latestBySch.get(r.scheme_code)
       if (!prev || r.date > prev.date) {
         latestBySch.set(r.scheme_code, { date: r.date, nav: r.nav })
+      }
+    }
+
+    // Fill in any funds not in today's insert from the stored latest NAV
+    for (const { scheme_code } of mfFunds) {
+      if (latestBySch.has(scheme_code)) continue
+      const amfiEntry = amfiNavs.get(scheme_code)
+      if (amfiEntry) {
+        latestBySch.set(scheme_code, amfiEntry)
       }
     }
 
