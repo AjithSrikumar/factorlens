@@ -94,6 +94,10 @@ function scoreBarWidth(raw: number | null | undefined): string {
   return `${Math.min(Math.max((100 - raw) / 10, 0), 10) * 10}%`
 }
 
+function toTitleCase(str: string) {
+  return str.replace(/\b\w+\b/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+}
+
 function RankBadge({ rank }: { rank: number | null }) {
   const style = rank === 1
     ? { background: "#FEF3C7", color: "#92400E" }
@@ -125,6 +129,7 @@ export default function RankingsPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [chartCache, setChartCache] = useState<Record<number, ChartData>>({})
   const [chartLoading, setChartLoading] = useState(false)
+  const [unrankedExpanded, setUnrankedExpanded] = useState(false)
 
   useEffect(() => {
     fetch("/api/funds")
@@ -228,12 +233,7 @@ export default function RankingsPage() {
     { key: "final_rank",            label: "Rank" },
     { key: "name",                  label: "Fund" },
     { key: "category",              label: "Category" },
-    { key: "cagr",                  label: "Inception",  title: "CAGR since inception" },
-    { key: "cagr_20y",              label: "20Y",        title: "20-year CAGR" },
-    { key: "cagr_10y",              label: "10Y",        title: "10-year CAGR" },
-    { key: "cagr_5y",               label: "5Y",         title: "5-year CAGR" },
-    { key: "cagr_3y",               label: "3Y",         title: "3-year CAGR" },
-    { key: "cagr_1y",               label: "1Y",         title: "1-year CAGR" },
+    { key: "cagr_10y",              label: "10Y CAGR",   title: "10-year CAGR" },
     { key: "avg_3y_rolling_return", label: "Avg 3Y Roll", title: "Average 3-year rolling return" },
     { key: "sharpe_ratio",          label: "Sharpe" },
     { key: "max_drawdown",          label: "Max DD" },
@@ -503,18 +503,16 @@ export default function RankingsPage() {
                           <td style={{ padding: "13px 16px" }}>
                             <RankBadge rank={fund.final_rank} />
                           </td>
-                          <td style={{ padding: "13px 16px", maxWidth: 220, fontSize: 13.5, verticalAlign: "middle" }}>
+                          <td style={{ padding: "13px 16px", maxWidth: 260, fontSize: 13.5, verticalAlign: "middle" }}>
                             <Link
                               href={`/rankings/${fund.id}`}
-                              style={{ fontWeight: 600, letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none" }}
+                              style={{ fontWeight: 600, letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none", lineHeight: 1.35 }}
                               className="hover:!text-[#1A56DB]"
                               onClick={e => e.stopPropagation()}
                             >
-                              <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>
-                                {fund.name}
-                              </span>
+                              {toTitleCase(fund.name)}
                             </Link>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 2 }}>
                               {fund.code}
                             </div>
                           </td>
@@ -527,18 +525,10 @@ export default function RankingsPage() {
                               {fund.category}
                             </span>
                           </td>
-                          {/* Inception CAGR */}
-                          <td style={{ padding: "13px 16px", verticalAlign: "middle" }}>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: (fund.cagr ?? 0) > 0.18 ? "#0A7C4E" : "#0C0E13" }}>
-                              {pct(fund.cagr)}
-                            </span>
+                          {/* 10Y CAGR */}
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: (fund.cagr_10y ?? 0) > 0.15 ? "#0A7C4E" : "#0C0E13", verticalAlign: "middle" }}>
+                            {pct(fund.cagr_10y)}
                           </td>
-                          {/* Period CAGRs */}
-                          {([fund.cagr_20y, fund.cagr_10y, fund.cagr_5y, fund.cagr_3y, fund.cagr_1y] as (number | null)[]).map((v, i) => (
-                            <td key={i} style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.65)", verticalAlign: "middle" }}>
-                              {pct(v)}
-                            </td>
-                          ))}
                           <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>
                             {pct(fund.avg_3y_rolling_return)}
                           </td>
@@ -570,7 +560,7 @@ export default function RankingsPage() {
 
                         {expandedId === fund.id && (
                           <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
-                            <td colSpan={14} style={{ padding: "22px 24px" }}>
+                            <td colSpan={9} style={{ padding: "22px 24px" }}>
                               <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.12)", borderRadius: 16, overflow: "hidden" }}>
                                 <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                                   <span style={{ fontWeight: 700, fontSize: 14 }}>{fund.name}</span>
@@ -593,110 +583,116 @@ export default function RankingsPage() {
           </div>
         </div>
 
-        {/* Unranked section — insufficient history */}
+        {/* Unranked section — insufficient history (desktop only; mobile rendered below ranked cards) */}
         {!loading && unrankedSorted.length > 0 && (
-          <div style={{ marginTop: 32 }}>
-            <div style={{ marginBottom: 12 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: "#0C0E13", marginBottom: 3 }}>
-                Not Ranked — Insufficient History
-              </h2>
-              <p style={{ fontSize: 12.5, color: "rgba(12,14,19,.4)" }}>
-                These {unrankedSorted.length} indices have less than 10 years of data and are excluded from the ranking.
-              </p>
-            </div>
-            <div className="hidden md:block" style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.10)", borderRadius: 16, overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ background: "#F5F5F3" }}>
-                      {[
-                        { label: "Fund" }, { label: "Category" },
-                        { label: "Inception CAGR" }, { label: "20Y" }, { label: "10Y" },
-                        { label: "5Y" }, { label: "3Y" }, { label: "1Y" },
-                        { label: "Avg 3Y Roll" }, { label: "Sharpe" }, { label: "Max DD" },
-                      ].map(col => (
-                        <th key={col.label} style={{
-                          padding: "9px 16px", textAlign: "left",
-                          fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
-                          textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)",
-                          borderBottom: "1px solid rgba(12,14,19,.10)", whiteSpace: "nowrap" as const,
-                        }}>
-                          {col.label}
-                        </th>
-                      ))}
-                      <th style={{ width: 32, borderBottom: "1px solid rgba(12,14,19,.10)" }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unrankedSorted.map((fund) => (
-                      <>
-                        <tr
-                          key={fund.id}
-                          style={{ borderBottom: "1px solid rgba(12,14,19,.06)", cursor: "pointer", background: expandedId === fund.id ? "#EBF0FF" : undefined }}
-                          className={expandedId !== fund.id ? "hover:bg-[#F5F5F3]" : ""}
-                          onClick={() => handleToggleExpand(fund.id)}
-                        >
-                          <td style={{ padding: "12px 16px", maxWidth: 220, fontSize: 13.5, verticalAlign: "middle" }}>
-                            <Link href={`/rankings/${fund.id}`} style={{ fontWeight: 600, color: "#0C0E13", textDecoration: "none" }} className="hover:!text-[#1A56DB]" onClick={e => e.stopPropagation()}>
-                              <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 200 }}>{fund.name}</span>
-                            </Link>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>{fund.code}</div>
-                          </td>
-                          <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
-                            <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
-                          </td>
-                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle", color: "#0C0E13" }}>{pct(fund.cagr)}</td>
-                          {([fund.cagr_20y, fund.cagr_10y, fund.cagr_5y, fund.cagr_3y, fund.cagr_1y] as (number | null)[]).map((v, i) => (
-                            <td key={i} style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>{pct(v)}</td>
-                          ))}
-                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>{pct(fund.avg_3y_rolling_return)}</td>
-                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle" }}>
-                            <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.6 ? "#1A56DB" : "#0C0E13" }}>{fixed(fund.sharpe_ratio)}</span>
-                          </td>
-                          <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E", verticalAlign: "middle" }}>{pct(fund.max_drawdown)}</td>
-                          <td style={{ padding: "12px 16px", color: "rgba(12,14,19,.3)", verticalAlign: "middle" }}>
-                            <svg style={{ width: 18, height: 18, transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
-                              <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </td>
-                        </tr>
-                        {expandedId === fund.id && (
-                          <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
-                            <td colSpan={12} style={{ padding: "22px 24px" }}>
-                              <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.12)", borderRadius: 16, overflow: "hidden" }}>
-                                <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                                  <span style={{ fontWeight: 700, fontSize: 14 }}>{fund.name}</span>
-                                  <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
-                                </div>
-                                <div style={{ padding: "20px" }}><FundCharts fund={fund} /></div>
-                              </div>
+          <div className="hidden md:block" style={{ marginTop: 32 }}>
+            {/* Collapsible header */}
+            <button
+              onClick={() => setUnrankedExpanded(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 18px", borderRadius: unrankedExpanded ? "12px 12px 0 0" : 12,
+                background: "#ffffff", border: "1px solid rgba(12,14,19,.10)",
+                cursor: "pointer", fontFamily: "inherit", transition: "border-radius .2s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0C0E13" }}>
+                  Not Ranked — Insufficient History
+                </span>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 100,
+                  background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.45)",
+                }}>
+                  {unrankedSorted.length} indices
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11.5, color: "rgba(12,14,19,.35)", fontWeight: 500 }}>
+                  {unrankedExpanded ? "Collapse" : "Expand to view"}
+                </span>
+                <svg style={{ width: 18, height: 18, color: "rgba(12,14,19,.35)", transition: "transform .22s ease", transform: unrankedExpanded ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                  <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </button>
+
+            {unrankedExpanded && (
+              <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.10)", borderTop: "none", borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
+                <p style={{ fontSize: 12, color: "rgba(12,14,19,.4)", padding: "8px 18px 10px", borderBottom: "1px solid rgba(12,14,19,.06)" }}>
+                  These indices have less than 10 years of data and are excluded from the ranking.
+                </p>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#F5F5F3" }}>
+                        {[
+                          { label: "Fund" }, { label: "Category" },
+                          { label: "10Y CAGR" }, { label: "Avg 3Y Roll" },
+                          { label: "Sharpe" }, { label: "Max DD" },
+                        ].map(col => (
+                          <th key={col.label} style={{
+                            padding: "9px 16px", textAlign: "left",
+                            fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+                            textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)",
+                            borderBottom: "1px solid rgba(12,14,19,.10)", whiteSpace: "nowrap" as const,
+                          }}>
+                            {col.label}
+                          </th>
+                        ))}
+                        <th style={{ width: 32, borderBottom: "1px solid rgba(12,14,19,.10)" }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unrankedSorted.map((fund) => (
+                        <>
+                          <tr
+                            key={fund.id}
+                            style={{ borderBottom: "1px solid rgba(12,14,19,.06)", cursor: "pointer", background: expandedId === fund.id ? "#EBF0FF" : undefined }}
+                            className={expandedId !== fund.id ? "hover:bg-[#F5F5F3]" : ""}
+                            onClick={() => handleToggleExpand(fund.id)}
+                          >
+                            <td style={{ padding: "12px 16px", maxWidth: 260, fontSize: 13.5, verticalAlign: "middle" }}>
+                              <Link href={`/rankings/${fund.id}`} style={{ fontWeight: 600, color: "#0C0E13", textDecoration: "none", lineHeight: 1.35 }} className="hover:!text-[#1A56DB]" onClick={e => e.stopPropagation()}>
+                                {toTitleCase(fund.name)}
+                              </Link>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 2 }}>{fund.code}</div>
+                            </td>
+                            <td style={{ padding: "12px 16px", verticalAlign: "middle" }}>
+                              <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                            </td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle", fontWeight: 700, color: (fund.cagr_10y ?? 0) > 0.15 ? "#0A7C4E" : "#0C0E13" }}>{pct(fund.cagr_10y)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.5)", verticalAlign: "middle" }}>{pct(fund.avg_3y_rolling_return)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle" }}>
+                              <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.6 ? "#1A56DB" : "#0C0E13" }}>{fixed(fund.sharpe_ratio)}</span>
+                            </td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E", verticalAlign: "middle" }}>{pct(fund.max_drawdown)}</td>
+                            <td style={{ padding: "12px 16px", color: "rgba(12,14,19,.3)", verticalAlign: "middle" }}>
+                              <svg style={{ width: 18, height: 18, transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                                <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
                             </td>
                           </tr>
-                        )}
-                      </>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            {/* Mobile unranked list */}
-            <div className="md:hidden" style={{ border: "1px solid rgba(12,14,19,.10)", borderRadius: 16, overflow: "hidden", background: "#ffffff" }}>
-              {unrankedSorted.map(fund => (
-                <div key={fund.id} style={{ borderBottom: "1px solid rgba(12,14,19,.08)", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Link href={`/rankings/${fund.id}`} style={{ fontSize: 13.5, fontWeight: 700, color: "#0C0E13", textDecoration: "none", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fund.name}</Link>
-                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-                      <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", background: "rgba(12,14,19,.06)", padding: "1px 6px", borderRadius: 4 }}>{fund.code}</span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#0C0E13" }}>{pct(fund.cagr)}</div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.4)", marginTop: 2 }}>Inception CAGR</div>
-                  </div>
+                          {expandedId === fund.id && (
+                            <tr key={`${fund.id}-charts`} style={{ borderBottom: "1px solid rgba(26,86,219,.15)", background: "rgba(235,240,255,.4)" }}>
+                              <td colSpan={7} style={{ padding: "22px 24px" }}>
+                                <div style={{ background: "#ffffff", border: "1px solid rgba(12,14,19,.12)", borderRadius: 16, overflow: "hidden" }}>
+                                  <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(12,14,19,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                    <span style={{ fontWeight: 700, fontSize: 14 }}>{toTitleCase(fund.name)}</span>
+                                    <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                                  </div>
+                                  <div style={{ padding: "20px" }}><FundCharts fund={fund} /></div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -729,10 +725,10 @@ export default function RankingsPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Link
                       href={`/rankings/${fund.id}`}
-                      style={{ fontSize: 14, fontWeight: 700, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none" }}
+                      style={{ fontSize: 14, fontWeight: 700, display: "block", letterSpacing: "-.1px", color: "#0C0E13", textDecoration: "none", lineHeight: 1.35 }}
                       onClick={e => e.stopPropagation()}
                     >
-                      {fund.name}
+                      {toTitleCase(fund.name)}
                     </Link>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
                       <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>
@@ -772,30 +768,10 @@ export default function RankingsPage() {
                 {/* Expanded content */}
                 {expandedId === fund.id && (
                   <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", background: "#F5F5F3" }}>
-                    {/* CAGR periods grid */}
-                    <div style={{ margin: "14px 20px 0" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 8 }}>
-                        CAGR by Period
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", background: "#ffffff" }}>
-                        {[
-                          { label: "Inception", value: pct(fund.cagr) },
-                          { label: "20 Year",   value: pct(fund.cagr_20y) },
-                          { label: "10 Year",   value: pct(fund.cagr_10y) },
-                          { label: "5 Year",    value: pct(fund.cagr_5y) },
-                          { label: "3 Year",    value: pct(fund.cagr_3y) },
-                          { label: "1 Year",    value: pct(fund.cagr_1y) },
-                        ].map((m, i) => (
-                          <div key={m.label} style={{
-                            padding: "11px 13px",
-                            borderRight: i % 3 !== 2 ? "1px solid rgba(12,14,19,.12)" : undefined,
-                            borderBottom: i < 3 ? "1px solid rgba(12,14,19,.12)" : undefined,
-                          }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 4 }}>{m.label}</div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0A7C4E" }}>{m.value}</div>
-                          </div>
-                        ))}
-                      </div>
+                    {/* 10Y CAGR highlight */}
+                    <div style={{ margin: "14px 20px 0", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", background: "#ffffff", padding: "12px 15px" }}>
+                      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".7px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 4 }}>10-Year CAGR</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 700, color: (fund.cagr_10y ?? 0) > 0.15 ? "#0A7C4E" : "#0C0E13" }}>{pct(fund.cagr_10y)}</div>
                     </div>
                     {/* 2×2 metrics grid */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", border: "1px solid rgba(12,14,19,.12)", borderRadius: 10, overflow: "hidden", margin: "10px 20px", background: "#ffffff" }}>
@@ -869,6 +845,51 @@ export default function RankingsPage() {
         <p style={{ fontSize: 11.5, color: "rgba(12,14,19,.3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
           {rankedSorted.length} ranked · {unrankedSorted.length} unranked · {funds.length} total NSE indices · NSE India data · Past performance is not a guarantee of future returns.
         </p>
+
+        {/* Mobile — unranked section pushed to bottom */}
+        {!loading && unrankedSorted.length > 0 && (
+          <div className="md:hidden" style={{ marginTop: 28 }}>
+            <button
+              onClick={() => setUnrankedExpanded(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "13px 18px", borderRadius: unrankedExpanded ? "12px 12px 0 0" : 12,
+                background: "#ffffff", border: "1px solid rgba(12,14,19,.10)",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#0C0E13" }}>Not Ranked — Insufficient History</span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.45)" }}>
+                  {unrankedSorted.length}
+                </span>
+              </div>
+              <svg style={{ width: 18, height: 18, color: "rgba(12,14,19,.35)", transition: "transform .22s ease", transform: unrankedExpanded ? "rotate(180deg)" : "none", flexShrink: 0 }} viewBox="0 0 18 18" fill="none">
+                <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {unrankedExpanded && (
+              <div style={{ border: "1px solid rgba(12,14,19,.10)", borderTop: "none", borderRadius: "0 0 16px 16px", overflow: "hidden", background: "#ffffff" }}>
+                {unrankedSorted.map(fund => (
+                  <div key={fund.id} style={{ borderBottom: "1px solid rgba(12,14,19,.08)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Link href={`/rankings/${fund.id}`} style={{ fontSize: 13.5, fontWeight: 700, color: "#0C0E13", textDecoration: "none", lineHeight: 1.35 }}>{toTitleCase(fund.name)}</Link>
+                      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                        <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", background: "rgba(12,14,19,.06)", padding: "1px 6px", borderRadius: 4 }}>{fund.code}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: (fund.cagr_10y ?? 0) > 0.15 ? "#0A7C4E" : "#0C0E13" }}>{pct(fund.cagr_10y)}</div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.4)", marginTop: 2 }}>10Y CAGR</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>
