@@ -183,7 +183,11 @@ async function computeAndStoreReturns(
     const { error } = await supabase
       .from('mf_funds')
       .upsert(fundUpdates.slice(i, i + CHUNK), { onConflict: 'scheme_code' })
-    if (!error) updated += Math.min(CHUNK, fundUpdates.length - i)
+    if (error) {
+      log.push(`[mf-eod] mf_funds upsert error (chunk ${i / CHUNK + 1}): ${error.message}`)
+      break
+    }
+    updated += Math.min(CHUNK, fundUpdates.length - i)
   }
   log.push(`[mf-eod] mf_funds updated with returns for ${updated} / ${fundUpdates.length} schemes`)
 }
