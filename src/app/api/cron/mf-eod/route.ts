@@ -53,70 +53,64 @@ interface MfLatest {
   nav:  number
 }
 
-interface BackfillResult {
-  rows:           MfLatest[]
+
+interface FetchFullResult {
+  latest:         MfLatest | null
+  rows:           MfLatest[]   // all entries after `afterDate`, newest-first
   fundHouse:      string
   schemeCategory: string
 }
 
-async function fetchLatest(schemeCode: number): Promise<MfLatest | null> {
-  try {
-    const res = await fetch(`${MFAPI_BASE}/${schemeCode}/latest`, {
-      signal: AbortSignal.timeout(10_000),
-    })
-    if (!res.ok) return null
-    const json = await res.json() as {
-      status: string
-      data: Array<{ date: string; nav: string }>
-    }
-    if (json.status !== 'SUCCESS' || !json.data?.length) return null
-    const row  = json.data[0]
-    const date = mfapiDateToISO(row.date)
-    const nav  = parseFloat(row.nav)
-    if (!date || isNaN(nav) || nav <= 0) return null
-    return { date, nav }
-  } catch {
-    return null
-  }
-}
-
 /**
- * Fetch full history since `afterDate` (exclusive) + fund metadata.
- * Called when a fund has no history yet, or has missed multiple days.
- * The full endpoint also returns meta (fund_house, scheme_category).
+ * Single fetch per fund: downloads full history from mfapi.in once and
+ * returns the latest NAV, all rows newer than `afterDate`, and fund metadata.
+ *
+ * We use the full /{code} endpoint (not /{code}/latest) because Vercel's IPs
+ * can reliably reach it — the /latest endpoint appears to be blocked.
  */
-async function fetchSince(
+async function fetchFull(
   schemeCode: number,
   afterDate: string,
-): Promise<BackfillResult> {
+): Promise<FetchFullResult> {
+  const empty: FetchFullResult = { latest: null, rows: [], fundHouse: '', schemeCategory: '' }
   try {
     const res = await fetch(`${MFAPI_BASE}/${schemeCode}`, {
       signal: AbortSignal.timeout(30_000),
     })
-    if (!res.ok) return { rows: [], fundHouse: '', schemeCategory: '' }
+    if (!res.ok) return empty
     const json = await res.json() as {
       status: string
       data:   Array<{ date: string; nav: string }>
       meta:   Record<string, string | number>
     }
-    if (json.status !== 'SUCCESS' || !json.data) {
-      return { rows: [], fundHouse: '', schemeCategory: '' }
-    }
+    if (json.status !== 'SUCCESS' || !json.data?.length) return empty
+
     const rows: MfLatest[] = []
-    for (const row of json.data) {
-      const date = mfapiDateToISO(row.date)
-      const nav  = parseFloat(row.nav)
+    for (const entry of json.data) {
+      const date = mfapiDateToISO(entry.date)
+      const nav  = parseFloat(entry.nav)
       if (date && !isNaN(nav) && nav > 0 && date > afterDate) {
         rows.push({ date, nav })
       }
     }
+
+    // data[0] is the most recent entry (mfapi returns newest-first)
+    const first = json.data[0]
+    const latestDate = mfapiDateToISO(first.date)
+    const latestNav  = parseFloat(first.nav)
+    const latest: MfLatest | null =
+      latestDate && !isNaN(latestNav) && latestNav > 0
+        ? { date: latestDate, nav: latestNav }
+        : null
+
     return {
+      latest,
       rows,
       fundHouse:      String(json.meta?.['fund_house']      ?? ''),
       schemeCategory: String(json.meta?.['scheme_category'] ?? ''),
     }
   } catch {
-    return { rows: [], fundHouse: '', schemeCategory: '' }
+    return empty
   }
 }
 
@@ -324,38 +318,31 @@ export async function GET(req: NextRequest) {
         batch.map(async ({ scheme_code }) => {
           const lastDate = latestDateByScheme.get(scheme_code) ?? '2000-01-01'
 
-          const latest = await fetchLatest(scheme_code)
+          // Single fetch per fund — returns latest NAV + new rows + metadata
+          const result = await fetchFull(scheme_code, lastDate)
 
-          if (!latest) {
+          if (!result.latest) {
             totalErrors++
             return
           }
 
           // Already up to date
-          if (latest.date <= lastDate) {
+          if (result.latest.date <= lastDate) {
             totalSkipped++
             return
           }
 
-          // Missed multiple days — backfill from full history
-          const dayDiff = (
-            new Date(latest.date).getTime() - new Date(lastDate).getTime()
-          ) / 86_400_000
+          // Store all rows newer than lastDate (handles both daily update and backfill)
+          for (const r of result.rows) {
+            toInsert.push({ scheme_code, date: r.date, nav: r.nav })
+          }
 
-          if (dayDiff > 3) {
-            // Full history fetch also returns fund metadata (fund_house, scheme_category)
-            const result = await fetchSince(scheme_code, lastDate)
-            for (const r of result.rows) {
-              toInsert.push({ scheme_code, date: r.date, nav: r.nav })
-            }
-            if (result.fundHouse || result.schemeCategory) {
-              metaBySch.set(scheme_code, {
-                fundHouse:      result.fundHouse,
-                schemeCategory: result.schemeCategory,
-              })
-            }
-          } else {
-            toInsert.push({ scheme_code, date: latest.date, nav: latest.nav })
+          // Capture metadata (fund_house, scheme_category) from every fetch
+          if (result.fundHouse || result.schemeCategory) {
+            metaBySch.set(scheme_code, {
+              fundHouse:      result.fundHouse,
+              schemeCategory: result.schemeCategory,
+            })
           }
         })
       )
