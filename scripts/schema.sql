@@ -62,3 +62,13 @@ CREATE TABLE IF NOT EXISTS mf_nav_data (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mf_nav_scheme_date ON mf_nav_data (scheme_code, date);
+
+-- ── 5. mf_funds computed columns ──────────────────────────────────────────────
+-- Migration: add pre-computed NAV + return columns so the API can serve
+-- the funds page instantly without hitting mfapi.in on every page load.
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS nav        NUMERIC(20,4);
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS nav_date   DATE;
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS return_1y  NUMERIC(8,4);
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS return_3y  NUMERIC(8,4);
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS return_5y  NUMERIC(8,4);
+ALTER TABLE mf_funds ADD COLUMN IF NOT EXISTS last_sync  TIMESTAMPTZ;
