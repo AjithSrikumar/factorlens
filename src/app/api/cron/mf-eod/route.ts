@@ -89,7 +89,10 @@ async function fetchFull(
       data:   Array<{ date: string; nav: string }>
       meta:   Record<string, string | number>
     }
-    if (json.status !== 'SUCCESS' || !json.data?.length) return empty
+    if (json.status !== 'SUCCESS' || !json.data?.length) {
+      if (!_firstFetchError) _firstFetchError = `status=${json.status} dataLen=${json.data?.length ?? 0} for ${schemeCode}`
+      return empty
+    }
 
     const rows: MfLatest[] = []
     for (const entry of json.data) {
@@ -108,6 +111,9 @@ async function fetchFull(
       latestDate && !isNaN(latestNav) && latestNav > 0
         ? { date: latestDate, nav: latestNav }
         : null
+    if (!latest && !_firstFetchError) {
+      _firstFetchError = `latest=null rawDate=${first.date} rawNav=${first.nav} for ${schemeCode}`
+    }
 
     return {
       latest,
@@ -311,6 +317,7 @@ export async function GET(req: NextRequest) {
     const BATCH_SIZE     = 20
     const BATCH_DELAY_MS = 500   // ms between batches (be polite to mfapi)
 
+    _firstFetchError = ''
     let totalInserted  = 0
     let totalSkipped   = 0
     let totalErrors    = 0
