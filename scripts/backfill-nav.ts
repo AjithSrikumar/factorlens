@@ -2,7 +2,7 @@
  * backfill-nav.ts — Fetch 5 years of historical NAV data from mfapi.in
  * and insert into mf_nav_data in Supabase.
  *
- * Run from the project root (Windows / Mac / Linux):
+ * Run from the project root:
  *   npx tsx scripts/backfill-nav.ts
  *
  * Reads credentials from .env.local automatically.
@@ -44,11 +44,11 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 const MFAPI_BASE  = 'https://api.mfapi.in/mf'
-const DELAY_MS    = 350   // delay between fund fetches (be polite)
+const DELAY_MS    = 400   // delay between fund fetches
 const CHUNK_SIZE  = 500   // rows per Supabase upsert
+const FETCH_TIMEOUT_MS = 20_000  // 20 s per fund
 
-// Only backfill funds whose oldest stored data is newer than this cutoff
-// (i.e., they have no 5-year history).  Set to yesterday to skip all.
+// Only backfill funds whose oldest stored data is newer than this cutoff.
 const BACKFILL_BEFORE = '2021-06-01'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -73,9 +73,50 @@ function bar(done: number, total: number, width = 30): string {
   return '[' + '█'.repeat(filled) + '░'.repeat(width - filled) + `] ${done}/${total}`
 }
 
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// ── Connectivity check ────────────────────────────────────────────────────────
+
+async function checkConnectivity(): Promise<boolean> {
+  const TEST_CODE = 120503  // UTI Nifty 50 Index Fund — always present
+  console.log(`Checking connectivity to mfapi.in (scheme ${TEST_CODE})…`)
+  try {
+    const res = await fetchWithTimeout(`${MFAPI_BASE}/${TEST_CODE}`, 10_000)
+    if (!res.ok) {
+      console.error(`  mfapi.in returned HTTP ${res.status}`)
+      return false
+    }
+    const json = await res.json() as { status: string; data?: unknown[] }
+    if (json.status !== 'SUCCESS') {
+      console.error(`  mfapi.in status: ${json.status}`)
+      return false
+    }
+    console.log(`  OK — mfapi.in is reachable (${(json.data ?? []).length} rows for test fund)\n`)
+    return true
+  } catch (e) {
+    console.error(`  mfapi.in unreachable: ${e}`)
+    return false
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // 0. Connectivity test
+  if (!await checkConnectivity()) {
+    console.error('\nmfapi.in is not reachable from this machine.')
+    console.error('Try: ping api.mfapi.in   or   curl https://api.mfapi.in/mf/120503')
+    process.exit(1)
+  }
+
   // 1. Load all scheme codes
   const { data: funds, error: fundsErr } = await supabase
     .from('mf_funds')
@@ -86,14 +127,19 @@ async function main() {
     console.error('Failed to load mf_funds:', fundsErr?.message)
     process.exit(1)
   }
-  console.log(`\nLoaded ${funds.length} funds from mf_funds`)
+  console.log(`Loaded ${funds.length} funds from mf_funds`)
 
   // 2. Get the earliest stored date per scheme (to know what's missing)
-  const { data: earliestRows } = await supabase
+  const { data: earliestRows, error: eErr } = await supabase
     .from('mf_nav_data')
     .select('scheme_code, date')
     .in('scheme_code', funds.map(f => f.scheme_code))
     .order('date', { ascending: true })
+
+  if (eErr) {
+    console.error('Failed to query mf_nav_data:', eErr.message)
+    process.exit(1)
+  }
 
   const earliestDate = new Map<number, string>()
   for (const row of earliestRows ?? []) {
@@ -115,19 +161,17 @@ async function main() {
   console.log(`${toBackfill.length} / ${funds.length} funds need backfill (no data before ${BACKFILL_BEFORE})\n`)
 
   let done = 0, totalInserted = 0, errors = 0
+  const errorLog: string[] = []
 
   for (const fund of toBackfill) {
-    const afterDate = earliestDate.get(fund.scheme_code)
-      ? '2000-01-01'   // no existing data — fetch everything
-      : '2000-01-01'   // or use earliest date if we only want to extend backwards
-    // We always fetch full history; upsert handles deduplication
     const label = fund.scheme_name.slice(0, 45).padEnd(45)
     process.stdout.write(`\r${bar(done, toBackfill.length)}  ${label}`)
 
     try {
-      const res = await fetch(`${MFAPI_BASE}/${fund.scheme_code}`)
+      const res = await fetchWithTimeout(`${MFAPI_BASE}/${fund.scheme_code}`, FETCH_TIMEOUT_MS)
       if (!res.ok) {
-        process.stdout.write(`\n  [${fund.scheme_code}] HTTP ${res.status}\n`)
+        const msg = `[${fund.scheme_code}] HTTP ${res.status}`
+        errorLog.push(msg)
         errors++
         done++
         continue
@@ -139,7 +183,8 @@ async function main() {
       }
 
       if (json.status !== 'SUCCESS' || !json.data?.length) {
-        process.stdout.write(`\n  [${fund.scheme_code}] no data (status=${json.status})\n`)
+        const msg = `[${fund.scheme_code}] bad response: status=${json.status}, rows=${json.data?.length ?? 0}`
+        errorLog.push(msg)
         errors++
         done++
         continue
@@ -155,20 +200,24 @@ async function main() {
       }
 
       // Upsert in chunks
+      let chunkErr = false
       for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
         const { error } = await supabase
           .from('mf_nav_data')
           .upsert(rows.slice(i, i + CHUNK_SIZE), { onConflict: 'scheme_code,date' })
         if (error) {
-          process.stdout.write(`\n  [${fund.scheme_code}] upsert error: ${error.message}\n`)
+          const msg = `[${fund.scheme_code}] upsert error: ${error.message}`
+          errorLog.push(msg)
+          chunkErr = true
           break
         }
       }
 
-      totalInserted += rows.length
+      if (!chunkErr) totalInserted += rows.length
       done++
     } catch (e) {
-      process.stdout.write(`\n  [${fund.scheme_code}] ${e}\n`)
+      const msg = `[${fund.scheme_code}] ${e instanceof Error ? e.message : String(e)}`
+      errorLog.push(msg)
       errors++
       done++
     }
@@ -178,11 +227,14 @@ async function main() {
 
   process.stdout.write(`\r${bar(done, toBackfill.length)}  ${'done'.padEnd(45)}\n`)
   console.log(`\nBackfill complete`)
-  console.log(`  Funds processed : ${done}`)
+  console.log(`  Funds processed  : ${done}`)
   console.log(`  NAV rows upserted: ${totalInserted.toLocaleString()}`)
   console.log(`  Errors           : ${errors}`)
-  console.log(`\nRun the cron once to recompute returns:`)
-  console.log(`  curl -H "Authorization: Bearer <CRON_SECRET>" https://factorlens.vercel.app/api/cron/mf-eod`)
+
+  if (errorLog.length > 0) {
+    console.log(`\nFirst 20 errors:`)
+    for (const e of errorLog.slice(0, 20)) console.log(' ', e)
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
