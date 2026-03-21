@@ -252,7 +252,7 @@ export async function GET(req: NextRequest) {
     // ── 0. Seed mf_funds from the pre-computed SCHEME_ENTRIES list ─────────
     // This ensures the funds page renders instantly (fund names at minimum)
     // even before any NAV data has been fetched.
-    const schemeEntries = discoverSchemeEntries()
+    const schemeEntries = await discoverSchemeEntries()
     if (schemeEntries.length > 0) {
       const { error: seedErr } = await supabase.from('mf_funds').upsert(
         schemeEntries.map(e => ({

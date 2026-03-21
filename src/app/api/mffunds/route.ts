@@ -15,7 +15,7 @@ export async function GET() {
       // ── Ensure every known scheme exists in mf_funds ──────────────────────
       // This is a no-op after the first request (ignoreDuplicates = true).
       // It means the page can render fund names even before the first cron run.
-      const entries = discoverSchemeEntries()
+      const entries = await discoverSchemeEntries()
       if (entries.length > 0) {
         await supabaseAdmin.from('mf_funds').upsert(
           entries.map(e => ({
@@ -50,7 +50,7 @@ export async function GET() {
     // ── Fallback: skeleton rows (Supabase not configured) ────────────────────
     // Returns fund names with null NAV/returns so the page renders immediately
     // without any spinner. The mf-eod cron will populate real data.
-    const entries = discoverSchemeEntries()
+    const entries = await discoverSchemeEntries()
     return NextResponse.json(
       entries.map(e => ({
         scheme_code:     e.schemeCode,
