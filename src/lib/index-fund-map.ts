@@ -257,29 +257,49 @@ export function getTrackedIndex(fundName: string): IndexEntry | undefined {
 /**
  * Return the search terms to use when looking for MF funds that track a given index.
  * Returns an array of candidate search strings (try each until results found).
+ *
+ * Generates multiple variants to maximise recall:
+ *  1. Original lowercase
+ *  2. De-hyphenated  ("low-volatility" → "low volatility")
+ *  3. Spaced numbers  ("midcap150"      → "midcap 150")
+ *  4. Compact numbers ("midcap 150"     → "midcap150")
+ *  5. Short key-phrase for long names
  */
 export function getIndexSearchTerms(indexName: string): string[] {
   const base = indexName.toLowerCase().trim()
-  const terms = [base]
+  const add  = new Set<string>([base])
 
-  // Add spacing variants for compact names
-  const spacedVariants = base
-    .replace(/nifty50\b/g, "nifty 50")
-    .replace(/nifty100\b/g, "nifty 100")
-    .replace(/nifty200\b/g, "nifty 200")
-    .replace(/nifty500\b/g, "nifty 500")
-    .replace(/midcap150\b/g, "midcap 150")
-    .replace(/midcap100\b/g, "midcap 100")
-    .replace(/midcap50\b/g, "midcap 50")
-    .replace(/smallcap250\b/g, "smallcap 250")
-    .replace(/smallcap100\b/g, "smallcap 100")
-    .replace(/smallcap50\b/g, "smallcap 50")
+  // 1. De-hyphenated variant
+  const dehyphen = base.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+  add.add(dehyphen)
 
-  if (spacedVariants !== base) terms.push(spacedVariants)
+  // 2. Spaced-number variant  (nifty500 → nifty 500, midcap150 → midcap 150)
+  const spaced = base
+    .replace(/\bnifty(\d+)\b/g,        'nifty $1')
+    .replace(/\bmidcap(\d+)\b/g,       'midcap $1')
+    .replace(/\bsmallcap(\d+)\b/g,     'smallcap $1')
+    .replace(/\bmicrocap(\d+)\b/g,     'microcap $1')
+    .replace(/\blargemidcap(\d+)\b/g,  'largemidcap $1')
+    .replace(/\bmidsmallcap(\d+)\b/g,  'midsmallcap $1')
+    .replace(/\s+/g, ' ').trim()
+  add.add(spaced)
 
-  // For very long names, add a shortened version (first 3-4 meaningful words)
-  const words = base.split(/\s+/).filter(w => w !== "nifty" && w !== "index")
-  if (words.length > 4) terms.push("nifty " + words.slice(0, 4).join(" "))
+  // Also de-hyphen the spaced variant
+  add.add(spaced.replace(/-/g, ' ').replace(/\s+/g, ' ').trim())
 
-  return [...new Set(terms)]
+  // 3. Compact-number variant  (midcap 150 → midcap150, nifty 50 → nifty50)
+  const compact = base
+    .replace(/\bmidcap\s+(\d+)\b/g,       'midcap$1')
+    .replace(/\bsmallcap\s+(\d+)\b/g,     'smallcap$1')
+    .replace(/\bnifty\s+(\d+)\b/g,        'nifty$1')
+    .replace(/\blargemidcap\s+(\d+)\b/g,  'largemidcap$1')
+    .replace(/\bmidsmallcap\s+(\d+)\b/g,  'midsmallcap$1')
+    .replace(/\s+/g, ' ').trim()
+  add.add(compact)
+
+  // 4. Short key-phrase for very long names (skip "nifty" and "index")
+  const words = dehyphen.split(/\s+/).filter(w => w !== 'nifty' && w !== 'index')
+  if (words.length > 4) add.add('nifty ' + words.slice(0, 4).join(' '))
+
+  return [...add].filter(t => t.length > 0)
 }

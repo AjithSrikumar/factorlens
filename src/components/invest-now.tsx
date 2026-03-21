@@ -76,7 +76,8 @@ export function InvestNow({ allocations }: Props) {
           .then(r => r.json())
           .then((d: unknown) => ({
             code: a.fund.code,
-            data: Array.isArray(d) ? (d as MFFund[]).filter(f => f.nav != null && f.nav > 0) : [],
+            // Keep all results — the API now fetches real NAVs; null only for rare failures
+            data: Array.isArray(d) ? (d as MFFund[]) : [],
           }))
           .catch(() => ({ code: a.fund.code, data: [] }))
       )
@@ -93,9 +94,13 @@ export function InvestNow({ allocations }: Props) {
 
   const rows: FundRow[] = allocations.map(a => {
     const allocated = (a.weight / 100) * investAmount
-    const mfs       = (mfMap[a.fund.code] ?? [])
+    // Sort: funds with real NAV first, then by 3Y return
+    const mfs = (mfMap[a.fund.code] ?? [])
       .slice()
-      .sort((x, y) => (y.return_3y ?? -99) - (x.return_3y ?? -99))
+      .sort((x, y) => {
+        if ((x.nav != null) !== (y.nav != null)) return x.nav != null ? -1 : 1
+        return (y.return_3y ?? -99) - (x.return_3y ?? -99)
+      })
     const idx    = chosenIdx[a.fund.code] ?? 0
     const chosen = mfs[idx] ?? null
     const nav    = chosen?.nav ?? null
