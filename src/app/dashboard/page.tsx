@@ -5,6 +5,9 @@ import { PortfolioBuilder, Fund } from "@/components/portfolio-builder"
 import { NavChart, DrawdownChart, RollingReturnChart, AllocationPieChart, FiscalYearChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
 import { Badge } from "@/components/ui/badge"
 import { Info, TrendingUp } from "lucide-react"
+import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
+import { InvestNow } from "@/components/invest-now"
+import { RISK_CATEGORY_META, RiskCategory } from "@/lib/risk-engine"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
 
@@ -397,7 +400,121 @@ function ChartLegend({ items }: { items: { color: string; label: string; dashed?
   )
 }
 
+function toTitleCase(s: string) {
+  return s.replace(/\b\w+\b/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+}
+
+// ─── Risk profile banner ──────────────────────────────────────────────────────
+function RiskBanner({
+  profile, onRetake, onWhy, whyOpen,
+}: {
+  profile: RiskProfile
+  onRetake: () => void
+  onWhy: () => void
+  whyOpen: boolean
+}) {
+  const meta = RISK_CATEGORY_META[profile.category as RiskCategory]
+  return (
+    <div style={{
+      background: meta.bg, border: `1.5px solid ${meta.border}`,
+      borderRadius: 16, padding: '16px 20px', marginBottom: 20,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' as const }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>{meta.icon}</span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: meta.color }}>{profile.category}</span>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                padding: '2px 8px', borderRadius: 5,
+                background: 'rgba(255,255,255,.6)', color: meta.color,
+              }}>
+                Score {profile.score}/100
+              </span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'rgba(12,14,19,.5)', marginTop: 2 }}>
+              {meta.description.split('.')[0]}.
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onWhy}
+            style={{
+              fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+              background: 'rgba(255,255,255,.7)', border: `1px solid ${meta.border}`,
+              color: meta.color, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            {whyOpen ? 'Hide reasoning' : 'Why this portfolio?'}
+          </button>
+          <button
+            onClick={onRetake}
+            style={{
+              fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 8,
+              background: 'none', border: '1px solid rgba(12,14,19,.14)',
+              color: 'rgba(12,14,19,.45)', cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            Retake
+          </button>
+        </div>
+      </div>
+
+      {/* Why this portfolio — collapsible */}
+      {whyOpen && (
+        <div style={{ marginTop: 16, borderTop: `1px solid ${meta.border}`, paddingTop: 14 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 800, letterSpacing: '1px',
+            textTransform: 'uppercase' as const, color: meta.color, marginBottom: 10, opacity: 0.7,
+          }}>
+            Why each fund was selected
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+            {profile.funds.map((f, i) => (
+              <div key={f.id} style={{
+                background: 'rgba(255,255,255,.65)', borderRadius: 10, padding: '11px 14px',
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                  color: '#ffffff', background: meta.color,
+                  width: 24, height: 24, borderRadius: 6, display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
+                }}>{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as const }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13' }}>{toTitleCase(f.name)}</span>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: meta.color,
+                    }}>{f.weight.toFixed(0)}%</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(12,14,19,.5)', marginTop: 2, lineHeight: 1.4 }}>{f.reason}</div>
+                  <div style={{ display: 'flex', gap: 7, marginTop: 6, flexWrap: 'wrap' as const }}>
+                    {f.scoreBreakdown.map(m => (
+                      <span key={m.label} style={{
+                        fontSize: 11, padding: '2px 7px', borderRadius: 5,
+                        background: 'rgba(12,14,19,.06)', color: 'rgba(12,14,19,.6)', fontWeight: 600,
+                      }}>
+                        {m.label}: {m.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
+  const [step, setStep]           = useState<'questionnaire' | 'portfolio'>('questionnaire')
+  const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
+  const [whyOpen, setWhyOpen]     = useState(false)
   const [funds, setFunds] = useState<Fund[]>([])
   const [allocations, setAllocations] = useState<FundAllocation[]>([])
   const [result, setResult] = useState<PortfolioResult | null>(null)
@@ -407,6 +524,19 @@ export default function DashboardPage() {
   const [isDefault, setIsDefault] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)  // closed by default
   const resultsRef = useRef<HTMLDivElement>(null)
+  const hasAutoRun = useRef(false)
+
+  // Check localStorage for existing risk profile on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('fl_risk_profile')
+      if (saved) {
+        const p: RiskProfile = JSON.parse(saved)
+        setRiskProfile(p)
+        setStep('portfolio')
+      }
+    } catch { /* ignore */ }
+  }, [])
 
   useEffect(() => {
     fetch("/api/funds")
@@ -414,6 +544,22 @@ export default function DashboardPage() {
       .then((data: Fund[]) => {
         setFunds(data)
         setFundsLoading(false)
+
+        if (riskProfile) {
+          // Populate from risk recommendation
+          const allocs = riskProfile.funds
+            .map(rf => {
+              const f = data.find((d) => d.id === rf.id)
+              return f ? { fund: f, weight: rf.weight } : null
+            })
+            .filter(Boolean) as FundAllocation[]
+          if (allocs.length > 0) {
+            setAllocations(allocs)
+            return
+          }
+        }
+
+        // Fallback: default portfolio
         const defaultFunds = DEFAULT_FUND_IDS
           .map((id) => data.find((f) => f.id === id))
           .filter(Boolean) as Fund[]
@@ -423,7 +569,8 @@ export default function DashboardPage() {
         }
       })
       .catch(() => setFundsLoading(false))
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])  // re-run when step changes (questionnaire → portfolio)
 
   const handleGenerate = useCallback(async () => {
     if (allocations.length === 0) return
@@ -448,12 +595,40 @@ export default function DashboardPage() {
     }
   }, [allocations])
 
+  // Auto-run when default portfolio is pre-loaded
   useEffect(() => {
     if (isDefault && allocations.length === DEFAULT_FUND_IDS.length && !result) {
       handleGenerate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDefault, allocations.length])
+
+  // Auto-run when risk-recommended portfolio is loaded
+  useEffect(() => {
+    if (riskProfile && allocations.length > 0 && !result && !loading && !hasAutoRun.current) {
+      hasAutoRun.current = true
+      handleGenerate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riskProfile, allocations.length])
+
+  const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
+    try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
+    hasAutoRun.current = false
+    setResult(null)
+    setRiskProfile(profile)
+    setStep('portfolio')
+  }, [])
+
+  const handleRetakeQuestionnaire = useCallback(() => {
+    try { localStorage.removeItem('fl_risk_profile') } catch { /* ignore */ }
+    hasAutoRun.current = false
+    setRiskProfile(null)
+    setResult(null)
+    setAllocations([])
+    setWhyOpen(false)
+    setStep('questionnaire')
+  }, [])
 
   const handleAllocationsChange = useCallback((next: FundAllocation[]) => {
     setAllocations(next)
@@ -465,6 +640,16 @@ export default function DashboardPage() {
     setTimeout(() => {
       document.getElementById("builder-section")?.scrollIntoView({ behavior: "smooth", block: "start" })
     }, 100)
+  }
+
+  // Show questionnaire if no profile yet
+  if (step === 'questionnaire') {
+    return (
+      <RiskQuestionnaire
+        onComplete={handleQuestionnaireComplete}
+        onSkip={() => { hasAutoRun.current = false; setStep('portfolio') }}
+      />
+    )
   }
 
   return (
@@ -483,6 +668,16 @@ export default function DashboardPage() {
       </div>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 32px 64px" }} className="dash-wrap-resp">
+
+        {/* Risk Profile Banner */}
+        {riskProfile && (
+          <RiskBanner
+            profile={riskProfile}
+            onRetake={handleRetakeQuestionnaire}
+            onWhy={() => setWhyOpen(v => !v)}
+            whyOpen={whyOpen}
+          />
+        )}
 
         {/* Builder section — collapsed by default, at top */}
         <div style={{ marginBottom: 20 }} id="builder-section">
@@ -700,7 +895,7 @@ export default function DashboardPage() {
               {/* Disclosure */}
               <div style={{
                 border: "1px dashed rgba(12,14,19,.3)", borderRadius: 16,
-                padding: "22px 24px", marginTop: 8,
+                padding: "22px 24px", marginTop: 8, marginBottom: 20,
               }}>
                 <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 9 }}>
                   Disclosure
@@ -709,6 +904,9 @@ export default function DashboardPage() {
                   Past performance is not indicative of future results. All computations use adjusted NSE index NAV data (2005–present). CAGR is annualised compounded growth. Volatility is annualised standard deviation of daily returns. Max Drawdown represents the deepest peak-to-trough decline. Comparison vs Nifty 50 is for benchmarking only. <strong style={{ color: "#0C0E13" }}>Data Source: NSE India | FactorLens Calculations.</strong> Not financial advice.
                 </p>
               </div>
+
+              {/* Invest Now */}
+              <InvestNow allocations={allocations} />
             </div>
           )}
         </div>
