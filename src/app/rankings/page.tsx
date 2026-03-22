@@ -130,6 +130,7 @@ export default function RankingsPage() {
   const [chartCache, setChartCache] = useState<Record<number, ChartData>>({})
   const [chartLoading, setChartLoading] = useState(false)
   const [unrankedExpanded, setUnrankedExpanded] = useState(false)
+  const [fixedIncomeExpanded, setFixedIncomeExpanded] = useState(false)
 
   useEffect(() => {
     fetch("/api/funds")
@@ -156,9 +157,17 @@ export default function RankingsPage() {
   }, [expandedId, chartCache])
 
   const nifty50 = useMemo(() => funds.find(f => f.code === 'N50'), [funds])
-  const categories = useMemo(() => ["All", ...Array.from(new Set(funds.map((f) => f.category)))], [funds])
+
+  // Separate fixed income from equity/other indices
+  const fixedIncomeFunds = useMemo(() => funds.filter(f => f.category === "Fixed Income"), [funds])
+
+  const categories = useMemo(() => {
+    const nonFI = funds.filter(f => f.category !== "Fixed Income")
+    return ["All", ...Array.from(new Set(nonFI.map((f) => f.category)))]
+  }, [funds])
 
   const filterFund = (f: Fund) => {
+    if (f.category === "Fixed Income") return false   // FI has its own section
     const matchCat = catFilter === "All" || f.category === catFilter
     const matchSearch = f.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
@@ -173,13 +182,22 @@ export default function RankingsPage() {
     return sortDir === "asc" ? av - bv : bv - av
   })
 
-  // Ranked = has final_rank (10y+ history). Unranked = insufficient history.
+  // Ranked = has final_rank (10y+ equity history). Unranked = insufficient history.
+  // Fixed income excluded from both — they appear in their own section.
   const rankedSorted   = useMemo(() => applySort(funds.filter(f => f.final_rank != null && filterFund(f))), [funds, search, catFilter, sortKey, sortDir])
   const unrankedSorted = useMemo(() => funds.filter(f => f.final_rank == null && filterFund(f)).sort((a,b) => a.name.localeCompare(b.name)), [funds, search, catFilter])
 
-  // Top 3 ranked funds for leader grid (exclude unranked/pending indices)
+  // Fixed income sorted by CAGR descending, filtered by search term
+  const fixedIncomeSorted = useMemo(
+    () => [...fixedIncomeFunds]
+      .filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => (b.cagr ?? 0) - (a.cagr ?? 0)),
+    [fixedIncomeFunds, search]
+  )
+
+  // Top 3 ranked funds for leader grid (equity only)
   const top3 = useMemo(
-    () => [...funds].filter(f => f.final_rank != null).sort((a, b) => (a.final_rank ?? 0) - (b.final_rank ?? 0)).slice(0, 3),
+    () => [...funds].filter(f => f.final_rank != null && f.category !== "Fixed Income").sort((a, b) => (a.final_rank ?? 0) - (b.final_rank ?? 0)).slice(0, 3),
     [funds]
   )
 
@@ -258,7 +276,7 @@ export default function RankingsPage() {
                 Fund Rankings
               </h1>
               <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
-                {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null).length} ranked · ${funds.filter(f => f.final_rank == null).length} unranked · ${funds.length} total NSE indices`}
+                {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null && f.category !== "Fixed Income").length} ranked · ${unrankedSorted.length} unranked · ${fixedIncomeFunds.length} fixed income · ${funds.length} total NSE indices`}
               </p>
             </div>
             <Link
@@ -845,9 +863,144 @@ export default function RankingsPage() {
           )}
         </div>
 
+        {/* ── Fixed Income Section (desktop) ───────────────────────────────── */}
+        {!loading && fixedIncomeSorted.length > 0 && (
+          <div className="hidden md:block" style={{ marginTop: 32 }}>
+            <button
+              onClick={() => setFixedIncomeExpanded(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 18px", borderRadius: fixedIncomeExpanded ? "12px 12px 0 0" : 12,
+                background: "#F5F3FF", border: "1.5px solid #DDD6FE",
+                cursor: "pointer", fontFamily: "inherit", transition: "border-radius .2s",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "#EDE9FE", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#5B21B6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="3" width="12" height="9" rx="1.5" /><path d="M1 6h12" /><path d="M5 6v6" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#3B0764" }}>
+                  Fixed Income — G-Sec & Bond Indices
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 100, background: "#EDE9FE", color: "#5B21B6" }}>
+                  {fixedIncomeSorted.length} indices
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11.5, color: "#5B21B6", fontWeight: 500 }}>
+                  {fixedIncomeExpanded ? "Collapse" : "Expand to view"}
+                </span>
+                <svg style={{ width: 18, height: 18, color: "#5B21B6", transition: "transform .22s ease", transform: fixedIncomeExpanded ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                  <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </button>
+
+            {fixedIncomeExpanded && (
+              <div style={{ background: "#ffffff", border: "1.5px solid #DDD6FE", borderTop: "none", borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
+                {/* Info note */}
+                <div style={{ padding: "10px 18px 10px", borderBottom: "1px solid rgba(91,33,182,.1)", background: "#FAFAFF" }}>
+                  <p style={{ fontSize: 12, color: "#5B21B6", lineHeight: 1.6 }}>
+                    Government securities and Bharat Bond indices. Not ranked alongside equity — lower returns reflect
+                    capital preservation and interest income. <strong>CAGR shown from inception.</strong> Charts compare
+                    each bond index against Nifty 50 to illustrate equity vs fixed income trade-offs.
+                  </p>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#F5F3FF" }}>
+                        {[
+                          { label: "Index" }, { label: "CAGR" }, { label: "1Y" },
+                          { label: "3Y" }, { label: "5Y" }, { label: "Sharpe" },
+                          { label: "Volatility" }, { label: "Max DD" },
+                        ].map(col => (
+                          <th key={col.label} style={{
+                            padding: "9px 16px", textAlign: "left",
+                            fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+                            textTransform: "uppercase" as const, color: "rgba(91,33,182,.5)",
+                            borderBottom: "1px solid rgba(91,33,182,.12)", whiteSpace: "nowrap" as const,
+                          }}>
+                            {col.label}
+                          </th>
+                        ))}
+                        <th style={{ width: 32, borderBottom: "1px solid rgba(91,33,182,.12)" }} />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fixedIncomeSorted.map((fund) => (
+                        <>
+                          <tr
+                            key={fund.id}
+                            style={{
+                              borderBottom: "1px solid rgba(91,33,182,.06)",
+                              cursor: "pointer",
+                              background: expandedId === fund.id ? "#EDE9FE" : undefined,
+                              transition: "background .12s",
+                            }}
+                            className={expandedId !== fund.id ? "hover:bg-[#F5F3FF]" : ""}
+                            onClick={() => handleToggleExpand(fund.id)}
+                          >
+                            <td style={{ padding: "12px 16px", maxWidth: 280, verticalAlign: "middle" }}>
+                              <Link
+                                href={`/rankings/${fund.id}`}
+                                style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-.1px", color: "#3B0764", textDecoration: "none", lineHeight: 1.35 }}
+                                className="hover:!text-[#5B21B6]"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {toTitleCase(fund.name)}
+                              </Link>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(91,33,182,.4)", marginTop: 2 }}>
+                                {fund.code}
+                              </div>
+                            </td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#0A7C4E", verticalAlign: "middle" }}>{pct(fund.cagr)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.6)", verticalAlign: "middle" }}>{pct(fund.cagr_1y)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.6)", verticalAlign: "middle" }}>{pct(fund.cagr_3y)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.6)", verticalAlign: "middle" }}>{pct(fund.cagr_5y)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, verticalAlign: "middle" }}>
+                              <span style={{ color: (fund.sharpe_ratio ?? 0) > 0.4 ? "#1A56DB" : "#0C0E13" }}>{fixed(fund.sharpe_ratio)}</span>
+                            </td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "rgba(12,14,19,.6)", verticalAlign: "middle" }}>{pct(fund.volatility)}</td>
+                            <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E", verticalAlign: "middle" }}>{pct(fund.max_drawdown)}</td>
+                            <td style={{ padding: "12px 16px", color: "rgba(91,33,182,.4)", verticalAlign: "middle" }}>
+                              <svg style={{ width: 18, height: 18, transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none" }} viewBox="0 0 18 18" fill="none">
+                                <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </td>
+                          </tr>
+
+                          {expandedId === fund.id && (
+                            <tr key={`${fund.id}-fi-charts`} style={{ borderBottom: "1px solid rgba(91,33,182,.15)", background: "rgba(237,233,254,.25)" }}>
+                              <td colSpan={9} style={{ padding: "22px 24px" }}>
+                                <div style={{ background: "#ffffff", border: "1px solid rgba(91,33,182,.15)", borderRadius: 16, overflow: "hidden" }}>
+                                  <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(91,33,182,.08)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                    <span style={{ fontWeight: 700, fontSize: 14, color: "#3B0764" }}>{fund.name}</span>
+                                    <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                                    <span style={{ display: "inline-flex", padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)" }}>vs Nifty 50</span>
+                                  </div>
+                                  <div style={{ padding: "20px" }}>
+                                    <FundCharts fund={fund} />
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Footer note */}
         <p style={{ fontSize: 11.5, color: "rgba(12,14,19,.3)", textAlign: "center", marginTop: 18, lineHeight: 1.6 }}>
-          {rankedSorted.length} ranked · {unrankedSorted.length} unranked · {funds.length} total NSE indices · NSE India data · Past performance is not a guarantee of future returns.
+          {rankedSorted.length} ranked · {unrankedSorted.length} unranked · {fixedIncomeFunds.length} fixed income · {funds.length} total NSE indices · NSE India data · Past performance is not a guarantee of future returns.
         </p>
 
         {/* Mobile — unranked section pushed to bottom */}
@@ -888,6 +1041,99 @@ export default function RankingsPage() {
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: (fund.cagr_10y ?? 0) > 0.15 ? "#0A7C4E" : "#0C0E13" }}>{pct(fund.cagr_10y)}</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.4)", marginTop: 2 }}>10Y CAGR</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Mobile — Fixed Income section */}
+        {!loading && fixedIncomeSorted.length > 0 && (
+          <div className="md:hidden" style={{ marginTop: 28 }}>
+            <button
+              onClick={() => setFixedIncomeExpanded(v => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "13px 18px", borderRadius: fixedIncomeExpanded ? "12px 12px 0 0" : 12,
+                background: "#F5F3FF", border: "1.5px solid #DDD6FE",
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#3B0764" }}>Fixed Income — G-Sec & Bonds</span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: "#EDE9FE", color: "#5B21B6" }}>
+                  {fixedIncomeSorted.length}
+                </span>
+              </div>
+              <svg style={{ width: 18, height: 18, color: "#5B21B6", transition: "transform .22s ease", transform: fixedIncomeExpanded ? "rotate(180deg)" : "none", flexShrink: 0 }} viewBox="0 0 18 18" fill="none">
+                <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {fixedIncomeExpanded && (
+              <div style={{ border: "1.5px solid #DDD6FE", borderTop: "none", borderRadius: "0 0 16px 16px", overflow: "hidden", background: "#ffffff" }}>
+                <div style={{ padding: "10px 16px", background: "#FAFAFF", borderBottom: "1px solid rgba(91,33,182,.1)" }}>
+                  <p style={{ fontSize: 11.5, color: "#5B21B6", lineHeight: 1.6 }}>G-Sec and Bharat Bond indices. CAGR shown from inception.</p>
+                </div>
+                {fixedIncomeSorted.map(fund => (
+                  <div
+                    key={fund.id}
+                    style={{ borderBottom: "1px solid rgba(91,33,182,.08)", overflow: "hidden" }}
+                  >
+                    <div
+                      style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer", background: expandedId === fund.id ? "#F5F3FF" : undefined }}
+                      onClick={() => handleToggleExpand(fund.id)}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <Link href={`/rankings/${fund.id}`} style={{ fontSize: 13.5, fontWeight: 700, color: "#3B0764", textDecoration: "none", lineHeight: 1.35 }} onClick={e => e.stopPropagation()}>
+                          {toTitleCase(fund.name)}
+                        </Link>
+                        <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                          <span style={{ display: "inline-flex", padding: "2px 7px", borderRadius: 100, fontSize: 10.5, fontWeight: 600, ...catStyle(fund.category) }}>{fund.category}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(91,33,182,.4)", background: "#EDE9FE", padding: "1px 6px", borderRadius: 4 }}>{fund.code}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: "#0A7C4E" }}>{pct(fund.cagr)}</div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(91,33,182,.4)", marginTop: 2 }}>CAGR</div>
+                      </div>
+                      <svg style={{ width: 16, height: 16, color: "rgba(91,33,182,.4)", transition: "transform .22s ease", transform: expandedId === fund.id ? "rotate(180deg)" : "none", flexShrink: 0 }} viewBox="0 0 18 18" fill="none">
+                        <path d="M4.5 7l4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+
+                    {expandedId === fund.id && (
+                      <div style={{ borderTop: "1px solid rgba(91,33,182,.1)", background: "#F5F3FF", padding: 16 }}>
+                        {/* Metrics grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16, background: "#ffffff", border: "1px solid rgba(91,33,182,.1)", borderRadius: 10, overflow: "hidden" }}>
+                          {[
+                            { label: "1Y CAGR", value: pct(fund.cagr_1y) },
+                            { label: "3Y CAGR", value: pct(fund.cagr_3y) },
+                            { label: "5Y CAGR", value: pct(fund.cagr_5y) },
+                            { label: "Sharpe", value: fixed(fund.sharpe_ratio) },
+                            { label: "Volatility", value: pct(fund.volatility) },
+                            { label: "Max Drawdown", value: pct(fund.max_drawdown), red: true },
+                          ].map((m, i) => (
+                            <div key={m.label} style={{
+                              padding: "11px 13px",
+                              borderRight: i % 2 === 0 ? "1px solid rgba(91,33,182,.08)" : undefined,
+                              borderBottom: i < 4 ? "1px solid rgba(91,33,182,.08)" : undefined,
+                            }}>
+                              <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".8px", textTransform: "uppercase" as const, color: "rgba(91,33,182,.4)", marginBottom: 4 }}>{m.label}</div>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700, color: m.red ? "#C5271E" : "#3B0764" }}>{m.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <FundCharts fund={fund} />
+                        <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
+                          <Link href={`/rankings/${fund.id}`} onClick={e => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 14px", borderRadius: 8, background: "#5B21B6", color: "#ffffff", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+                            Full Detail
+                            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 10L10 2M6 2h4v4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

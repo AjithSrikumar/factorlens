@@ -299,6 +299,13 @@ INCEPTION_DATES = {
     "NBB2033":     "2023-01-02",
 }
 
+# Fixed income index codes — these use a separate niftyindices.com endpoint
+FIXED_INCOME_CODES = {
+    "N813GSEC", "N10GSEC", "N10GSECCP", "N48GSEC",
+    "N1115GSEC", "N15PGSEC", "NCGSEC",
+    "NBB2030", "NBB2031", "NBB2032", "NBB2033",
+}
+
 # ── Category helper for auto-insert ──────────────────────────────────────────
 
 def derive_index_category(code: str, name: str) -> str:
@@ -473,6 +480,80 @@ def fetch_nifty_index_chunked(index_name: str, from_iso: str, to_iso: str) -> li
             time.sleep(0.3)          # be polite between chunks
 
     return sorted(all_rows.items())  # [(date_iso, value), ...] ascending
+
+# ── Fixed Income scrapers ─────────────────────────────────────────────────────
+
+def fetch_nifty_fixed_income(index_name: str, from_iso: str, to_iso: str, retries=3):
+    """
+    Return list of (date_iso, close_value) tuples for fixed income indices.
+    Uses the dedicated niftyindices.com fixed income endpoint which may return
+    TRI_CLOSE or Value fields in addition to the standard CLOSE field.
+    """
+    cinfo = json.dumps({
+        "name": index_name,
+        "startDate": iso_to_nifty_req(from_iso),
+        "endDate":   iso_to_nifty_req(to_iso),
+        "indexName": index_name,
+    })
+    payload = json.dumps({"cinfo": cinfo})
+
+    for attempt in range(retries):
+        try:
+            resp = requests.post(
+                "https://www.niftyindices.com/Backpage.aspx/getHistoricalDataFixedIncometoString",
+                data=payload,
+                headers=NIFTY_HEADERS,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            outer = resp.json()
+            rows = json.loads(outer.get("d", "[]"))
+            result = []
+            for row in rows:
+                date_str  = row.get("HistoricalDate") or row.get("Date") or row.get("date", "")
+                close_str = (
+                    row.get("CLOSE") or row.get("Close") or row.get("close") or
+                    row.get("TRI_CLOSE") or row.get("TRI Close") or
+                    row.get("Value") or row.get("value", "")
+                )
+                date_iso = nifty_resp_to_iso(date_str)
+                try:
+                    val = float(str(close_str).replace(",", ""))
+                except (ValueError, AttributeError):
+                    continue
+                if date_iso and val > 0:
+                    result.append((date_iso, val))
+            if not result and rows:
+                print(f"  [warn] {index_name}: FI API returned {len(rows)} rows but none parsed "
+                      f"(fields: {list(rows[0].keys()) if rows else []})")
+            elif not result:
+                print(f"  [warn] {index_name}: FI API returned empty data for {from_iso}→{to_iso}")
+            result.sort(key=lambda x: x[0])
+            return result
+        except Exception as e:
+            print(f"  [attempt {attempt+1}/{retries}] {index_name} (FI): {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return []
+
+
+def fetch_nifty_fixed_income_chunked(index_name: str, from_iso: str, to_iso: str) -> list:
+    """
+    Chunked version of fetch_nifty_fixed_income for multi-year date ranges.
+    """
+    all_rows: dict = {}
+    chunk_start = from_iso
+    while chunk_start <= to_iso:
+        chunk_end_dt = datetime.strptime(chunk_start, "%Y-%m-%d") + timedelta(days=CHUNK_DAYS - 1)
+        chunk_end = min(chunk_end_dt.strftime("%Y-%m-%d"), to_iso)
+        rows = fetch_nifty_fixed_income(index_name, chunk_start, chunk_end)
+        for d, v in rows:
+            all_rows[d] = v
+        chunk_start = add_days(chunk_end, 1)
+        if rows:
+            time.sleep(0.3)
+    return sorted(all_rows.items())
+
 
 # ── Metric computation ────────────────────────────────────────────────────────
 
@@ -731,7 +812,9 @@ def _recompute_rankings(conn, cur):
     # Clear existing ranks for all funds first
     cur.execute("UPDATE funds SET score = NULL, final_rank = NULL")
 
-    # Only rank funds with at least 10 years of history
+    # Only rank equity funds with at least 10 years of history.
+    # Fixed Income indices are excluded — they are displayed separately on the
+    # rankings page and have fundamentally different return/risk profiles.
     cur.execute("""
         SELECT id, code,
                COALESCE(cagr_20y, cagr_10y) AS long_cagr,
@@ -741,6 +824,7 @@ def _recompute_rankings(conn, cur):
           AND avg_3y_rolling_return IS NOT NULL
           AND sharpe_ratio IS NOT NULL
           AND max_drawdown IS NOT NULL
+          AND category != 'Fixed Income'
         ORDER BY id
     """)
     rows = cur.fetchall()
@@ -928,19 +1012,26 @@ def main():
             print(f"  [{code}] up to date ({last_date})")
             continue
 
-        # Determine fetch strategy (chunked for large ranges)
+        # Determine fetch strategy (chunked for large ranges, FI endpoint for bonds)
         span_days = (
             datetime.strptime(today, "%Y-%m-%d") -
             datetime.strptime(from_iso, "%Y-%m-%d")
         ).days
 
+        is_fi   = code in FIXED_INCOME_CODES
         chunked = span_days > CHUNK_DAYS
         if chunked:
-            print(f"  [{code}] {index_name}: chunked fetch {from_iso} → {today} ({span_days}d) …")
-            rows = fetch_nifty_index_chunked(index_name, from_iso, today)
+            tag = "FI chunked" if is_fi else "chunked"
+            print(f"  [{code}] {index_name}: {tag} fetch {from_iso} → {today} ({span_days}d) …")
+            rows = (fetch_nifty_fixed_income_chunked if is_fi else fetch_nifty_index_chunked)(
+                index_name, from_iso, today
+            )
         else:
-            print(f"  [{code}] {index_name}: fetching {from_iso} → {today} ...", end=" ", flush=True)
-            rows = fetch_nifty_index(index_name, from_iso, today)
+            fi_tag = " (FI)" if is_fi else ""
+            print(f"  [{code}] {index_name}: fetching{fi_tag} {from_iso} → {today} ...", end=" ", flush=True)
+            rows = (fetch_nifty_fixed_income if is_fi else fetch_nifty_index)(
+                index_name, from_iso, today
+            )
 
         new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
         if not new_rows:
