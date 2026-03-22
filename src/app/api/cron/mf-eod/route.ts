@@ -287,11 +287,10 @@ export async function GET(req: NextRequest) {
       .select('scheme_code, nav_date')
       .in('scheme_code', schemeCodes)
 
+    // If nav_date column doesn't exist yet (schema not migrated), proceed with
+    // empty map — mf_nav_data's unique constraint will deduplicate on upsert.
     if (latestErr) {
-      return NextResponse.json(
-        { error: 'Failed to load latest nav dates: ' + latestErr.message },
-        { status: 500 }
-      )
+      log.push(`[mf-eod] nav_date column missing in mf_funds — proceeding without dedup (${latestErr.message})`)
     }
 
     const latestDateByScheme = new Map<number, string>()
