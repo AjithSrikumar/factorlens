@@ -201,24 +201,36 @@ async function computeAndStoreReturns(
   const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
   try {
     // ── Patch split-affected funds with normalized returns ──────────────────
-    // Done inside the main sql block so we use a single connection and errors
-    // are properly surfaced (no silent swallowing from a bare try/finally).
+    // Uses the supabase (PostgREST) client — same path as the window queries
+    // that correctly detected the split. Direct SQL failed here silently due
+    // to a likely int4 vs int8 type mismatch for scheme_code.
     if (splitAffectedCodes.size > 0) {
       log.push(`[mf-eod] fetching full history for ${splitAffectedCodes.size} split-affected fund(s)`)
       for (const sc of splitAffectedCodes) {
         try {
-          const rows = await sql`
-            SELECT date::text AS date, nav::float8 AS nav
-            FROM mf_nav_data
-            WHERE scheme_code = ${sc}
-            ORDER BY date ASC
-          `
-          log.push(`[mf-eod] split-fix ${sc}: fetched ${rows.length} history rows`)
-          if (rows.length < 2) continue
-          const rawHist: NavRow[] = rows.map(r => ({ date: r.date as string, nav: r.nav as number }))
-          const splits  = detectSplits(rawHist, sc)
-          const adjNavs = normalizeHistory(rawHist, splits)
-          const norm    = rawHist.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
+          // Paginate: a fund with 15y of daily NAVs has ~3750 rows
+          const histRows: Array<{ date: string; nav: number }> = []
+          let offset = 0
+          while (true) {
+            const { data, error } = await supabase
+              .from('mf_nav_data')
+              .select('date, nav')
+              .eq('scheme_code', sc)
+              .order('date', { ascending: true })
+              .range(offset, offset + 999)
+            if (error || !data || data.length === 0) {
+              if (error) log.push(`[mf-eod] split-fix ${sc} page error: ${error.message}`)
+              break
+            }
+            for (const r of data) histRows.push({ date: r.date as string, nav: Number(r.nav) })
+            if (data.length < 1000) break
+            offset += 1000
+          }
+          log.push(`[mf-eod] split-fix ${sc}: fetched ${histRows.length} history rows`)
+          if (histRows.length < 2) continue
+          const splits  = detectSplits(histRows, sc)
+          const adjNavs = normalizeHistory(histRows, splits)
+          const norm    = histRows.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
           const m       = computeMetrics(norm)
           log.push(`[mf-eod] split-fix ${sc}: splits=${splits.length} 1y=${m.return_1y?.toFixed(1)} 3y=${m.return_3y?.toFixed(1)} 5y=${m.return_5y?.toFixed(1)}`)
           // Patch the corresponding entry in fundUpdates
