@@ -141,11 +141,8 @@ async function computeAndStoreReturns(
     fetchWindow(addDays(today, -365 * 5 - 45), addDays(today, -365 * 5 + 45)),
   ])
 
-  // ── Detect funds with NAV splits ─────────────────────────────────────────
-  // A split has likely occurred when a reference NAV is > 2× the current NAV
-  // (e.g. SBI Gold ETF: ref NAV ≈ ₹4008, current ≈ ₹50 → raw CAGR = -50%).
-  // For those funds we fetch full history from mf_nav_data, apply
-  // detectSplits/normalizeHistory, and recompute returns from adjusted NAVs.
+  // ── Detect funds where a reference NAV is > 2× current (split signal) ───
+  // e.g. SBI Gold ETF: 5y-ago NAV ≈ ₹4008, current ≈ ₹50 → raw CAGR = -50%.
   const splitAffectedCodes = new Set<number>()
   for (const [scheme_code, latest] of latestBySch.entries()) {
     const n1 = findNearest(w1y.get(scheme_code) ?? [], addDays(latest.date, -365))
@@ -157,36 +154,11 @@ async function computeAndStoreReturns(
       (n5 != null && n5 > latest.nav * 2)
     ) splitAffectedCodes.add(scheme_code)
   }
-
-  // Fetch full history for split-affected funds and compute normalized returns
-  const splitReturns = new Map<number, { r1y: number|null; r3y: number|null; r5y: number|null }>()
   if (splitAffectedCodes.size > 0) {
-    log.push(`[mf-eod] ${splitAffectedCodes.size} split-affected fund(s) detected — fetching full history`)
-    const dbUrl = process.env.SUPABASE_DB_URL
-    if (dbUrl) {
-      const sqlConn = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
-      try {
-        for (const sc of splitAffectedCodes) {
-          const rows = await sqlConn`
-            SELECT date::text AS date, nav::float8 AS nav
-            FROM mf_nav_data
-            WHERE scheme_code = ${sc}
-            ORDER BY date ASC
-          `
-          const history: NavRow[] = rows.map(r => ({ date: r.date as string, nav: r.nav as number }))
-          if (history.length < 2) continue
-          const splits  = detectSplits(history, sc)
-          const adjNavs = normalizeHistory(history, splits)
-          const norm    = history.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
-          const m       = computeMetrics(norm)
-          splitReturns.set(sc, { r1y: m.return_1y, r3y: m.return_3y, r5y: m.return_5y })
-          log.push(`[mf-eod] split-fix ${sc}: 1y=${m.return_1y?.toFixed(1)} 3y=${m.return_3y?.toFixed(1)} 5y=${m.return_5y?.toFixed(1)}`)
-        }
-      } finally { await sqlConn.end() }
-    }
+    log.push(`[mf-eod] split-affected codes: ${[...splitAffectedCodes].join(', ')}`)
   }
 
-  // Build upsert records
+  // ── Build initial upsert records (split-affected will be patched below) ──
   const fundUpdates: Array<{
     scheme_code:     number
     nav:             number
@@ -203,16 +175,13 @@ async function computeAndStoreReturns(
     const nav3y = findNearest(w3y.get(scheme_code) ?? [], addDays(latest.date, -365 * 3))
     const nav5y = findNearest(w5y.get(scheme_code) ?? [], addDays(latest.date, -365 * 5))
 
-    // Use split-normalized returns if this fund had a split
-    const splitAdj = splitReturns.get(scheme_code)
-
     const rec: typeof fundUpdates[number] = {
       scheme_code,
       nav:       latest.nav,
       nav_date:  latest.date,
-      return_1y: splitAdj ? splitAdj.r1y : (nav1y ? cagrPct(nav1y, latest.nav, 1) : null),
-      return_3y: splitAdj ? splitAdj.r3y : (nav3y ? cagrPct(nav3y, latest.nav, 3) : null),
-      return_5y: splitAdj ? splitAdj.r5y : (nav5y ? cagrPct(nav5y, latest.nav, 5) : null),
+      return_1y: nav1y ? cagrPct(nav1y, latest.nav, 1) : null,
+      return_3y: nav3y ? cagrPct(nav3y, latest.nav, 3) : null,
+      return_5y: nav5y ? cagrPct(nav5y, latest.nav, 5) : null,
     }
 
     const meta = metaBySch.get(scheme_code)
@@ -223,9 +192,6 @@ async function computeAndStoreReturns(
   }
 
   // Direct PostgreSQL connection bypasses PostgREST schema cache entirely.
-  // PostgREST's cache may be stale after ALTER TABLE (columns like nav_date,
-  // return_1y won't be visible until PostgREST restarts). Raw SQL has no such
-  // limitation. Requires SUPABASE_DB_URL set in environment.
   const dbUrl = process.env.SUPABASE_DB_URL
   if (!dbUrl) {
     log.push(`[mf-eod] SUPABASE_DB_URL not set — skipping metrics update (returns will be null)`)
@@ -234,8 +200,41 @@ async function computeAndStoreReturns(
 
   const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
   try {
+    // ── Patch split-affected funds with normalized returns ──────────────────
+    // Done inside the main sql block so we use a single connection and errors
+    // are properly surfaced (no silent swallowing from a bare try/finally).
+    if (splitAffectedCodes.size > 0) {
+      log.push(`[mf-eod] fetching full history for ${splitAffectedCodes.size} split-affected fund(s)`)
+      for (const sc of splitAffectedCodes) {
+        try {
+          const rows = await sql`
+            SELECT date::text AS date, nav::float8 AS nav
+            FROM mf_nav_data
+            WHERE scheme_code = ${sc}
+            ORDER BY date ASC
+          `
+          log.push(`[mf-eod] split-fix ${sc}: fetched ${rows.length} history rows`)
+          if (rows.length < 2) continue
+          const rawHist: NavRow[] = rows.map(r => ({ date: r.date as string, nav: r.nav as number }))
+          const splits  = detectSplits(rawHist, sc)
+          const adjNavs = normalizeHistory(rawHist, splits)
+          const norm    = rawHist.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
+          const m       = computeMetrics(norm)
+          log.push(`[mf-eod] split-fix ${sc}: splits=${splits.length} 1y=${m.return_1y?.toFixed(1)} 3y=${m.return_3y?.toFixed(1)} 5y=${m.return_5y?.toFixed(1)}`)
+          // Patch the corresponding entry in fundUpdates
+          const entry = fundUpdates.find(u => u.scheme_code === sc)
+          if (entry) {
+            entry.return_1y = m.return_1y
+            entry.return_3y = m.return_3y
+            entry.return_5y = m.return_5y
+          }
+        } catch (splitErr) {
+          log.push(`[mf-eod] split-fix ${sc} error: ${splitErr instanceof Error ? splitErr.message : String(splitErr)}`)
+        }
+      }
+    }
+
     // Pass data as JSON — avoids postgres.js array serialization quirks.
-    // json_to_recordset unpacks the array of objects directly in PostgreSQL.
     const jsonData = fundUpdates.map(r => ({
       code:     r.scheme_code,
       nav:      r.nav,
