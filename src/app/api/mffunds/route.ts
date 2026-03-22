@@ -39,12 +39,17 @@ export async function GET() {
       if (!fullError && fullData) {
         data = fullData as Record<string, unknown>[]
       } else {
-        // Schema cache stale — fetch only known-safe columns
+        // Schema cache stale — fetch only known-safe columns, pad with nulls
         const { data: namesData } = await supabaseAdmin
           .from('mf_funds')
           .select('scheme_code, scheme_name')
           .limit(1000)
-        if (namesData) data = namesData as Record<string, unknown>[]
+        if (namesData) data = namesData.map(r => ({
+          ...r,
+          fund_house: null, scheme_category: null,
+          nav: null, nav_date: null,
+          return_1y: null, return_3y: null, return_5y: null,
+        })) as Record<string, unknown>[]
       }
 
       if (data) {

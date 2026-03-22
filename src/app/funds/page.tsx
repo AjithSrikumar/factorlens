@@ -140,8 +140,8 @@ function catLabel(name: string, rawCat?: string | null): string {
   return deriveCategory(name, rawCat)
 }
 
-function ReturnBadge({ value }: { value: number | null }) {
-  if (value === null) return <span style={{ color: "rgba(12,14,19,.25)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>
+function ReturnBadge({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span style={{ color: "rgba(12,14,19,.25)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>
   const pos = value >= 0
   return (
     <span style={{
@@ -247,7 +247,7 @@ function FundsPageInner() {
       const q = search.toLowerCase()
       list = list.filter(f =>
         f.scheme_name.toLowerCase().includes(q) ||
-        f.fund_house.toLowerCase().includes(q)
+        (f.fund_house ?? '').toLowerCase().includes(q)
       )
     }
     if (categoryFilter !== "All") {
@@ -493,7 +493,7 @@ function FundsPageInner() {
                             </span>
                           </td>
                           <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                            {fund.nav !== null
+                            {fund.nav != null
                               ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "#0C0E13" }}>
                                   ₹{fund.nav.toFixed(1)}
                                 </span>
@@ -578,7 +578,7 @@ function FundsPageInner() {
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          {fund.nav !== null
+                          {fund.nav != null
                             ? <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0C0E13" }}>
                                 ₹{fund.nav.toFixed(1)}
                               </p>
