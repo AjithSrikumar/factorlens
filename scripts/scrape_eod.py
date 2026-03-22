@@ -205,6 +205,21 @@ NSE_INDICES = [
     ("NBB2031",      "NIFTY BHARAT BOND INDEX - APRIL 2031"),
     ("NBB2032",      "NIFTY BHARAT BOND INDEX - APRIL 2032"),
     ("NBB2033",      "NIFTY BHARAT BOND INDEX - APRIL 2033"),
+
+    # ── Fixed Income / Duration / Debt Category ───────────────────────────────
+    ("NLIQ",         "NIFTY LIQUID INDEX"),
+    ("NMMI",         "NIFTY MONEY MARKET INDEX"),
+    ("NUSDD",        "NIFTY ULTRA SHORT DURATION DEBT INDEX"),
+    ("NLDD",         "NIFTY LOW DURATION DEBT INDEX"),
+    ("NSDD",         "NIFTY SHORT DURATION DEBT INDEX"),
+    ("NMDD",         "NIFTY MEDIUM DURATION DEBT INDEX"),
+    ("NMLDD",        "NIFTY MEDIUM TO LONG DURATION DEBT INDEX"),
+    ("NLNGDD",       "NIFTY LONG DURATION DEBT INDEX"),
+    ("NCOMPD",       "NIFTY COMPOSITE DEBT INDEX"),
+    ("NCORPBD",      "NIFTY CORPORATE BOND INDEX"),
+    ("NCRBOND",      "NIFTY CREDIT RISK BOND INDEX"),
+    ("NBPSUD",       "NIFTY BANKING & PSU DEBT INDEX"),
+    ("NADSEC",       "NIFTY ALL DURATION G-SEC INDEX"),
 ]
 
 # ── Inception dates for new indices (used on first DB insert / first fetch) ───
@@ -290,20 +305,33 @@ INCEPTION_DATES = {
     "N100LQ15":    "2003-01-01",  "NMCLQ15":     "2004-01-01",
     # Volatility
     "IVIX":        "2008-01-01",
-    # Fixed Income
+    # Fixed Income — G-Sec / Bharat Bond
     "N813GSEC":    "2001-01-01",  "N10GSEC":     "2001-01-01",
     "N10GSECCP":   "2001-01-01",  "N48GSEC":     "2001-01-01",
     "N1115GSEC":   "2001-01-01",  "N15PGSEC":    "2001-01-01",
     "NCGSEC":      "2001-01-01",  "NBB2030":     "2020-01-01",
     "NBB2031":     "2021-01-04",  "NBB2032":     "2022-01-03",
     "NBB2033":     "2023-01-02",
+    # Fixed Income — Duration / Debt Category (base date 2001-09-03)
+    "NLIQ":        "2001-09-03",  "NMMI":        "2001-09-03",
+    "NUSDD":       "2001-09-03",  "NLDD":        "2001-09-03",
+    "NSDD":        "2001-09-03",  "NMDD":        "2001-09-03",
+    "NMLDD":       "2001-09-03",  "NLNGDD":      "2001-09-03",
+    "NCOMPD":      "2001-09-03",  "NCORPBD":     "2001-09-03",
+    "NCRBOND":     "2001-09-03",  "NBPSUD":      "2001-09-03",
+    "NADSEC":      "2001-09-03",
 }
 
 # Fixed income index codes — these use a separate niftyindices.com endpoint
 FIXED_INCOME_CODES = {
+    # G-Sec / Bharat Bond
     "N813GSEC", "N10GSEC", "N10GSECCP", "N48GSEC",
     "N1115GSEC", "N15PGSEC", "NCGSEC",
     "NBB2030", "NBB2031", "NBB2032", "NBB2033",
+    # Duration / Debt Category
+    "NLIQ", "NMMI", "NUSDD", "NLDD", "NSDD", "NMDD",
+    "NMLDD", "NLNGDD", "NCOMPD", "NCORPBD", "NCRBOND",
+    "NBPSUD", "NADSEC",
 }
 
 # ── Category helper for auto-insert ──────────────────────────────────────────
@@ -312,7 +340,12 @@ def derive_index_category(code: str, name: str) -> str:
     """Derive a display category for a new index based on its code/name."""
     n = name.lower()
     if code in ("IVIX",):                          return "Volatility"
-    if "g-sec" in n or "bharat bond" in n:         return "Fixed Income"
+    if code in FIXED_INCOME_CODES:                 return "Fixed Income"
+    if any(x in n for x in (
+        "g-sec", "bharat bond", "liquid index", "money market",
+        "duration debt", "composite debt", "corporate bond",
+        "credit risk bond", "banking & psu debt",
+    )):                                            return "Fixed Income"
     if any(x in n for x in ("momentum",)):         return "Momentum"
     if "multifactor" in n or "mqvlv" in n:         return "Multi-Factor"
     if any(x in n for x in ("alpha", "low vol", "quality", "value")):

@@ -181,7 +181,7 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   // ── Volatility Index ─────────────────────────────────────────────────────
   { code: "IVIX",        name: "INDIA VIX",                                       category: "Volatility",  inception: "2008-01-01" },
 
-  // ── Fixed Income / G-Sec ─────────────────────────────────────────────────
+  // ── Fixed Income / G-Sec / Bharat Bond ───────────────────────────────────
   { code: "N813GSEC",    name: "NIFTY 8-13 YR G-SEC",                            category: "Fixed Income",inception: "2001-01-01" },
   { code: "N10GSEC",     name: "NIFTY 10 YR BENCHMARK G-SEC",                    category: "Fixed Income",inception: "2001-01-01" },
   { code: "N10GSECCP",   name: "NIFTY 10 YR BENCHMARK G-SEC (CLEAN PRICE)",      category: "Fixed Income",inception: "2001-01-01" },
@@ -193,6 +193,21 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NBB2031",     name: "NIFTY BHARAT BOND INDEX - APRIL 2031",           category: "Fixed Income",inception: "2021-01-04" },
   { code: "NBB2032",     name: "NIFTY BHARAT BOND INDEX - APRIL 2032",           category: "Fixed Income",inception: "2022-01-03" },
   { code: "NBB2033",     name: "NIFTY BHARAT BOND INDEX - APRIL 2033",           category: "Fixed Income",inception: "2023-01-02" },
+
+  // ── Fixed Income / Duration / Debt Category (base date 2001-09-03) ────────
+  { code: "NLIQ",        name: "NIFTY LIQUID INDEX",                             category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NMMI",        name: "NIFTY MONEY MARKET INDEX",                       category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NUSDD",       name: "NIFTY ULTRA SHORT DURATION DEBT INDEX",          category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NLDD",        name: "NIFTY LOW DURATION DEBT INDEX",                  category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NSDD",        name: "NIFTY SHORT DURATION DEBT INDEX",                category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NMDD",        name: "NIFTY MEDIUM DURATION DEBT INDEX",               category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NMLDD",       name: "NIFTY MEDIUM TO LONG DURATION DEBT INDEX",       category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NLNGDD",      name: "NIFTY LONG DURATION DEBT INDEX",                 category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NCOMPD",      name: "NIFTY COMPOSITE DEBT INDEX",                     category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NCORPBD",     name: "NIFTY CORPORATE BOND INDEX",                     category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NCRBOND",     name: "NIFTY CREDIT RISK BOND INDEX",                   category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NBPSUD",      name: "NIFTY BANKING & PSU DEBT INDEX",                 category: "Fixed Income",inception: "2001-09-03" },
+  { code: "NADSEC",      name: "NIFTY ALL DURATION G-SEC INDEX",                 category: "Fixed Income",inception: "2001-09-03" },
 ]
 
 /** Build a lowercase-name → entry lookup for O(1) reverse lookups */
