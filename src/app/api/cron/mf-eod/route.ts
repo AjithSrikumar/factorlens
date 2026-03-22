@@ -172,53 +172,20 @@ async function computeAndStoreReturns(
     fundUpdates.push(rec)
   }
 
-  // Upsert in chunks of 100.
-  // First attempt: full record including nav + nav_date.
-  // If the mf_funds table is missing those columns (schema cache error), retry
-  // with returns-only so that at minimum 1y/3y/5y values are persisted.
+  // Use RPC to bypass PostgREST schema cache validation.
+  // Direct upsert fails when PostgREST's cache is stale (e.g. after ALTER TABLE
+  // until the cache reloads). The stored procedure receives raw JSON and updates
+  // PostgreSQL directly, skipping column-level schema validation entirely.
   const CHUNK = 100
   let updated = 0
-  let navColumnMissing = false
 
   for (let i = 0; i < fundUpdates.length; i += CHUNK) {
     const chunk = fundUpdates.slice(i, i + CHUNK)
-    const { error } = await supabase
-      .from('mf_funds')
-      .upsert(chunk, { onConflict: 'scheme_code' })
-
+    const { error } = await supabase.rpc('update_mf_fund_metrics', {
+      records: chunk,
+    })
     if (error) {
-      // Detect missing nav / nav_date column (Supabase schema cache issue)
-      if (!navColumnMissing && (error.message.includes("'nav'") || error.message.includes('"nav"'))) {
-        navColumnMissing = true
-        log.push(`[mf-eod] nav column missing in mf_funds — retrying without nav/nav_date fields`)
-
-        // Retry all chunks without nav/nav_date
-        const returnsOnly = fundUpdates.map(r => ({
-          scheme_code:      r.scheme_code,
-          return_1y:        r.return_1y,
-          return_3y:        r.return_3y,
-          return_5y:        r.return_5y,
-          ...(r.fund_house      ? { fund_house:      r.fund_house }      : {}),
-          ...(r.scheme_category ? { scheme_category: r.scheme_category } : {}),
-        }))
-
-        for (let j = 0; j < returnsOnly.length; j += CHUNK) {
-          const { error: retryErr } = await supabase
-            .from('mf_funds')
-            .upsert(returnsOnly.slice(j, j + CHUNK), { onConflict: 'scheme_code' })
-          if (retryErr) {
-            log.push(`[mf-eod] returns-only upsert error (chunk ${j / CHUNK + 1}): ${retryErr.message}`)
-            break
-          }
-          updated += Math.min(CHUNK, returnsOnly.length - j)
-        }
-        log.push(
-          `[mf-eod] TIP: add nav NUMERIC and nav_date DATE columns to mf_funds table to fix this warning`
-        )
-        break  // already handled all chunks in the retry loop
-      }
-
-      log.push(`[mf-eod] mf_funds upsert error (chunk ${i / CHUNK + 1}): ${error.message}`)
+      log.push(`[mf-eod] rpc update error (chunk ${i / CHUNK + 1}): ${error.message}`)
       break
     }
     updated += Math.min(CHUNK, fundUpdates.length - i)
