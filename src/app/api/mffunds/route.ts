@@ -1,35 +1,58 @@
 import { NextResponse } from 'next/server'
+import postgres from 'postgres'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 
-// ── Main handler ──────────────────────────────────────────────────────────────
-//
-// Always reads from the `mf_funds` Supabase table (populated + refreshed daily
-// by the /api/cron/mf-eod job).  The old live-fetch fallback that hit
-// mfapi.in for all 259 funds on every page load (60-130 s cold start) has been
-// removed — the DB is the single source of truth for the funds page.
-
 export async function GET() {
   try {
+    // ── Path A: direct SQL (bypasses PostgREST schema cache) ─────────────────
+    // PostgREST's schema cache may be stale and unable to see nav/return columns.
+    // Direct postgres connection has no such limitation.
+    const dbUrl = process.env.SUPABASE_DB_URL
+    if (dbUrl) {
+      const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+      try {
+        const rows = await sql`
+          SELECT
+            scheme_code,
+            scheme_name,
+            fund_house,
+            scheme_category,
+            nav::float8          AS nav,
+            nav_date::text       AS nav_date,
+            return_1y::float8    AS return_1y,
+            return_3y::float8    AS return_3y,
+            return_5y::float8    AS return_5y
+          FROM mf_funds
+          ORDER BY scheme_code
+          LIMIT 1000
+        `
+        const data = rows as Record<string, unknown>[]
+        const sorted = [...data].sort((a, b) => {
+          if (a.nav != null && b.nav == null) return -1
+          if (a.nav == null && b.nav != null) return  1
+          const ar = (a.return_1y as number | null) ?? -Infinity
+          const br = (b.return_1y as number | null) ?? -Infinity
+          return br - ar
+        })
+        return NextResponse.json(sorted, { headers: { 'Cache-Control': 'no-store' } })
+      } finally {
+        await sql.end()
+      }
+    }
+
+    // ── Path B: PostgREST (fallback when SUPABASE_DB_URL not set) ────────────
     if (isSupabaseConfigured()) {
-      // ── Ensure every known scheme exists in mf_funds ──────────────────────
-      // This is a no-op after the first request (ignoreDuplicates = true).
-      // It means the page can render fund names even before the first cron run.
+      // Seed missing funds so names show even before first cron run
       const entries = await discoverSchemeEntries()
       if (entries.length > 0) {
         await supabaseAdmin.from('mf_funds').upsert(
-          entries.map(e => ({
-            scheme_code: e.schemeCode,
-            scheme_name: e.schemeName,
-          })),
+          entries.map(e => ({ scheme_code: e.schemeCode, scheme_name: e.schemeName })),
           { onConflict: 'scheme_code', ignoreDuplicates: true },
         )
       }
 
-      // ── Read pre-computed data from mf_funds ──────────────────────────────
-      // Try full select first. If PostgREST schema cache is stale (after ALTER
-      // TABLE) and rejects metric columns, fall back to names-only select so
-      // the page at least renders fund names while the cache catches up.
+      // Try full select; fall back to names-only if schema cache is stale
       let data: Record<string, unknown>[] | null = null
       const { data: fullData, error: fullError } = await supabaseAdmin
         .from('mf_funds')
@@ -39,11 +62,8 @@ export async function GET() {
       if (!fullError && fullData) {
         data = fullData as Record<string, unknown>[]
       } else {
-        // Schema cache stale — fetch only known-safe columns, pad with nulls
         const { data: namesData } = await supabaseAdmin
-          .from('mf_funds')
-          .select('scheme_code, scheme_name')
-          .limit(1000)
+          .from('mf_funds').select('scheme_code, scheme_name').limit(1000)
         if (namesData) data = namesData.map(r => ({
           ...r,
           fund_house: null, scheme_category: null,
@@ -53,36 +73,25 @@ export async function GET() {
       }
 
       if (data) {
-        // Sort: funds with live NAV first, then by 1Y return descending
         const sorted = [...data].sort((a, b) => {
-          if (a.nav !== null && b.nav === null) return -1
-          if (a.nav === null && b.nav !== null) return  1
+          if (a.nav != null && b.nav == null) return -1
+          if (a.nav == null && b.nav != null) return  1
           const ar = (a.return_1y as number | null) ?? -Infinity
           const br = (b.return_1y as number | null) ?? -Infinity
           return br - ar
         })
-        return NextResponse.json(sorted, {
-          headers: { 'Cache-Control': 'no-store' },
-        })
+        return NextResponse.json(sorted, { headers: { 'Cache-Control': 'no-store' } })
       }
     }
 
-    // ── Fallback: skeleton rows (Supabase not configured) ────────────────────
-    // Returns fund names with null NAV/returns so the page renders immediately
-    // without any spinner. The mf-eod cron will populate real data.
+    // ── Path C: static skeleton (nothing configured) ─────────────────────────
     const entries = await discoverSchemeEntries()
     return NextResponse.json(
       entries.map(e => ({
-        scheme_code:     e.schemeCode,
-        scheme_name:     e.schemeName,
-        fund_house:      null,
-        scheme_category: null,
-        nav:             null,
-        nav_date:        null,
-        return_1y:       null,
-        return_3y:       null,
-        return_5y:       null,
-        aum_cr:          null,
+        scheme_code: e.schemeCode, scheme_name: e.schemeName,
+        fund_house: null, scheme_category: null,
+        nav: null, nav_date: null,
+        return_1y: null, return_3y: null, return_5y: null,
       })),
       { headers: { 'Cache-Control': 'no-store' } },
     )

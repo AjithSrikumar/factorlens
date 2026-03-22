@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import postgres from 'postgres'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 import {
@@ -58,8 +59,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   try {
     // ── Path A: Supabase — normalized NAV, pre-computed metrics ───────────────
     if (isSupabaseConfigured()) {
-      const [{ data: fund, error: fundErr }, { data: rawHistory, error: histErr }] = await Promise.all([
-        supabaseAdmin.from('mf_funds').select('*').eq('scheme_code', schemeCode).single(),
+      // Fetch NAV history via PostgREST (mf_nav_data columns are in cache)
+      // and fund metadata via direct SQL (bypasses stale PostgREST schema cache
+      // which can't see fund_house, scheme_category etc after ALTER TABLE).
+      const dbUrl = process.env.SUPABASE_DB_URL
+
+      const [metaResult, { data: rawHistory, error: histErr }] = await Promise.all([
+        dbUrl
+          ? (async () => {
+              const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+              try {
+                const rows = await sql`
+                  SELECT scheme_name, fund_house, scheme_type, scheme_category
+                  FROM mf_funds WHERE scheme_code = ${schemeCode} LIMIT 1
+                `
+                return { data: rows[0] ?? null }
+              } finally { await sql.end() }
+            })()
+          : supabaseAdmin.from('mf_funds').select('*').eq('scheme_code', schemeCode).single()
+            .then(r => ({ data: r.data })),
         supabaseAdmin
           .from('mf_nav_data')
           .select('date, nav')
@@ -68,10 +86,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           .limit(10_000),
       ])
 
-      // Use stored history if we have rows and the latest date is reasonably fresh.
-      // Deliberately avoid reading fund.nav_date — PostgREST's schema cache may
-      // be stale after ALTER TABLE and not expose new columns. We derive all
-      // date/nav info directly from mf_nav_data rows which PostgREST does know.
       if (!histErr && rawHistory?.length) {
         const latestHistDate = rawHistory[rawHistory.length - 1].date as string
         const cutoff = new Date()
@@ -86,17 +100,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
           const metrics = computeMetrics(history)
           const fy_data = computeFiscalYears(history)
-
-          // fund metadata is best-effort — PostgREST may only return columns it
-          // knows about (scheme_code, scheme_name) if its cache is stale.
-          const meta = (fund ?? {}) as Record<string, unknown>
+          const meta = (metaResult.data ?? {}) as Record<string, unknown>
 
           return NextResponse.json({
             fund: {
               scheme_code:     schemeCode,
-              scheme_name:     (meta.scheme_name as string) ?? '',
-              fund_house:      (meta.fund_house  as string) ?? '',
-              scheme_type:     (meta.scheme_type as string) ?? '',
+              scheme_name:     (meta.scheme_name     as string) ?? '',
+              fund_house:      (meta.fund_house      as string) ?? '',
+              scheme_type:     (meta.scheme_type     as string) ?? '',
               scheme_category: (meta.scheme_category as string) ?? '',
               nav:             history[history.length - 1].nav,
               nav_date:        latestHistDate,
