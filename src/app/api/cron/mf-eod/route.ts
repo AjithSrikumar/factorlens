@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import postgres from 'postgres'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 
 // Use service role key if available, otherwise fall back to anon key
@@ -172,25 +173,54 @@ async function computeAndStoreReturns(
     fundUpdates.push(rec)
   }
 
-  // Use RPC to bypass PostgREST schema cache validation.
-  // Direct upsert fails when PostgREST's cache is stale (e.g. after ALTER TABLE
-  // until the cache reloads). The stored procedure receives raw JSON and updates
-  // PostgreSQL directly, skipping column-level schema validation entirely.
-  const CHUNK = 100
-  let updated = 0
-
-  for (let i = 0; i < fundUpdates.length; i += CHUNK) {
-    const chunk = fundUpdates.slice(i, i + CHUNK)
-    const { error } = await supabase.rpc('update_mf_fund_metrics', {
-      records: chunk,
-    })
-    if (error) {
-      log.push(`[mf-eod] rpc update error (chunk ${i / CHUNK + 1}): ${error.message}`)
-      break
-    }
-    updated += Math.min(CHUNK, fundUpdates.length - i)
+  // Direct PostgreSQL connection bypasses PostgREST schema cache entirely.
+  // PostgREST's cache may be stale after ALTER TABLE (columns like nav_date,
+  // return_1y won't be visible until PostgREST restarts). Raw SQL has no such
+  // limitation. Requires SUPABASE_DB_URL set in environment.
+  const dbUrl = process.env.SUPABASE_DB_URL
+  if (!dbUrl) {
+    log.push(`[mf-eod] SUPABASE_DB_URL not set — skipping metrics update (returns will be null)`)
+    return
   }
-  log.push(`[mf-eod] mf_funds updated with returns for ${updated} / ${fundUpdates.length} schemes`)
+
+  const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+  try {
+    const codes    = fundUpdates.map(r => r.scheme_code)
+    const navs     = fundUpdates.map(r => r.nav)
+    const dates    = fundUpdates.map(r => r.nav_date)
+    const r1y      = fundUpdates.map(r => r.return_1y ?? null)
+    const r3y      = fundUpdates.map(r => r.return_3y ?? null)
+    const r5y      = fundUpdates.map(r => r.return_5y ?? null)
+    const houses   = fundUpdates.map(r => r.fund_house      ?? null)
+    const cats     = fundUpdates.map(r => r.scheme_category ?? null)
+
+    await sql`
+      UPDATE mf_funds SET
+        nav             = u.nav::numeric,
+        nav_date        = u.nav_date::date,
+        return_1y       = u.r1y::numeric,
+        return_3y       = u.r3y::numeric,
+        return_5y       = u.r5y::numeric,
+        fund_house      = COALESCE(u.house,    mf_funds.fund_house),
+        scheme_category = COALESCE(u.cat,      mf_funds.scheme_category)
+      FROM unnest(
+        ${sql.array(codes)}::int[],
+        ${sql.array(navs)}::numeric[],
+        ${sql.array(dates)}::text[],
+        ${sql.array(r1y)}::numeric[],
+        ${sql.array(r3y)}::numeric[],
+        ${sql.array(r5y)}::numeric[],
+        ${sql.array(houses)}::text[],
+        ${sql.array(cats)}::text[]
+      ) AS u(code, nav, nav_date, r1y, r3y, r5y, house, cat)
+      WHERE mf_funds.scheme_code = u.code
+    `
+    log.push(`[mf-eod] mf_funds updated with returns for ${fundUpdates.length} / ${fundUpdates.length} schemes`)
+  } catch (e) {
+    log.push(`[mf-eod] direct SQL metrics update failed: ${e instanceof Error ? e.message : String(e)}`)
+  } finally {
+    await sql.end()
+  }
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -244,26 +274,11 @@ export async function GET(req: NextRequest) {
 
     log.push(`[mf-eod] ${mfFunds.length} funds loaded from mf_funds`)
 
-    // ── 2. Get latest stored NAV date per scheme from mf_funds.nav_date ─────
-    // Reading nav_date from funds (286 rows) is far cheaper than scanning
-    // all of nav_history (millions of rows) to find the max date per scheme.
-    const schemeCodes = mfFunds.map((f) => f.scheme_code)
-
-    const { data: navDateRows, error: latestErr } = await supabase
-      .from('mf_funds')
-      .select('scheme_code, nav_date')
-      .in('scheme_code', schemeCodes)
-
-    // If nav_date column doesn't exist yet (schema not migrated), proceed with
-    // empty map — mf_nav_data's unique constraint will deduplicate on upsert.
-    if (latestErr) {
-      log.push(`[mf-eod] nav_date column missing in mf_funds — proceeding without dedup (${latestErr.message})`)
-    }
-
+    // ── 2. Skip nav_date pre-check — rely on mf_nav_data unique constraint ───
+    // Previously we read nav_date from mf_funds here, but PostgREST's schema
+    // cache may be stale and not know about that column. The mf_nav_data table
+    // has a UNIQUE(scheme_code, date) constraint so upserts are idempotent.
     const latestDateByScheme = new Map<number, string>()
-    for (const row of navDateRows ?? []) {
-      if (row.nav_date) latestDateByScheme.set(row.scheme_code, row.nav_date)
-    }
 
     // ── 3. Fetch all NAVs from AMFI in one request ────────────────────────
     let amfiNavs: Map<number, { date: string; nav: number }>
