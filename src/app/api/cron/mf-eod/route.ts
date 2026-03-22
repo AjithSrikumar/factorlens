@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import postgres from 'postgres'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 import { detectSplits, normalizeHistory, computeMetrics, type NavRow } from '@/lib/nav-normalize'
+import { AMC_LIST } from '@/lib/amc'
 
 // Use service role key if available, otherwise fall back to anon key
 // (works when RLS is disabled on mf_funds / mf_nav_data tables).
@@ -351,7 +352,19 @@ export async function GET(req: NextRequest) {
     let totalSkipped   = 0
     let totalErrors    = 0
     const toInsert: Array<{ scheme_code: number; date: string; nav: number }> = []
+
+    // Derive fund_house from scheme_name using AMC keyword matching
     const metaBySch = new Map<number, { fundHouse: string; schemeCategory: string }>()
+    for (const { scheme_code, scheme_name } of mfFunds) {
+      if (!scheme_name) continue
+      const lower = (scheme_name as string).toLowerCase()
+      for (const amc of AMC_LIST) {
+        if (amc.keywords.some(k => lower.includes(k))) {
+          metaBySch.set(scheme_code, { fundHouse: amc.displayName, schemeCategory: '' })
+          break
+        }
+      }
+    }
 
     for (const { scheme_code } of mfFunds) {
       const entry = amfiNavs.get(scheme_code)
