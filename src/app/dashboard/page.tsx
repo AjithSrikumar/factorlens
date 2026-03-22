@@ -592,9 +592,18 @@ export default function DashboardPage() {
   }, [riskProfile])
 
   useEffect(() => {
+    // Track whether this effect run is still current.
+    // On mount, step='questionnaire' fires first with riskProfile=null.
+    // Then localStorage sets riskProfile + step='portfolio', triggering a
+    // second run. Without this flag, if the first fetch (riskProfile=null)
+    // completes AFTER the second, it overwrites the custom portfolio with
+    // defaults — the root cause of custom portfolios reverting on revisit.
+    let cancelled = false
+
     fetch("/api/funds")
       .then((r) => r.json())
       .then((data: Fund[]) => {
+        if (cancelled) return   // stale fetch — a newer run has already taken over
         setFunds(data)
         setFundsLoading(false)
 
@@ -613,6 +622,7 @@ export default function DashboardPage() {
               ? allocs.map(a => ({ ...a, weight: Math.round((a.weight / totalW) * 100) }))
               : allocs
             setAllocations(normalised)
+            setIsDefault(false)
             pendingRun.current = true   // trigger auto-backtest once allocations arrive
             return
           }
@@ -628,7 +638,9 @@ export default function DashboardPage() {
           pendingRun.current = true   // trigger auto-backtest for default portfolio
         }
       })
-      .catch(() => setFundsLoading(false))
+      .catch(() => { if (!cancelled) setFundsLoading(false) })
+
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step])  // re-run when step changes (questionnaire → portfolio)
 

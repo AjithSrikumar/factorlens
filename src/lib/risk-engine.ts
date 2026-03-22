@@ -5,6 +5,20 @@
  * Pure logic — no DB / fetch calls here.
  */
 
+import { SCHEME_ENTRIES } from '@/lib/mf-funds'
+import { getTrackedIndex } from '@/lib/index-fund-map'
+
+/**
+ * Index codes that have at least one tracking mutual fund in SCHEME_ENTRIES.
+ * Derived at module load time — automatically stays in sync as new funds are added.
+ * Only indices in this set should be recommended (ensures users can actually invest).
+ */
+export const TRACKED_INDEX_CODES: Set<string> = new Set(
+  SCHEME_ENTRIES
+    .map(e => getTrackedIndex(e.schemeName)?.code)
+    .filter((c): c is string => c !== undefined),
+)
+
 export type RiskCategory = 'Conservative' | 'Balanced' | 'Growth' | 'Aggressive'
 
 export interface RiskAnswers {
@@ -311,6 +325,7 @@ export function selectAndWeightFunds(
   // ── Find the best Low-Vol fund ────────────────────────────────────────────
   const lowVolCandidates = funds.filter(f =>
     LOW_VOL_CODES.includes(f.code) &&
+    TRACKED_INDEX_CODES.has(f.code) &&
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
 
@@ -337,6 +352,7 @@ export function selectAndWeightFunds(
 
   const eligible = funds.filter(f =>
     MF_ELIGIBLE_CODES.has(f.code) &&
+    TRACKED_INDEX_CODES.has(f.code) &&
     !excludeCodes.has(f.code) &&
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
