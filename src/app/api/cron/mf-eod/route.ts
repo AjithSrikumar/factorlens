@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { discoverSchemeEntries } from '@/lib/mf-funds'
 
 // Use service role key if available, otherwise fall back to anon key
-// (works when RLS is disabled on funds / nav_history tables).
+// (works when RLS is disabled on mf_funds / mf_nav_data tables).
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here')
@@ -76,10 +76,10 @@ async function fetchAmfiNavs(
   return navMap
 }
 
-// ── Returns computation from stored nav_history ────────────────────────────
+// ── Returns computation from stored mf_nav_data ────────────────────────────
 //
 // Instead of downloading full history on every page load, returns are computed
-// here in the cron and stored in funds.  The API then serves them instantly.
+// here in the cron and stored in mf_funds.  The API then serves them instantly.
 
 async function computeAndStoreReturns(
   latestBySch: Map<number, { date: string; nav: number }>,
@@ -101,7 +101,7 @@ async function computeAndStoreReturns(
     let offset = 0
     while (true) {
       const { data, error } = await supabase
-        .from('nav_history')
+        .from('mf_nav_data')
         .select('scheme_code, date, nav')
         .in('scheme_code', codes)
         .gte('date', from)
@@ -183,7 +183,7 @@ async function computeAndStoreReturns(
   for (let i = 0; i < fundUpdates.length; i += CHUNK) {
     const chunk = fundUpdates.slice(i, i + CHUNK)
     const { error } = await supabase
-      .from('funds')
+      .from('mf_funds')
       .upsert(chunk, { onConflict: 'scheme_code' })
 
     if (error) {
@@ -204,7 +204,7 @@ async function computeAndStoreReturns(
 
         for (let j = 0; j < returnsOnly.length; j += CHUNK) {
           const { error: retryErr } = await supabase
-            .from('funds')
+            .from('mf_funds')
             .upsert(returnsOnly.slice(j, j + CHUNK), { onConflict: 'scheme_code' })
           if (retryErr) {
             log.push(`[mf-eod] returns-only upsert error (chunk ${j / CHUNK + 1}): ${retryErr.message}`)
@@ -213,7 +213,7 @@ async function computeAndStoreReturns(
           updated += Math.min(CHUNK, returnsOnly.length - j)
         }
         log.push(
-          `[mf-eod] TIP: add nav NUMERIC and nav_date DATE columns to funds table to fix this warning`
+          `[mf-eod] TIP: add nav NUMERIC and nav_date DATE columns to mf_funds table to fix this warning`
         )
         break  // already handled all chunks in the retry loop
       }
@@ -223,7 +223,7 @@ async function computeAndStoreReturns(
     }
     updated += Math.min(CHUNK, fundUpdates.length - i)
   }
-  log.push(`[mf-eod] funds updated with returns for ${updated} / ${fundUpdates.length} schemes`)
+  log.push(`[mf-eod] mf_funds updated with returns for ${updated} / ${fundUpdates.length} schemes`)
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -243,12 +243,12 @@ export async function GET(req: NextRequest) {
   ]
 
   try {
-    // ── 0. Seed funds from the pre-computed SCHEME_ENTRIES list ───────────
+    // ── 0. Seed mf_funds from the pre-computed SCHEME_ENTRIES list ───────────
     // This ensures the funds page renders instantly (fund names at minimum)
     // even before any NAV data has been fetched.
     const schemeEntries = await discoverSchemeEntries()
     if (schemeEntries.length > 0) {
-      const { error: seedErr } = await supabase.from('funds').upsert(
+      const { error: seedErr } = await supabase.from('mf_funds').upsert(
         schemeEntries.map(e => ({
           scheme_code: e.schemeCode,
           scheme_name: e.schemeName,
@@ -258,32 +258,32 @@ export async function GET(req: NextRequest) {
       if (seedErr) {
         log.push(`[mf-eod] seed warning: ${seedErr.message}`)
       } else {
-        log.push(`[mf-eod] seeded funds with ${schemeEntries.length} scheme entries`)
+        log.push(`[mf-eod] seeded mf_funds with ${schemeEntries.length} scheme entries`)
       }
     }
 
-    // ── 1. Load all scheme codes from funds ───────────────────────────────
+    // ── 1. Load all scheme codes from mf_funds ───────────────────────────────
     const { data: mfFunds, error: fundsErr } = await supabase
-      .from('funds')
+      .from('mf_funds')
       .select('scheme_code, scheme_name')
       .order('scheme_code')
 
     if (fundsErr || !mfFunds) {
       return NextResponse.json(
-        { error: 'Failed to load funds: ' + fundsErr?.message },
+        { error: 'Failed to load mf_funds: ' + fundsErr?.message },
         { status: 500 }
       )
     }
 
-    log.push(`[mf-eod] ${mfFunds.length} funds loaded from funds`)
+    log.push(`[mf-eod] ${mfFunds.length} funds loaded from mf_funds`)
 
-    // ── 2. Get latest stored NAV date per scheme from funds.nav_date ─────
+    // ── 2. Get latest stored NAV date per scheme from mf_funds.nav_date ─────
     // Reading nav_date from funds (286 rows) is far cheaper than scanning
     // all of nav_history (millions of rows) to find the max date per scheme.
     const schemeCodes = mfFunds.map((f) => f.scheme_code)
 
     const { data: navDateRows, error: latestErr } = await supabase
-      .from('funds')
+      .from('mf_funds')
       .select('scheme_code, nav_date')
       .in('scheme_code', schemeCodes)
 
@@ -329,13 +329,13 @@ export async function GET(req: NextRequest) {
       toInsert.push({ scheme_code, date: entry.date, nav: entry.nav })
     }
 
-    // ── 4. Upsert collected rows into nav_history ─────────────────────────
+    // ── 4. Upsert collected rows into mf_nav_data ─────────────────────────
     if (toInsert.length > 0) {
       const CHUNK = 500
       for (let i = 0; i < toInsert.length; i += CHUNK) {
         const chunk = toInsert.slice(i, i + CHUNK)
         const { error: upsertErr } = await supabase
-          .from('nav_history')
+          .from('mf_nav_data')
           .upsert(
             chunk.map((r) => ({ scheme_code: r.scheme_code, date: r.date, nav: r.nav })),
             { onConflict: 'scheme_code,date' }
@@ -349,7 +349,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 5. Compute & store 1y/3y/5y returns → funds ───────────────────────
+    // ── 5. Compute & store 1y/3y/5y returns → mf_funds ───────────────────────
     // Build the latest-nav map for ALL funds (not just today's inserts) so
     // that returns are recomputed even on holidays / already-up-to-date days.
     const latestBySch = new Map<number, { date: string; nav: number }>()

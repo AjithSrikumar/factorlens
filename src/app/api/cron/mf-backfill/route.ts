@@ -2,7 +2,7 @@
  * GET /api/cron/mf-backfill?batch=N
  *
  * Fetches the COMPLETE NAV history (since inception) for a batch of funds from
- * AMFI's NAV History download API and upserts into nav_history.
+ * AMFI's NAV History download API and upserts into mf_nav_data.
  *
  * Primary source: AMFI NAV History
  *   https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx
@@ -223,13 +223,13 @@ export async function GET(req: NextRequest) {
     `Primary source: AMFI NAV History (portal.amfiindia.com) | Fallback: mfapi.in`,
   ]
 
-  // 1. Load scheme codes from funds
+  // 1. Load scheme codes from mf_funds
   const { data: funds, error: fundsErr } = await supabase
-    .from('funds')
+    .from('mf_funds')
     .select('scheme_code')
     .order('scheme_code')
   if (fundsErr || !funds) {
-    return NextResponse.json({ error: `load funds: ${fundsErr?.message}`, log }, { status: 500 })
+    return NextResponse.json({ error: `load mf_funds: ${fundsErr?.message}`, log }, { status: 500 })
   }
 
   const totalFunds   = funds.length
@@ -285,7 +285,7 @@ export async function GET(req: NextRequest) {
     const CHUNK = 500
     for (let i = 0; i < allRows.length; i += CHUNK) {
       const { error } = await supabase
-        .from('nav_history')
+        .from('mf_nav_data')
         .upsert(allRows.slice(i, i + CHUNK), { onConflict: 'scheme_code,date' })
       if (error) {
         fetchErrors.push(`upsert chunk @${i}: ${error.message}`)

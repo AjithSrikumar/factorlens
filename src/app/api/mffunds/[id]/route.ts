@@ -59,10 +59,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // ── Path A: Supabase — normalized NAV, pre-computed metrics ───────────────
     if (isSupabaseConfigured()) {
       const [{ data: fund, error: fundErr }, { data: rawHistory, error: histErr }] = await Promise.all([
-        supabaseAdmin.from('funds').select('*').eq('scheme_code', schemeCode).single(),
+        supabaseAdmin.from('mf_funds').select('*').eq('scheme_code', schemeCode).single(),
         supabaseAdmin
-          .from('nav_history')
-          .select('date, nav, nav_adj')
+          .from('mf_nav_data')
+          .select('date, nav')
           .eq('scheme_code', schemeCode)
           .order('date', { ascending: true })
           .limit(10_000),
@@ -79,7 +79,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         if (!isStale) {
           const history: NavRow[] = rawHistory.map(r => ({
             date: r.date as string,
-            nav:  Number(r.nav_adj ?? r.nav),
+            nav:  Number(r.nav),
           }))
 
           const metrics = computeMetrics(history)
