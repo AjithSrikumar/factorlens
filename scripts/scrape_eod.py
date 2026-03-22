@@ -220,6 +220,73 @@ NSE_INDICES = [
     ("NCRBOND",      "NIFTY CREDIT RISK BOND INDEX"),
     ("NBPSUD",       "NIFTY BANKING & PSU DEBT INDEX"),
     ("NADSEC",       "NIFTY ALL DURATION G-SEC INDEX"),
+
+    # ── Fixed Income / Overnight & Liquid Fund ────────────────────────────────
+    ("N1DR",         "NIFTY 1D RATE INDEX"),
+    ("NLIQF",        "NIFTY LIQUID FUND INDEX"),
+
+    # ── Fixed Income / G-Sec Benchmark ───────────────────────────────────────
+    ("N5GSEC",       "NIFTY 5 YR BENCHMARK G-SEC INDEX"),
+
+    # ── Fixed Income / G-Sec Target Maturity ─────────────────────────────────
+    ("NGSDEC26",     "NIFTY G-SEC DEC 2026 INDEX"),
+    ("NGSJUN27",     "NIFTY G-SEC JUN 2027 INDEX"),
+    ("NGSJUL27",     "NIFTY G-SEC JUL 2027 INDEX"),
+    ("NGSSEP27",     "NIFTY G-SEC SEP 2027 INDEX"),
+    ("NGSOCT28",     "NIFTY G-SEC OCT 2028 INDEX"),
+    ("NGSAPR29",     "NIFTY G-SEC APR 2029 INDEX"),
+    ("NGSDEC29",     "NIFTY G-SEC DEC 2029 INDEX"),
+    ("NGSDEC30",     "NIFTY G-SEC DEC 2030 INDEX"),
+    ("NGSJUL31",     "NIFTY G-SEC JULY 2031 INDEX"),
+    ("NGSSEP32",     "NIFTY G-SEC SEP 2032 INDEX"),
+    ("NGSJUL33",     "NIFTY G-SEC JULY 2033 INDEX"),
+    ("NGSJUN36",     "NIFTY G-SEC JUN 2036 INDEX"),
+
+    # ── Fixed Income / SDL (State Development Loans) ─────────────────────────
+    ("NSDLJUL26",    "NIFTY SDL JUL 2026 INDEX"),
+    ("NSDLSEP26",    "NIFTY SDL SEP 2026 INDEX"),
+    ("NSDLOCT26",    "NIFTY SDL OCT 2026 INDEX"),
+    ("NSDLDEC26",    "NIFTY SDL DECEMBER 2026 INDEX"),
+    ("NSDLAPR27",    "NIFTY SDL APR 2027 INDEX"),
+    ("NSDLJUN27",    "NIFTY SDL JUN 2027 INDEX"),
+    ("NSDLSEP27",    "NIFTY SDL SEP 2027 INDEX"),
+    ("NSDLJUN28",    "NIFTY SDL JUNE 2028 INDEX"),
+    ("NSDLDEC28",    "NIFTY SDL DEC 2028 INDEX"),
+    ("NSDLJUL33",    "NIFTY SDL JUL 2033 INDEX"),
+
+    # ── Fixed Income / SDL Equal-Weight ──────────────────────────────────────
+    ("NSDLT20A26",   "NIFTY SDL APR 2026 TOP 20 EQUAL WEIGHT INDEX"),
+    ("NSDLT12A27",   "NIFTY SDL APR 2027 TOP 12 EQUAL WEIGHT INDEX"),
+    ("NSDLT12A32",   "NIFTY SDL APR 2032 TOP 12 EQUAL WEIGHT INDEX"),
+
+    # ── Fixed Income / SDL + G-Sec Blends ────────────────────────────────────
+    ("NSDLGSJ27",    "NIFTY SDL PLUS G-SEC JUN 2027 40:60 INDEX"),
+    ("NSDLGSS27",    "NIFTY SDL PLUS G-SEC SEP 2027 50:50 INDEX"),
+    ("NSDLGSJ28",    "NIFTY SDL PLUS G-SEC JUN 2028 70:30 INDEX"),
+    ("NSDLGSJ29",    "NIFTY SDL PLUS G-SEC JUN 2029 70:30 INDEX"),
+
+    # ── Fixed Income / SDL + AAA PSU Bond Blends ─────────────────────────────
+    ("NSDLAAA26",    "NIFTY SDL PLUS AAA PSU BOND APR 2026 75:25 INDEX"),
+    ("NSDLAAD27",    "NIFTY SDL PLUS AAA PSU BOND DEC 2027 60:40 INDEX - TRI"),
+    ("NSDLAAJ28",    "NIFTY SDL PLUS AAA PSU BOND JUL 2028 60:40 INDEX"),
+    ("NSDLAAA28",    "NIFTY SDL PLUS AAA PSU BOND APR 2028 75:25 INDEX"),
+
+    # ── Fixed Income / SDL + PSU Bond Blend ──────────────────────────────────
+    ("NSDLPSP26",    "NIFTY SDL PLUS PSU BOND SEP 2026 60:40 INDEX"),
+
+    # ── Fixed Income / PSU Bond + SDL Blends ─────────────────────────────────
+    ("NPSUA26",      "NIFTY PSU BOND PLUS SDL APR 2026 50:50 INDEX"),
+    ("NPSUA27",      "NIFTY PSU BOND PLUS SDL APR 2027 50:50 INDEX"),
+    ("NPSUSP27",     "NIFTY PSU BOND PLUS SDL SEP 2027 40:60 INDEX"),
+
+    # ── Fixed Income / AAA Bond Blends ───────────────────────────────────────
+    ("NAAAS26",      "NIFTY AAA BOND PLUS SDL APR 2026 50:50 INDEX"),
+    ("NAAAFM28",     "NIFTY AAA FINANCIAL SERVICES BOND MAR 2028 INDEX"),
+    ("NAAACSA27",    "NIFTY AAA CPSE BOND PLUS SDL APR 2027 60:40 INDEX"),
+    ("NAAAPSS26",    "NIFTY AAA PSU BOND PLUS SDL SEP 2026 50:50 INDEX"),
+
+    # ── Fixed Income / CPSE Bond ──────────────────────────────────────────────
+    ("NCPSESS26",    "NIFTY CPSE BOND PLUS SDL SEP 2026 50:50 INDEX"),
 ]
 
 # ── Inception dates for new indices (used on first DB insert / first fetch) ───
@@ -320,6 +387,42 @@ INCEPTION_DATES = {
     "NCOMPD":      "2001-09-03",  "NCORPBD":     "2001-09-03",
     "NCRBOND":     "2001-09-03",  "NBPSUD":      "2001-09-03",
     "NADSEC":      "2001-09-03",
+    # Fixed Income — Overnight & Liquid Fund
+    "N1DR":        "2015-01-01",  "NLIQF":       "2015-01-01",
+    # Fixed Income — G-Sec Benchmark
+    "N5GSEC":      "2004-01-01",
+    # Fixed Income — G-Sec Target Maturity
+    "NGSDEC26":    "2019-01-01",  "NGSJUN27":    "2020-01-01",
+    "NGSJUL27":    "2020-01-01",  "NGSSEP27":    "2020-01-01",
+    "NGSOCT28":    "2021-01-01",  "NGSAPR29":    "2022-01-01",
+    "NGSDEC29":    "2020-01-01",  "NGSDEC30":    "2020-01-01",
+    "NGSJUL31":    "2020-01-01",  "NGSSEP32":    "2021-01-01",
+    "NGSJUL33":    "2021-01-01",  "NGSJUN36":    "2022-01-01",
+    # Fixed Income — SDL Single
+    "NSDLJUL26":   "2019-01-01",  "NSDLSEP26":   "2019-01-01",
+    "NSDLOCT26":   "2019-01-01",  "NSDLDEC26":   "2019-01-01",
+    "NSDLAPR27":   "2020-01-01",  "NSDLJUN27":   "2020-01-01",
+    "NSDLSEP27":   "2020-01-01",  "NSDLJUN28":   "2021-01-01",
+    "NSDLDEC28":   "2021-01-01",  "NSDLJUL33":   "2021-01-01",
+    # Fixed Income — SDL Equal-Weight
+    "NSDLT20A26":  "2019-01-01",  "NSDLT12A27":  "2020-01-01",
+    "NSDLT12A32":  "2021-01-01",
+    # Fixed Income — SDL + G-Sec Blends
+    "NSDLGSJ27":   "2020-01-01",  "NSDLGSS27":   "2020-01-01",
+    "NSDLGSJ28":   "2021-01-01",  "NSDLGSJ29":   "2022-01-01",
+    # Fixed Income — SDL + AAA PSU Bond Blends
+    "NSDLAAA26":   "2019-01-01",  "NSDLAAD27":   "2020-01-01",
+    "NSDLAAJ28":   "2021-01-01",  "NSDLAAA28":   "2021-01-01",
+    # Fixed Income — SDL + PSU Bond Blend
+    "NSDLPSP26":   "2019-01-01",
+    # Fixed Income — PSU Bond + SDL Blends
+    "NPSUA26":     "2019-01-01",  "NPSUA27":     "2020-01-01",
+    "NPSUSP27":    "2020-01-01",
+    # Fixed Income — AAA Bond Blends
+    "NAAAS26":     "2019-01-01",  "NAAAFM28":    "2021-01-01",
+    "NAAACSA27":   "2020-01-01",  "NAAAPSS26":   "2019-01-01",
+    # Fixed Income — CPSE Bond
+    "NCPSESS26":   "2019-01-01",
 }
 
 # Fixed income index codes — these use a separate niftyindices.com endpoint
@@ -332,6 +435,32 @@ FIXED_INCOME_CODES = {
     "NLIQ", "NMMI", "NUSDD", "NLDD", "NSDD", "NMDD",
     "NMLDD", "NLNGDD", "NCOMPD", "NCORPBD", "NCRBOND",
     "NBPSUD", "NADSEC",
+    # Overnight & Liquid Fund
+    "N1DR", "NLIQF",
+    # G-Sec Benchmark
+    "N5GSEC",
+    # G-Sec Target Maturity
+    "NGSDEC26", "NGSJUN27", "NGSJUL27", "NGSSEP27",
+    "NGSOCT28", "NGSAPR29", "NGSDEC29", "NGSDEC30",
+    "NGSJUL31", "NGSSEP32", "NGSJUL33", "NGSJUN36",
+    # SDL Single
+    "NSDLJUL26", "NSDLSEP26", "NSDLOCT26", "NSDLDEC26",
+    "NSDLAPR27", "NSDLJUN27", "NSDLSEP27", "NSDLJUN28",
+    "NSDLDEC28", "NSDLJUL33",
+    # SDL Equal-Weight
+    "NSDLT20A26", "NSDLT12A27", "NSDLT12A32",
+    # SDL + G-Sec Blends
+    "NSDLGSJ27", "NSDLGSS27", "NSDLGSJ28", "NSDLGSJ29",
+    # SDL + AAA PSU Bond Blends
+    "NSDLAAA26", "NSDLAAD27", "NSDLAAJ28", "NSDLAAA28",
+    # SDL + PSU Bond Blend
+    "NSDLPSP26",
+    # PSU Bond + SDL Blends
+    "NPSUA26", "NPSUA27", "NPSUSP27",
+    # AAA Bond Blends
+    "NAAAS26", "NAAAFM28", "NAAACSA27", "NAAAPSS26",
+    # CPSE Bond
+    "NCPSESS26",
 }
 
 # ── Category helper for auto-insert ──────────────────────────────────────────

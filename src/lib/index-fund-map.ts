@@ -208,6 +208,73 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NCRBOND",     name: "NIFTY CREDIT RISK BOND INDEX",                   category: "Fixed Income",inception: "2001-09-03" },
   { code: "NBPSUD",      name: "NIFTY BANKING & PSU DEBT INDEX",                 category: "Fixed Income",inception: "2001-09-03" },
   { code: "NADSEC",      name: "NIFTY ALL DURATION G-SEC INDEX",                 category: "Fixed Income",inception: "2001-09-03" },
+
+  // ── Fixed Income / Overnight & Liquid Fund ────────────────────────────────
+  { code: "N1DR",        name: "NIFTY 1D RATE INDEX",                            category: "Fixed Income",inception: "2015-01-01" },
+  { code: "NLIQF",       name: "NIFTY LIQUID FUND INDEX",                        category: "Fixed Income",inception: "2015-01-01" },
+
+  // ── Fixed Income / G-Sec Benchmark ───────────────────────────────────────
+  { code: "N5GSEC",      name: "NIFTY 5 YR BENCHMARK G-SEC INDEX",              category: "Fixed Income",inception: "2004-01-01" },
+
+  // ── Fixed Income / G-Sec Target Maturity ─────────────────────────────────
+  { code: "NGSDEC26",    name: "NIFTY G-SEC DEC 2026 INDEX",                    category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NGSJUN27",    name: "NIFTY G-SEC JUN 2027 INDEX",                    category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSJUL27",    name: "NIFTY G-SEC JUL 2027 INDEX",                    category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSSEP27",    name: "NIFTY G-SEC SEP 2027 INDEX",                    category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSOCT28",    name: "NIFTY G-SEC OCT 2028 INDEX",                    category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NGSAPR29",    name: "NIFTY G-SEC APR 2029 INDEX",                    category: "Fixed Income",inception: "2022-01-01" },
+  { code: "NGSDEC29",    name: "NIFTY G-SEC DEC 2029 INDEX",                    category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSDEC30",    name: "NIFTY G-SEC DEC 2030 INDEX",                    category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSJUL31",    name: "NIFTY G-SEC JULY 2031 INDEX",                   category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NGSSEP32",    name: "NIFTY G-SEC SEP 2032 INDEX",                    category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NGSJUL33",    name: "NIFTY G-SEC JULY 2033 INDEX",                   category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NGSJUN36",    name: "NIFTY G-SEC JUN 2036 INDEX",                    category: "Fixed Income",inception: "2022-01-01" },
+
+  // ── Fixed Income / SDL Single ─────────────────────────────────────────────
+  { code: "NSDLJUL26",   name: "NIFTY SDL JUL 2026 INDEX",                      category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLSEP26",   name: "NIFTY SDL SEP 2026 INDEX",                      category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLOCT26",   name: "NIFTY SDL OCT 2026 INDEX",                      category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLDEC26",   name: "NIFTY SDL DECEMBER 2026 INDEX",                 category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLAPR27",   name: "NIFTY SDL APR 2027 INDEX",                      category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLJUN27",   name: "NIFTY SDL JUN 2027 INDEX",                      category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLSEP27",   name: "NIFTY SDL SEP 2027 INDEX",                      category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLJUN28",   name: "NIFTY SDL JUNE 2028 INDEX",                     category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NSDLDEC28",   name: "NIFTY SDL DEC 2028 INDEX",                      category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NSDLJUL33",   name: "NIFTY SDL JUL 2033 INDEX",                      category: "Fixed Income",inception: "2021-01-01" },
+
+  // ── Fixed Income / SDL Equal-Weight ──────────────────────────────────────
+  { code: "NSDLT20A26",  name: "NIFTY SDL APR 2026 TOP 20 EQUAL WEIGHT INDEX",  category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLT12A27",  name: "NIFTY SDL APR 2027 TOP 12 EQUAL WEIGHT INDEX",  category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLT12A32",  name: "NIFTY SDL APR 2032 TOP 12 EQUAL WEIGHT INDEX",  category: "Fixed Income",inception: "2021-01-01" },
+
+  // ── Fixed Income / SDL + G-Sec Blends ────────────────────────────────────
+  { code: "NSDLGSJ27",   name: "NIFTY SDL PLUS G-SEC JUN 2027 40:60 INDEX",     category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLGSS27",   name: "NIFTY SDL PLUS G-SEC SEP 2027 50:50 INDEX",     category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLGSJ28",   name: "NIFTY SDL PLUS G-SEC JUN 2028 70:30 INDEX",     category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NSDLGSJ29",   name: "NIFTY SDL PLUS G-SEC JUN 2029 70:30 INDEX",     category: "Fixed Income",inception: "2022-01-01" },
+
+  // ── Fixed Income / SDL + AAA PSU Bond Blends ─────────────────────────────
+  { code: "NSDLAAA26",   name: "NIFTY SDL PLUS AAA PSU BOND APR 2026 75:25 INDEX",     category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NSDLAAD27",   name: "NIFTY SDL PLUS AAA PSU BOND DEC 2027 60:40 INDEX - TRI",category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NSDLAAJ28",   name: "NIFTY SDL PLUS AAA PSU BOND JUL 2028 60:40 INDEX",     category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NSDLAAA28",   name: "NIFTY SDL PLUS AAA PSU BOND APR 2028 75:25 INDEX",     category: "Fixed Income",inception: "2021-01-01" },
+
+  // ── Fixed Income / SDL + PSU Bond Blend ──────────────────────────────────
+  { code: "NSDLPSP26",   name: "NIFTY SDL PLUS PSU BOND SEP 2026 60:40 INDEX",  category: "Fixed Income",inception: "2019-01-01" },
+
+  // ── Fixed Income / PSU Bond + SDL Blends ─────────────────────────────────
+  { code: "NPSUA26",     name: "NIFTY PSU BOND PLUS SDL APR 2026 50:50 INDEX",  category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NPSUA27",     name: "NIFTY PSU BOND PLUS SDL APR 2027 50:50 INDEX",  category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NPSUSP27",    name: "NIFTY PSU BOND PLUS SDL SEP 2027 40:60 INDEX",  category: "Fixed Income",inception: "2020-01-01" },
+
+  // ── Fixed Income / AAA Bond Blends ───────────────────────────────────────
+  { code: "NAAAS26",     name: "NIFTY AAA BOND PLUS SDL APR 2026 50:50 INDEX",      category: "Fixed Income",inception: "2019-01-01" },
+  { code: "NAAAFM28",    name: "NIFTY AAA FINANCIAL SERVICES BOND MAR 2028 INDEX",  category: "Fixed Income",inception: "2021-01-01" },
+  { code: "NAAACSA27",   name: "NIFTY AAA CPSE BOND PLUS SDL APR 2027 60:40 INDEX", category: "Fixed Income",inception: "2020-01-01" },
+  { code: "NAAAPSS26",   name: "NIFTY AAA PSU BOND PLUS SDL SEP 2026 50:50 INDEX",  category: "Fixed Income",inception: "2019-01-01" },
+
+  // ── Fixed Income / CPSE Bond ──────────────────────────────────────────────
+  { code: "NCPSESS26",   name: "NIFTY CPSE BOND PLUS SDL SEP 2026 50:50 INDEX", category: "Fixed Income",inception: "2019-01-01" },
 ]
 
 /** Build a lowercase-name → entry lookup for O(1) reverse lookups */
