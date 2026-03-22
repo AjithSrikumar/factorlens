@@ -207,7 +207,7 @@ async function computeAndStoreReturns(
         return_5y       = (d.r5y)::numeric,
         fund_house      = COALESCE(d.house, m.fund_house),
         scheme_category = COALESCE(d.cat,   m.scheme_category)
-      FROM json_to_recordset(${JSON.stringify(jsonData)}::json) AS d(
+      FROM json_to_recordset(${sql.json(jsonData)}) AS d(
         code int, nav text, nav_date text, r1y text, r3y text, r5y text, house text, cat text
       )
       WHERE m.scheme_code = d.code
