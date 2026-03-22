@@ -277,14 +277,15 @@ export async function GET(req: NextRequest) {
 
     log.push(`[mf-eod] ${mfFunds.length} funds loaded from funds`)
 
-    // ── 2. Get latest date per scheme code from nav_history ───────────────
+    // ── 2. Get latest stored NAV date per scheme from funds.nav_date ─────
+    // Reading nav_date from funds (286 rows) is far cheaper than scanning
+    // all of nav_history (millions of rows) to find the max date per scheme.
     const schemeCodes = mfFunds.map((f) => f.scheme_code)
 
-    const { data: latestRows, error: latestErr } = await supabase
-      .from('nav_history')
-      .select('scheme_code, date')
+    const { data: navDateRows, error: latestErr } = await supabase
+      .from('funds')
+      .select('scheme_code, nav_date')
       .in('scheme_code', schemeCodes)
-      .order('date', { ascending: false })
 
     if (latestErr) {
       return NextResponse.json(
@@ -294,10 +295,8 @@ export async function GET(req: NextRequest) {
     }
 
     const latestDateByScheme = new Map<number, string>()
-    for (const row of latestRows ?? []) {
-      if (!latestDateByScheme.has(row.scheme_code)) {
-        latestDateByScheme.set(row.scheme_code, row.date)
-      }
+    for (const row of navDateRows ?? []) {
+      if (row.nav_date) latestDateByScheme.set(row.scheme_code, row.nav_date)
     }
 
     // ── 3. Fetch all NAVs from AMFI in one request ────────────────────────
