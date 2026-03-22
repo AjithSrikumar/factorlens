@@ -241,6 +241,10 @@ export default function RankingsPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+      <style>{`
+        .rcats-scroll { -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+        .rcats-scroll::-webkit-scrollbar { display: none; }
+      `}</style>
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "32px 32px 64px" }} className="rank-wrap-resp">
 
         {/* Page header */}
@@ -398,7 +402,7 @@ export default function RankingsPage() {
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" as const, marginBottom: 20 }}
           className="rfilt-resp">
           {/* Search */}
-          <div style={{ position: "relative", flex: "0 0 auto", width: "100%", maxWidth: 290 }} className="rfilt-search">
+          <div style={{ position: "relative", flex: "0 0 auto", width: "100%", maxWidth: 290, minWidth: 0 }} className="rfilt-search">
             <svg viewBox="0 0 20 20" fill="none" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "rgba(12,14,19,.3)", pointerEvents: "none" }}>
               <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.8" />
               <path d="M14 14l-3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -420,7 +424,7 @@ export default function RankingsPage() {
             />
           </div>
           {/* Category pills */}
-          <div style={{ display: "flex", gap: 6, overflowX: "auto" as const, flex: 1, paddingBottom: 2 }} className="rcats-scroll">
+          <div style={{ display: "flex", gap: 6, overflowX: "auto" as const, flex: 1, minWidth: 0, paddingBottom: 2 }} className="rcats-scroll">
             {categories.map((cat) => (
               <button
                 key={cat}
