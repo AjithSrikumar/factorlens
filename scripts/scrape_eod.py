@@ -542,6 +542,23 @@ def ensure_funds_in_db(conn, cur) -> dict:
 # We chunk large date ranges into CHUNK_DAYS-day windows to fetch full history.
 CHUNK_DAYS = 365
 
+# ── API name overrides ────────────────────────────────────────────────────────
+# The niftyindices.com API uses abbreviated Trading_Index_Name values for some
+# indices (from IndexMapping.json at iislliveblob.niftyindices.com).  The
+# display names in NSE_INDICES are correct for the DB / UI; these overrides
+# supply the correct string to send as `name` in the POST body.
+INDEX_API_NAMES: dict[str, str] = {
+    "N50EW":    "NIFTY50 EQL WGT",
+    "N100EW":   "NIFTY100 EQL WGT",
+    "NDIV50":   "NIFTY DIV OPPS 50",
+    "N50DP":    "NIFTY50 DIV POINT",
+    "NGRWTH15": "NIFTY GROWSECT 15",
+    "N50TR2X":  "NIFTY50 TR 2X LEV",
+    "N50PR2X":  "NIFTY50 PR 2X LEV",
+    "N50TR1XI": "NIFTY50 TR 1X INV",
+    "N50PR1XI": "NIFTY50 PR 1X INV",
+}
+
 
 NIFTY_HEADERS = {
     "Content-Type":     "application/json; charset=utf-8",
@@ -1182,17 +1199,18 @@ def main():
 
         is_fi   = code in FIXED_INCOME_CODES
         chunked = span_days > CHUNK_DAYS
+        api_name = INDEX_API_NAMES.get(code, index_name)
         if chunked:
             tag = "FI chunked" if is_fi else "chunked"
             print(f"  [{code}] {index_name}: {tag} fetch {from_iso} → {today} ({span_days}d) …")
             rows = (fetch_nifty_fixed_income_chunked if is_fi else fetch_nifty_index_chunked)(
-                index_name, from_iso, today
+                api_name, from_iso, today
             )
         else:
             fi_tag = " (FI)" if is_fi else ""
             print(f"  [{code}] {index_name}: fetching{fi_tag} {from_iso} → {today} ...", end=" ", flush=True)
             rows = (fetch_nifty_fixed_income if is_fi else fetch_nifty_index)(
-                index_name, from_iso, today
+                api_name, from_iso, today
             )
 
         new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
