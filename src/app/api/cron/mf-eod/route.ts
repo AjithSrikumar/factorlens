@@ -185,35 +185,32 @@ async function computeAndStoreReturns(
 
   const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
   try {
-    const codes    = fundUpdates.map(r => r.scheme_code)
-    const navs     = fundUpdates.map(r => r.nav)
-    const dates    = fundUpdates.map(r => r.nav_date)
-    const r1y      = fundUpdates.map(r => r.return_1y ?? null)
-    const r3y      = fundUpdates.map(r => r.return_3y ?? null)
-    const r5y      = fundUpdates.map(r => r.return_5y ?? null)
-    const houses   = fundUpdates.map(r => r.fund_house      ?? null)
-    const cats     = fundUpdates.map(r => r.scheme_category ?? null)
+    // Pass data as JSON — avoids postgres.js array serialization quirks.
+    // json_to_recordset unpacks the array of objects directly in PostgreSQL.
+    const jsonData = fundUpdates.map(r => ({
+      code:     r.scheme_code,
+      nav:      r.nav,
+      nav_date: r.nav_date,
+      r1y:      r.return_1y  ?? null,
+      r3y:      r.return_3y  ?? null,
+      r5y:      r.return_5y  ?? null,
+      house:    r.fund_house       ?? null,
+      cat:      r.scheme_category  ?? null,
+    }))
 
     await sql`
-      UPDATE mf_funds SET
-        nav             = u.nav::numeric,
-        nav_date        = u.nav_date::date,
-        return_1y       = u.r1y::numeric,
-        return_3y       = u.r3y::numeric,
-        return_5y       = u.r5y::numeric,
-        fund_house      = COALESCE(u.house,    mf_funds.fund_house),
-        scheme_category = COALESCE(u.cat,      mf_funds.scheme_category)
-      FROM unnest(
-        ${sql.array(codes)}::int[],
-        ${sql.array(navs)}::numeric[],
-        ${sql.array(dates)}::text[],
-        ${sql.array(r1y)}::numeric[],
-        ${sql.array(r3y)}::numeric[],
-        ${sql.array(r5y)}::numeric[],
-        ${sql.array(houses)}::text[],
-        ${sql.array(cats)}::text[]
-      ) AS u(code, nav, nav_date, r1y, r3y, r5y, house, cat)
-      WHERE mf_funds.scheme_code = u.code
+      UPDATE mf_funds m SET
+        nav             = (d.nav)::numeric,
+        nav_date        = (d.nav_date)::date,
+        return_1y       = (d.r1y)::numeric,
+        return_3y       = (d.r3y)::numeric,
+        return_5y       = (d.r5y)::numeric,
+        fund_house      = COALESCE(d.house, m.fund_house),
+        scheme_category = COALESCE(d.cat,   m.scheme_category)
+      FROM json_to_recordset(${JSON.stringify(jsonData)}::json) AS d(
+        code int, nav text, nav_date text, r1y text, r3y text, r5y text, house text, cat text
+      )
+      WHERE m.scheme_code = d.code
     `
     log.push(`[mf-eod] mf_funds updated with returns for ${fundUpdates.length} / ${fundUpdates.length} schemes`)
   } catch (e) {
