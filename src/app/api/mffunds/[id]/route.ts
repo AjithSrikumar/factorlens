@@ -68,13 +68,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           .limit(10_000),
       ])
 
-      if (!fundErr && !histErr && fund && rawHistory?.length) {
-        // Staleness check: if nav_date is older than 3 days, fall through to
-        // mfapi.in so the chart and metrics always reflect today's latest NAV.
+      // Use stored history if we have rows and the latest date is reasonably fresh.
+      // Deliberately avoid reading fund.nav_date — PostgREST's schema cache may
+      // be stale after ALTER TABLE and not expose new columns. We derive all
+      // date/nav info directly from mf_nav_data rows which PostgREST does know.
+      if (!histErr && rawHistory?.length) {
+        const latestHistDate = rawHistory[rawHistory.length - 1].date as string
         const cutoff = new Date()
         cutoff.setDate(cutoff.getDate() - 3)
-        const cutoffStr = cutoff.toISOString().slice(0, 10)
-        const isStale = !fund.nav_date || fund.nav_date < cutoffStr
+        const isStale = latestHistDate < cutoff.toISOString().slice(0, 10)
 
         if (!isStale) {
           const history: NavRow[] = rawHistory.map(r => ({
@@ -85,16 +87,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           const metrics = computeMetrics(history)
           const fy_data = computeFiscalYears(history)
 
+          // fund metadata is best-effort — PostgREST may only return columns it
+          // knows about (scheme_code, scheme_name) if its cache is stale.
+          const meta = (fund ?? {}) as Record<string, unknown>
+
           return NextResponse.json({
             fund: {
-              scheme_code:     fund.scheme_code,
-              scheme_name:     fund.scheme_name,
-              fund_house:      fund.fund_house ?? '',
-              scheme_type:     fund.scheme_type ?? '',
-              scheme_category: fund.scheme_category ?? '',
-              nav:             fund.nav,
-              nav_date:        fund.nav_date,
-              inception_date:  fund.inception_date,
+              scheme_code:     schemeCode,
+              scheme_name:     (meta.scheme_name as string) ?? '',
+              fund_house:      (meta.fund_house  as string) ?? '',
+              scheme_type:     (meta.scheme_type as string) ?? '',
+              scheme_category: (meta.scheme_category as string) ?? '',
+              nav:             history[history.length - 1].nav,
+              nav_date:        latestHistDate,
+              inception_date:  history[0].date,
             },
             metrics,
             fy_data,
@@ -103,7 +109,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             headers: { 'Cache-Control': 'no-store' },
           })
         }
-        // Supabase data is stale — fall through to live mfapi.in fetch
+        // History is stale — fall through to live mfapi.in fetch
       }
     }
 

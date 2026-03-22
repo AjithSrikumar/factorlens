@@ -27,12 +27,27 @@ export async function GET() {
       }
 
       // ── Read pre-computed data from mf_funds ──────────────────────────────
-      const { data, error } = await supabaseAdmin
+      // Try full select first. If PostgREST schema cache is stale (after ALTER
+      // TABLE) and rejects metric columns, fall back to names-only select so
+      // the page at least renders fund names while the cache catches up.
+      let data: Record<string, unknown>[] | null = null
+      const { data: fullData, error: fullError } = await supabaseAdmin
         .from('mf_funds')
         .select('scheme_code, scheme_name, fund_house, scheme_category, nav, nav_date, return_1y, return_3y, return_5y')
         .limit(1000)
 
-      if (!error && data) {
+      if (!fullError && fullData) {
+        data = fullData as Record<string, unknown>[]
+      } else {
+        // Schema cache stale — fetch only known-safe columns
+        const { data: namesData } = await supabaseAdmin
+          .from('mf_funds')
+          .select('scheme_code, scheme_name')
+          .limit(1000)
+        if (namesData) data = namesData as Record<string, unknown>[]
+      }
+
+      if (data) {
         // Sort: funds with live NAV first, then by 1Y return descending
         const sorted = [...data].sort((a, b) => {
           if (a.nav !== null && b.nav === null) return -1
