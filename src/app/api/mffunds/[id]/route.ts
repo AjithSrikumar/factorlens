@@ -93,10 +93,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         const isStale = latestHistDate < cutoff.toISOString().slice(0, 10)
 
         if (!isStale) {
-          const history: NavRow[] = rawHistory.map(r => ({
+          const rawNavs: NavRow[] = rawHistory.map(r => ({
             date: r.date as string,
             nav:  Number(r.nav),
           }))
+
+          // Apply split normalization so returns across NAV splits are correct.
+          // e.g. SBI Gold ETF had a split in FY22 (₹4008 → ₹46); without this
+          // the 5Y CAGR computes as -50% instead of the correct ~+12%.
+          const splits  = detectSplits(rawNavs, schemeCode)
+          const adjNavs = normalizeHistory(rawNavs, splits)
+          const history: NavRow[] = rawNavs.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
 
           const metrics = computeMetrics(history)
           const fy_data = computeFiscalYears(history)

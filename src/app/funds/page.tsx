@@ -299,7 +299,7 @@ function FundsPageInner() {
           </h1>
           <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: 0 }}>
             {loading
-              ? "Loading live data from mfapi.in…"
+              ? "Loading fund data…"
               : `${funds.length} funds · NAV as of ${navDate ?? "—"} · ${withReturns} with return history`
             }
           </p>
@@ -445,11 +445,18 @@ function FundsPageInner() {
                                     alt=""
                                     width={16} height={16}
                                     style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
+                                    onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                                   />
-                                : <svg viewBox="0 0 14 14" fill="none" style={{ width: 11, height: 11, flexShrink: 0 }}>
-                                    <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.2" />
-                                    <path d="M4 7h6M4 5h4M4 9h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                                  </svg>
+                                : fund.fund_house
+                                  ? <span style={{
+                                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                      width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                                      background: "rgba(26,86,219,.12)", color: "#1A56DB",
+                                      fontSize: 9, fontWeight: 700, lineHeight: 1,
+                                    }}>
+                                      {fund.fund_house.charAt(0).toUpperCase()}
+                                    </span>
+                                  : null
                               }
                               <Link
                                 href={`/amc/${amcSlug(fund.fund_house)}`}
@@ -560,14 +567,25 @@ function FundsPageInner() {
                             {fund.scheme_name}
                           </p>
                           <div style={{ margin: "3px 0 0", display: "flex", alignItems: "center", gap: 5 }}>
-                            {amcLogoUrl(fund.fund_house) && (
-                              <img
-                                src={amcLogoUrl(fund.fund_house)!}
-                                alt=""
-                                width={14} height={14}
-                                style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
-                              />
-                            )}
+                            {amcLogoUrl(fund.fund_house)
+                              ? <img
+                                  src={amcLogoUrl(fund.fund_house)!}
+                                  alt=""
+                                  width={14} height={14}
+                                  style={{ borderRadius: 3, objectFit: "contain", flexShrink: 0 }}
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                />
+                              : fund.fund_house
+                                ? <span style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 14, height: 14, borderRadius: 3, flexShrink: 0,
+                                    background: "rgba(26,86,219,.12)", color: "#1A56DB",
+                                    fontSize: 8, fontWeight: 700, lineHeight: 1,
+                                  }}>
+                                    {fund.fund_house.charAt(0).toUpperCase()}
+                                  </span>
+                                : null
+                            }
                             <Link
                               href={`/amc/${amcSlug(fund.fund_house)}`}
                               onClick={e => e.stopPropagation()}
