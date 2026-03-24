@@ -462,6 +462,25 @@ async function scrapeHtmlListPage(url: string, source: string): Promise<RawArtic
 
 // ─── Article content enricher ─────────────────────────────────────────────────
 
+/**
+ * Remove non-content blocks (scripts, styles, noscript) before text extraction
+ * so inline JS is never mistaken for article body text.
+ */
+function removeNonContentBlocks(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '')
+}
+
+/** Returns true if the text looks like JavaScript/CSS rather than prose */
+function looksLikeCode(text: string): boolean {
+  const codeTokens = (text.match(
+    /\bfunction\b|\bvar\b|\bconst\b|\blet\b|\b=>\b|\.appendChild\b|\.innerHTML\b|window\.|document\.|setInterval|setTimeout|querySelector|addEventListener|\bcss\b|\bstyle\b/g
+  ) ?? []).length
+  return codeTokens >= 3
+}
+
 async function fetchArticleContent(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
@@ -473,7 +492,8 @@ async function fetchArticleContent(url: string): Promise<string> {
     })
     if (!res.ok) return ''
 
-    const html = await res.text()
+    // Strip script/style/noscript blocks first to avoid extracting JS as prose
+    const html = removeNonContentBlocks(await res.text())
 
     const contentPatterns = [
       /<article[^>]*>([\s\S]*?)<\/article>/i,
@@ -485,7 +505,7 @@ async function fetchArticleContent(url: string): Promise<string> {
       const match = html.match(re)
       if (match?.[1]) {
         const text = stripHtml(match[1])
-        if (text.length > 200) return text.slice(0, 3000)
+        if (text.length > 200 && !looksLikeCode(text)) return text.slice(0, 3000)
       }
     }
 
@@ -494,7 +514,7 @@ async function fetchArticleContent(url: string): Promise<string> {
     let pm: RegExpExecArray | null
     while ((pm = pRe.exec(html)) !== null) {
       const t = stripHtml(pm[1])
-      if (t.length > 40) paragraphs.push(t)
+      if (t.length > 40 && !looksLikeCode(t)) paragraphs.push(t)
       if (paragraphs.join(' ').length > 2500) break
     }
     return paragraphs.join(' ').slice(0, 3000)
