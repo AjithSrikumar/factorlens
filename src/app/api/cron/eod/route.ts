@@ -8,6 +8,7 @@ import {
   computeSortino,
   NavPoint,
 } from '@/lib/calculations'
+import { NSE_INDEX_LIST } from '@/lib/index-fund-map'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,35 +16,11 @@ const supabase = createClient(
 )
 
 // ── Index definitions ────────────────────────────────────────────────────────
+// Use the canonical NSE_INDEX_LIST (all equity + fixed-income indices) so the
+// EOD cron fetches data for every index shown on the rankings page.
 
-const NSE_INDICES: { code: string; indexName: string }[] = [
-  { code: 'N50',          indexName: 'NIFTY 50' },
-  { code: 'NN50',         indexName: 'NIFTY NEXT 50' },
-  { code: 'N500',         indexName: 'NIFTY 500' },
-  { code: 'NMC150',       indexName: 'NIFTY MIDCAP 150' },
-  { code: 'NSC250',       indexName: 'NIFTY SMALLCAP 250' },
-  { code: 'NSC500',       indexName: 'NIFTY SMALLCAP 500' },
-  { code: 'NμC250',       indexName: 'NIFTY MICROCAP 250' },
-  { code: 'NTM',          indexName: 'NIFTY TOTAL MARKET' },
-  { code: 'MC150M50',     indexName: 'NIFTY MIDCAP150 MOMENTUM 50' },
-  { code: 'N500M50',      indexName: 'NIFTY500 MOMENTUM 50' },
-  { code: 'N200M30',      indexName: 'NIFTY200 MOMENTUM 30' },
-  { code: 'NTMMQ50',      indexName: 'NIFTY TOTAL MARKET MOMENTUM QUALITY 50' },
-  { code: 'MC150Q50',     indexName: 'NIFTY MIDCAP150 QUALITY 50' },
-  { code: 'N500Q50',      indexName: 'NIFTY500 QUALITY 50' },
-  { code: 'N200Q30',      indexName: 'NIFTY200 QUALITY 30' },
-  { code: 'N100Q30',      indexName: 'NIFTY100 QUALITY 30' },
-  { code: 'SC250Q50',     indexName: 'NIFTY SMALLCAP250 QUALITY 50' },
-  { code: 'N100LV30',     indexName: 'NIFTY100 LOW VOLATILITY 30' },
-  { code: 'N500LV50',     indexName: 'NIFTY500 LOW VOLATILITY 50' },
-  { code: 'N100A30',      indexName: 'NIFTY100 ALPHA 30' },
-  { code: 'N200A30',      indexName: 'NIFTY200 ALPHA 30' },
-  { code: 'N500V50',      indexName: 'NIFTY500 VALUE 50' },
-  { code: 'MMS400MQ100',  indexName: 'NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100' },
-  { code: 'SC250MQ100',   indexName: 'NIFTY SMALLCAP250 MOMENTUM QUALITY 100' },
-  { code: 'N500MCQ50',    indexName: 'NIFTY500 MULTICAP MOMENTUM QUALITY 50' },
-  { code: 'N500MF50',     indexName: 'NIFTY500 MULTIFACTOR MQVLV 50' },
-]
+const NSE_INDICES: { code: string; indexName: string }[] =
+  NSE_INDEX_LIST.map(idx => ({ code: idx.code, indexName: idx.name }))
 
 const YAHOO_FUNDS: { code: string; symbol: string }[] = [
   { code: 'SPX',  symbol: '^GSPC' },
@@ -234,6 +211,26 @@ function computeScale(
 
 // ── Metric computation ────────────────────────────────────────────────────────
 
+/** CAGR over the last `years` years from the most-recent nav point.
+ *  Returns null if history is less than 90 % of the requested window. */
+function computePeriodCAGR(nav: NavPoint[], years: number): number | null {
+  if (nav.length < 2) return null
+  const end      = nav[nav.length - 1]
+  const endMs    = new Date(end.date).getTime()
+  const msWindow = years * 365.25 * 24 * 60 * 60 * 1000
+  const cutoffMs = endMs - msWindow * 0.90   // need data at least 90% of window ago
+  let best: { ms: number; value: number } | null = null
+  for (const { date, value } of nav) {
+    const dt = new Date(date).getTime()
+    if (dt > cutoffMs) break
+    best = { ms: dt, value }
+  }
+  if (!best) return null
+  const actualYears = (endMs - best.ms) / (365.25 * 24 * 60 * 60 * 1000)
+  if (actualYears <= 0) return null
+  return Math.pow(end.value / best.value, 1 / actualYears) - 1
+}
+
 function computeMetricsFromNav(nav: NavPoint[]) {
   const cagr    = computeCAGR(nav)
   const vol     = computeVolatility(nav)
@@ -246,7 +243,14 @@ function computeMetricsFromNav(nav: NavPoint[]) {
   const avg3y   = rolling.length > 0
     ? rolling.reduce((s, r) => s + r.value, 0) / rolling.length / 100
     : 0
-  return { cagr, vol, maxDD, sharpe, calmar, sortino, avg3y }
+  return {
+    cagr, vol, maxDD, sharpe, calmar, sortino, avg3y,
+    cagr_1y:  computePeriodCAGR(nav, 1),
+    cagr_3y:  computePeriodCAGR(nav, 3),
+    cagr_5y:  computePeriodCAGR(nav, 5),
+    cagr_10y: computePeriodCAGR(nav, 10),
+    cagr_20y: computePeriodCAGR(nav, 20),
+  }
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -277,6 +281,18 @@ export async function GET(req: NextRequest) {
   ]
 
   try {
+    // ── 0. Ensure every index in NSE_INDEX_LIST exists in the DB ─────────────
+    // ignoreDuplicates: true → ON CONFLICT DO NOTHING so metrics aren't reset.
+    await supabase.from('funds').upsert(
+      NSE_INDEX_LIST.map(idx => ({
+        code:           idx.code,
+        name:           idx.name,
+        category:       idx.category,
+        inception_date: idx.inception,
+      })),
+      { onConflict: 'code', ignoreDuplicates: true }
+    )
+
     // ── 1. Load funds ────────────────────────────────────────────────────────
     const { data: funds, error: fundsErr } = await supabase
       .from('funds')
@@ -536,7 +552,7 @@ export async function GET(req: NextRequest) {
         const nav = navByFund.get(fundId)
         if (!nav || nav.length < 2) continue
 
-        const { cagr, vol, maxDD, sharpe, calmar, avg3y } = computeMetricsFromNav(nav)
+        const { cagr, vol, maxDD, sharpe, calmar, avg3y, cagr_1y, cagr_3y, cagr_5y, cagr_10y, cagr_20y } = computeMetricsFromNav(nav)
 
         const { error: updateErr } = await supabase
           .from('funds')
@@ -547,6 +563,11 @@ export async function GET(req: NextRequest) {
             sharpe_ratio: sharpe,
             calmar_ratio: calmar,
             avg_3y_rolling_return: avg3y,
+            cagr_1y,
+            cagr_3y,
+            cagr_5y,
+            cagr_10y,
+            cagr_20y,
           })
           .eq('id', fundId)
 
@@ -556,6 +577,60 @@ export async function GET(req: NextRequest) {
           metricsUpdated++
         }
       }
+    }
+
+    // ── 8. Recompute final_rank for all funds with ≥10Y history ──────────────
+    // Clear existing ranks, then assign score + final_rank based on a
+    // weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
+    await supabase.from('funds').update({ score: null, final_rank: null }).not('id', 'is', null)
+
+    const { data: rankableFunds } = await supabase
+      .from('funds')
+      .select('id, cagr_10y, cagr_20y, avg_3y_rolling_return, sharpe_ratio, max_drawdown')
+      .not('cagr_10y', 'is', null)
+      .not('avg_3y_rolling_return', 'is', null)
+      .not('sharpe_ratio', 'is', null)
+      .not('max_drawdown', 'is', null)
+
+    if (rankableFunds && rankableFunds.length >= 2) {
+      type RankRow = {
+        id: number
+        cagr_10y: number; cagr_20y: number | null
+        avg_3y_rolling_return: number; sharpe_ratio: number; max_drawdown: number
+      }
+      const rf = rankableFunds as RankRow[]
+      const n  = rf.length
+
+      // Percentile rank within the group: 0 = best (higher raw value = better)
+      const pctRank = (arr: number[]) => {
+        const sorted = arr.map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v)
+        const ranks  = new Array(n).fill(0)
+        sorted.forEach(({ i }, pos) => { ranks[i] = (pos / (n - 1)) * 100 })
+        return ranks
+      }
+
+      const longCagrs   = rf.map(f => f.cagr_20y ?? f.cagr_10y)
+      const cagrRanks   = pctRank(longCagrs)
+      const avg3yRanks  = pctRank(rf.map(f => f.avg_3y_rolling_return))
+      const sharpeRanks = pctRank(rf.map(f => f.sharpe_ratio))
+      // max_drawdown is negative; less negative = better = higher pctRank
+      const ddRanks     = pctRank(rf.map(f => f.max_drawdown))
+
+      const scored = rf.map((f, i) => ({
+        id:    f.id,
+        score: cagrRanks[i] * 0.30 + avg3yRanks[i] * 0.25 + sharpeRanks[i] * 0.30 + ddRanks[i] * 0.15,
+      }))
+      scored.sort((a, b) => a.score - b.score)  // lower score = better rank
+
+      for (let i = 0; i < scored.length; i++) {
+        await supabase
+          .from('funds')
+          .update({ score: scored[i].score, final_rank: i + 1 })
+          .eq('id', scored[i].id)
+      }
+      log.push(`[ranking] assigned final_rank to ${scored.length} funds`)
+    } else {
+      log.push(`[ranking] not enough rankable funds (${rankableFunds?.length ?? 0}) — skipped`)
     }
 
     log.push(`\nDone — ${totalInserted} new rows, ${metricsUpdated} fund metrics updated`)
