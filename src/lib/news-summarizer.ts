@@ -48,7 +48,9 @@ const FINANCE_KEYWORDS = new Set([
 const NON_FINANCE_KEYWORDS = new Set([
   'cricket', 'football', 'bollywood', 'movie', 'actor', 'actress', 'celebrity',
   'recipe', 'fashion', 'beauty', 'travel', 'fitness', 'yoga', 'astrology',
-  'horoscope', 'sports', 'ipl', 'match', 'tournament', 'game',
+  'horoscope',
+  // Removed 'ipl', 'match', 'tournament', 'game' — IPL franchise valuations/sales
+  // are genuine financial news and these words appear in finance contexts too
 ])
 
 const CATEGORY_KEYWORDS: Record<NewsCategory, string[]> = {

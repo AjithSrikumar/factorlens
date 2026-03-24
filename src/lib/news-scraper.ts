@@ -31,16 +31,34 @@ interface FeedSource {
 // ─── Feed definitions ─────────────────────────────────────────────────────────
 
 const FEED_SOURCES: FeedSource[] = [
+  // NDTV Profit — general latest feed (finance + some non-finance; filtered below)
   {
     source: 'NDTV Profit',
     type:   'rss',
     url:    'https://feeds.feedburner.com/ndtvprofit-latest',
   },
+  // The Hindu Business Line — section-specific feeds for high-quality finance signal
   {
     source: 'The Hindu Business Line',
     type:   'rss',
-    url:    'https://www.thehindubusinessline.com/feeder/default.rss',
+    url:    'https://www.thehindubusinessline.com/markets/feeder/default.rss',
   },
+  {
+    source: 'The Hindu Business Line',
+    type:   'rss',
+    url:    'https://www.thehindubusinessline.com/economy/feeder/default.rss',
+  },
+  {
+    source: 'The Hindu Business Line',
+    type:   'rss',
+    url:    'https://www.thehindubusinessline.com/companies/feeder/default.rss',
+  },
+  {
+    source: 'The Hindu Business Line',
+    type:   'rss',
+    url:    'https://www.thehindubusinessline.com/money-and-banking/feeder/default.rss',
+  },
+  // Business Standard & MoneyControl — HTML scraping (best-effort; CDN may block)
   {
     source: 'Business Standard',
     type:   'html',
@@ -145,13 +163,23 @@ function extractTag(xml: string, tag: string): string {
 }
 
 function extractLink(itemXml: string): string {
+  // <link>url</link> (plain text, e.g. NDTV Profit)
   const plain = itemXml.match(/<link>([^<]+)<\/link>/i)
   if (plain?.[1]) return plain[1].trim()
 
+  // <link><![CDATA[url]]></link> (CDATA-wrapped, e.g. Hindu Business Line)
+  const cdata = itemXml.match(/<link><!\[CDATA\[([^\]]+)\]\]><\/link>/i)
+  if (cdata?.[1]) return cdata[1].trim()
+
+  // <link href="url"/> or <link rel="..." href="url"/> (Atom feeds)
   const href = itemXml.match(/<link[^>]+href=["']([^"']+)["']/i)
   if (href?.[1]) return href[1].trim()
 
-  // <guid> often contains the canonical URL
+  // <id>url</id> (Atom)
+  const id = itemXml.match(/<id>([^<]+)<\/id>/i)
+  if (id?.[1]?.startsWith('http')) return id[1].trim()
+
+  // <guid> when it contains the canonical URL
   const guidCdata = itemXml.match(/<guid[^>]*><!\[CDATA\[([^\]]+)\]\]><\/guid>/i)
     || itemXml.match(/<guid[^>]*>([^<]+)<\/guid>/i)
   if (guidCdata?.[1]?.startsWith('http')) return guidCdata[1].trim()
