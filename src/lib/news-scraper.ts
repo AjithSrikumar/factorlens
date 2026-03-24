@@ -26,25 +26,11 @@ export interface FeedConfig {
 
 export const NEWS_FEEDS: FeedConfig[] = [
   {
-    source: 'Livemint',
+    source: 'Google News',
     urls: [
-      'https://www.livemint.com/rss/markets',
-      'https://www.livemint.com/rss/companies',
-      'https://www.livemint.com/rss/economy',
-    ],
-  },
-  {
-    source: 'NDTV Profit',
-    urls: [
-      'https://feeds.feedburner.com/ndtvprofit-latest',
-    ],
-  },
-  {
-    source: 'Hindu Business Line',
-    urls: [
-      'https://www.thehindubusinessline.com/markets/?service=rss',
-      'https://www.thehindubusinessline.com/economy/?service=rss',
-      'https://www.thehindubusinessline.com/companies/?service=rss',
+      'https://news.google.com/rss/search?q=india+stock+market+nifty+sensex&hl=en-IN&gl=IN&ceid=IN:en',
+      'https://news.google.com/rss/search?q=india+economy+rbi+sebi+budget&hl=en-IN&gl=IN&ceid=IN:en',
+      'https://news.google.com/rss/search?q=india+companies+earnings+profit+ipo&hl=en-IN&gl=IN&ceid=IN:en',
     ],
   },
 ]
