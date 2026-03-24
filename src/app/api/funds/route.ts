@@ -4,7 +4,7 @@ import { NSE_INDEX_LIST } from '@/lib/index-fund-map'
 
 export async function GET() {
   if (!isSupabaseConfigured()) {
-    return NextResponse.json([])
+    return NextResponse.json({ data: [], lastNavDate: null })
   }
 
   // Insert any indices from NSE_INDEX_LIST that are not yet in Supabase.
@@ -41,5 +41,17 @@ export async function GET() {
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+
+  // Get the most recent NAV date across all index funds so the UI can show
+  // "Data as of [date]" and warn users when data is stale.
+  let lastNavDate: string | null = null
+  const { data: latestNav } = await supabaseAdmin
+    .from('nav_data')
+    .select('date')
+    .order('date', { ascending: false })
+    .limit(1)
+    .single()
+  if (latestNav?.date) lastNavDate = latestNav.date as string
+
+  return NextResponse.json({ data: data ?? [], lastNavDate }, { headers: { 'Cache-Control': 'no-store' } })
 }

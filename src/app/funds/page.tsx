@@ -297,12 +297,22 @@ function FundsPageInner() {
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0C0E13", margin: "0 0 4px", letterSpacing: "-.02em" }}>
             Mutual Funds
           </h1>
-          <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: 0 }}>
+          <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: "0 0 8px" }}>
             {loading
               ? "Loading fund data…"
-              : `${funds.length} funds · NAV as of ${navDate ?? "—"} · ${withReturns} with return history`
+              : `${funds.length} funds · ${withReturns} with return history`
             }
           </p>
+          {!loading && navDate && (() => {
+            const daysDiff = Math.floor((Date.now() - new Date(navDate).getTime()) / 86_400_000)
+            const isStale = daysDiff > 4
+            return (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 99, fontSize: 11.5, fontWeight: 600, background: isStale ? "rgba(197,39,30,.08)" : "rgba(10,124,78,.08)", color: isStale ? "#C5271E" : "#0A7C4E" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: isStale ? "#C5271E" : "#0A7C4E", display: "inline-block", flexShrink: 0 }} />
+                {isStale ? `Data stale · last updated ${navDate}` : `NAV data as of ${navDate}`}
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── Error ── */}

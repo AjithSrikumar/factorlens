@@ -490,9 +490,16 @@ export default function FundDetailPage({ params }: { params: Promise<{ id: strin
               }}>
                 ₹{fund.nav?.toFixed(1) ?? "—"}
               </p>
-              <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "rgba(12,14,19,.4)" }}>
-                as of {formatDate(fund.nav_date)}
-              </p>
+              {fund.nav_date && (() => {
+                const daysDiff = Math.floor((Date.now() - new Date(fund.nav_date).getTime()) / 86_400_000)
+                const isStale = daysDiff > 4
+                return (
+                  <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: isStale ? "rgba(197,39,30,.08)" : "rgba(10,124,78,.08)", color: isStale ? "#C5271E" : "#0A7C4E" }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: isStale ? "#C5271E" : "#0A7C4E", display: "inline-block" }} />
+                    {isStale ? `Stale · ${formatDate(fund.nav_date)}` : `Updated ${formatDate(fund.nav_date)}`}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>

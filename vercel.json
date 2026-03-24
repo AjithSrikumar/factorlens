@@ -15,6 +15,14 @@
     {
       "path": "/api/nav-sync?action=normalize",
       "schedule": "30 18 * * 0"
+    },
+    {
+      "path": "/api/cron/eod?recompute_all=true",
+      "schedule": "0 3 * * 6"
+    },
+    {
+      "path": "/api/cron/mf-eod",
+      "schedule": "0 4 * * 6"
     }
   ],
   "functions": {

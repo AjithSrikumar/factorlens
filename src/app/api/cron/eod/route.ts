@@ -515,17 +515,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 7. Recompute metrics for updated funds (or all funds if recompute_all) ─
+    // ── 7. Recompute metrics for ALL funds every run ──────────────────────────
+    // Always recompute all funds (not just those with new data) so that:
+    //   - Metrics always reflect the latest available NAV data
+    //   - Any fund that missed a data fetch has its metrics kept current
+    //   - Formula changes propagate immediately across the board
     let metricsUpdated = 0
 
-    // recompute_all=true: re-derive every fund's metrics from nav_data so that
-    // formula changes (e.g. Sharpe RF correction) take effect across the board.
     if (recomputeAll) {
       log.push('[recompute_all] recomputing metrics for all funds from nav history…')
     }
 
-    if (recomputeAll || fundsWithNewData.size > 0) {
-      const updatedFundIds = recomputeAll ? fundIds : Array.from(fundsWithNewData)
+    if (true) {  // always recompute all funds on every run
+      const updatedFundIds = fundIds  // always use all fund IDs
       const PAGE = 1000
       let navRows: { fund_id: number; date: string; nav_value: number }[] = []
       let from = 0

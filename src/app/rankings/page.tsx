@@ -121,6 +121,7 @@ function RankBadge({ rank }: { rank: number | null }) {
 
 export default function RankingsPage() {
   const [funds, setFunds] = useState<Fund[]>([])
+  const [lastNavDate, setLastNavDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [catFilter, setCatFilter] = useState("All")
@@ -135,7 +136,17 @@ export default function RankingsPage() {
   useEffect(() => {
     fetch("/api/funds")
       .then((r) => r.json())
-      .then((d) => { setFunds(Array.isArray(d) ? d : []); setLoading(false) })
+      .then((d) => {
+        // API returns { data: Fund[], lastNavDate: string | null }
+        if (d && typeof d === "object" && "data" in d) {
+          setFunds(Array.isArray(d.data) ? d.data : [])
+          setLastNavDate(d.lastNavDate ?? null)
+        } else if (Array.isArray(d)) {
+          // Backwards-compat: old API returned bare array
+          setFunds(d)
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
@@ -278,6 +289,16 @@ export default function RankingsPage() {
               <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
                 {loading ? "Loading…" : `${funds.filter(f => f.final_rank != null && f.category !== "Fixed Income").length} ranked · ${unrankedSorted.length} unranked · ${fixedIncomeFunds.length} fixed income · ${funds.length} total NSE indices`}
               </p>
+              {!loading && lastNavDate && (() => {
+                const daysDiff = Math.floor((Date.now() - new Date(lastNavDate).getTime()) / 86_400_000)
+                const isStale = daysDiff > 4
+                return (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "3px 10px", borderRadius: 99, fontSize: 11.5, fontWeight: 600, background: isStale ? "rgba(197,39,30,.08)" : "rgba(10,124,78,.08)", color: isStale ? "#C5271E" : "#0A7C4E" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: isStale ? "#C5271E" : "#0A7C4E", display: "inline-block", flexShrink: 0 }} />
+                    {isStale ? `Data stale · last updated ${lastNavDate}` : `Data as of ${lastNavDate}`}
+                  </div>
+                )
+              })()}
             </div>
             <Link
               href="/dashboard"

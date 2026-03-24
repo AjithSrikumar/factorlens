@@ -56,6 +56,7 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params)
   const [loading, setLoading] = useState(true)
   const [fund, setFund] = useState<Fund | null>(null)
+  const [lastNavDate, setLastNavDate] = useState<string | null>(null)
   const [nav, setNav] = useState<NavPoint[]>([])
   const [benchmarkNav, setBenchmarkNav] = useState<NavPoint[]>([])
   const [rawFundNav, setRawFundNav] = useState<NavPoint[]>([])
@@ -99,6 +100,11 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
         const benchNavRaw: NavPoint[] = benchmarkData.nav ?? []
         setRawFundNav(fundNavRaw)
         setRawBenchmarkNav(benchNavRaw)
+
+        // Track the latest NAV date so we can display "Data as of [date]"
+        if (fundNavRaw.length > 0) {
+          setLastNavDate(fundNavRaw[fundNavRaw.length - 1].date)
+        }
 
         const today = new Date().toISOString().slice(0, 10)
         setFyRows(computeFYRawRows(fundNavRaw, today))
@@ -183,9 +189,21 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight leading-tight">
                 {fund.name}
               </h1>
-              <p className="text-sm text-muted-foreground mt-1.5">
-                Inception: <span className="font-mono">{fund.inception_date}</span>
-              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                <p className="text-sm text-muted-foreground">
+                  Inception: <span className="font-mono">{fund.inception_date}</span>
+                </p>
+                {lastNavDate && (() => {
+                  const daysDiff = Math.floor((Date.now() - new Date(lastNavDate).getTime()) / 86_400_000)
+                  const isStale = daysDiff > 4
+                  return (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 99, fontSize: 11, fontWeight: 600, background: isStale ? "rgba(197,39,30,.08)" : "rgba(10,124,78,.08)", color: isStale ? "#C5271E" : "#0A7C4E" }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: isStale ? "#C5271E" : "#0A7C4E", display: "inline-block" }} />
+                      {isStale ? `Stale · last updated ${lastNavDate}` : `Updated ${lastNavDate}`}
+                    </span>
+                  )
+                })()}
+              </div>
             </div>
 
             {/* Right: score + outperformance callout */}
