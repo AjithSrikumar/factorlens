@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Info, TrendingUp } from "lucide-react"
 import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
-import { RISK_CATEGORY_META, RiskCategory } from "@/lib/risk-engine"
+import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
@@ -602,8 +602,15 @@ export default function DashboardPage() {
 
     fetch("/api/funds")
       .then((r) => r.json())
-      .then((data: Fund[]) => {
+      .then((body: { data: Fund[]; lastNavDate: string | null }) => {
         if (cancelled) return   // stale fetch — a newer run has already taken over
+        // Extract the funds array from the API response envelope
+        const allFunds: Fund[] = Array.isArray(body) ? body : (body.data ?? [])
+        // Only expose ranked funds that have a tracking mutual fund — keeps the portfolio
+        // builder free of indices with no investable vehicle or insufficient history.
+        const data = allFunds.filter(f =>
+          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code)
+        )
         setFunds(data)
         setFundsLoading(false)
 
@@ -611,7 +618,9 @@ export default function DashboardPage() {
           // Populate from risk recommendation — only include funds found in the DB
           const allocs = riskProfile.funds
             .map(rf => {
-              const f = data.find((d) => d.id === rf.id)
+              // Search in all funds (not just filtered) so risk-recommended indices
+              // like Gold/LowVol that may not be MF-eligible by code still map correctly
+              const f = allFunds.find((d) => d.id === rf.id)
               return f ? { fund: f, weight: rf.weight } : null
             })
             .filter(Boolean) as FundAllocation[]
@@ -628,12 +637,12 @@ export default function DashboardPage() {
           }
         }
 
-        // Fallback: default portfolio
-        const defaultFunds = DEFAULT_FUND_IDS
-          .map((id) => data.find((f) => f.id === id))
-          .filter(Boolean) as Fund[]
-        if (defaultFunds.length === DEFAULT_FUND_IDS.length) {
-          setAllocations(defaultFunds.map((f) => ({ fund: f, weight: 100 / DEFAULT_FUND_IDS.length })))
+        // Fallback: pick the top-ranked MF-eligible funds (first 5 from filtered list)
+        const defaultFunds = data.slice(0, 5)
+        if (defaultFunds.length > 0) {
+          const eq = Math.floor(100 / defaultFunds.length)
+          const rem = 100 - eq * defaultFunds.length
+          setAllocations(defaultFunds.map((f, i) => ({ fund: f, weight: eq + (i === 0 ? rem : 0) })))
           setIsDefault(true)
           pendingRun.current = true   // trigger auto-backtest for default portfolio
         }

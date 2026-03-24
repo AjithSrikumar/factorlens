@@ -2,19 +2,19 @@
   "crons": [
     {
       "path": "/api/cron/eod",
-      "schedule": "30 12 * * 1-5"
+      "schedule": "30 12 * * *"
     },
     {
       "path": "/api/cron/mf-eod",
-      "schedule": "30 17 * * 1-5"
+      "schedule": "30 17 * * *"
     },
     {
       "path": "/api/nav-sync?action=daily",
-      "schedule": "0 18 * * 1-5"
+      "schedule": "0 18 * * *"
     },
     {
       "path": "/api/nav-sync?action=normalize",
-      "schedule": "30 18 * * 0"
+      "schedule": "30 18 * * *"
     },
     {
       "path": "/api/cron/eod?recompute_all=true",
@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/mf-eod",
       "schedule": "0 4 * * 6"
+    },
+    {
+      "path": "/api/cron/news-scrape",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/news-cleanup",
+      "schedule": "0 2 * * *"
     }
   ],
   "functions": {
@@ -34,6 +42,9 @@
     },
     "src/app/api/nav-sync/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/news-scrape/route.ts": {
+      "maxDuration": 120
     }
   }
 }

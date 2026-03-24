@@ -8,6 +8,7 @@ const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/funds", label: "Funds" },
   { href: "/rankings", label: "Rankings" },
+  { href: "/news", label: "News" },
   { href: "/amc", label: "AMC" },
   { href: "/academy", label: "Academy" },
 ]
@@ -44,13 +45,19 @@ const IconAmc = () => (
     <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" /><line x1="12" y1="12" x2="12" y2="16" /><line x1="10" y1="14" x2="14" y2="14" />
   </svg>
 )
+const IconNews = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
+    <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
+    <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" />
+  </svg>
+)
 
 const bottomNavLinks = [
   { href: "/", label: "Home", Icon: IconHome, exact: true },
-  { href: "/dashboard", label: "Dashboard", Icon: IconDash },
-  { href: "/funds", label: "Funds", Icon: IconFunds },
+  { href: "/dashboard", label: "Portfolio", Icon: IconDash },
+  { href: "/news", label: "News", Icon: IconNews },
   { href: "/rankings", label: "Rankings", Icon: IconRank },
-  { href: "/amc", label: "AMC", Icon: IconAmc },
+  { href: "/funds", label: "Funds", Icon: IconFunds },
 ]
 
 export function Navbar() {

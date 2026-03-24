@@ -326,6 +326,7 @@ export function selectAndWeightFunds(
   const lowVolCandidates = funds.filter(f =>
     LOW_VOL_CODES.includes(f.code) &&
     TRACKED_INDEX_CODES.has(f.code) &&
+    f.final_rank != null &&   // must be a ranked index with sufficient history
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
 
@@ -354,6 +355,7 @@ export function selectAndWeightFunds(
     MF_ELIGIBLE_CODES.has(f.code) &&
     TRACKED_INDEX_CODES.has(f.code) &&
     !excludeCodes.has(f.code) &&
+    f.final_rank != null &&   // only ranked indices with ≥10Y history
     (f.cagr_10y != null || f.sharpe_ratio != null || f.max_drawdown != null)
   )
 

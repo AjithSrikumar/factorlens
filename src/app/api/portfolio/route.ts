@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       },
       // Funds excluded from backtest due to no NAV data (e.g. not yet scraped)
       skippedFundIds: missingFunds.map(f => f.fundId),
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

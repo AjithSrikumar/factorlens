@@ -292,7 +292,7 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <Input
-                  placeholder="Search 28 factor indices…"
+                  placeholder={`Search ${filteredFunds.length + allocations.length} factor indices…`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 h-10 rounded-xl bg-muted/40 border-muted text-sm"
