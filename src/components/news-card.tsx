@@ -70,8 +70,8 @@ function stripHtml(text: string): string {
  * Parse the AI-generated summary into named sections.
  * Summary format uses bold **SECTION HEADER** markers.
  */
-function parseSummary(raw: string): { what: string; context: string; why: string; numbers: string[] } {
-  const result = { what: '', context: '', why: '', numbers: [] as string[] }
+function parseSummary(raw: string): { what: string; context: string; why: string } {
+  const result = { what: '', context: '', why: '' }
   if (!raw) return result
 
   const sections: Record<string, string> = {}
@@ -85,15 +85,6 @@ function parseSummary(raw: string): { what: string; context: string; why: string
   result.what    = stripHtml(sections['WHAT HAPPENED'] ?? '')
   result.context = stripHtml(sections['CONTEXT'] ?? '')
   result.why     = stripHtml(sections['WHY IT MATTERS'] ?? '')
-
-  const numbersRaw = sections['KEY NUMBERS'] ?? ''
-  if (numbersRaw) {
-    result.numbers = numbersRaw
-      .split(/[\n•\-–—]/)
-      .map(s => stripHtml(s.trim()))
-      .filter(s => s.length > 5)
-      .slice(0, 5)
-  }
 
   // If no section markers found, use the raw text as "what"
   if (!result.what && !result.context && !result.why) {
@@ -339,33 +330,15 @@ export function NewsCard({ article, index, total }: NewsCardProps) {
           </div>
         )}
 
-        {/* Key numbers */}
-        {sections.numbers.length > 0 && (
-          <>
-            <SectionLabel>Key Numbers</SectionLabel>
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' as const, gap: 5 }}>
-              {sections.numbers.map((n, i) => (
-                <li key={i} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 8,
-                  fontSize: 13.5, color: 'rgba(12,14,19,.75)',
-                }}>
-                  <span style={{
-                    width: 5, height: 5, borderRadius: '50%',
-                    background: cfg.bg, marginTop: 6, flexShrink: 0,
-                  }} />
-                  {n}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-
         {/* Key points */}
-        {parseKeyPoints(article.key_points).length > 0 && sections.numbers.length === 0 && (
+        {parseKeyPoints(article.key_points).filter(pt => !pt.startsWith('Source:')).length > 0 && (
           <>
             <SectionLabel>Key Points</SectionLabel>
             <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' as const, gap: 5 }}>
-              {parseKeyPoints(article.key_points).slice(0, 4).map((pt, i) => (
+              {parseKeyPoints(article.key_points)
+                .filter(pt => !pt.startsWith('Source:'))
+                .slice(0, 4)
+                .map((pt, i) => (
                 <li key={i} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   fontSize: 13.5, color: 'rgba(12,14,19,.75)',

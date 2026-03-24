@@ -255,29 +255,18 @@ function isFinanceRelevant(text: string, headline: string): boolean {
 // ─── Key Points Generator ─────────────────────────────────────────────────────
 
 function buildKeyPoints(
-  article: RawArticle,
   topSentences: string[],
-  numbers: string[],
 ): string[] {
+  // Use sentences not already shown in "What Happened" (indices 0–1)
+  // to avoid repetition across sections
   const points: string[] = []
 
-  // First top sentence as first point
-  if (topSentences[0]) points.push(topSentences[0].replace(/\s+/g, ' ').trim())
-
-  // Add a numbers bullet if found
-  if (numbers.length > 0) {
-    points.push(`Key figures: ${numbers.slice(0, 3).join('; ')}`)
+  for (let i = 2; i < topSentences.length && points.length < 3; i++) {
+    const s = topSentences[i].replace(/\s+/g, ' ').trim()
+    if (s.length > 20) points.push(s)
   }
 
-  // Second top sentence
-  if (topSentences[1] && topSentences[1] !== topSentences[0]) {
-    points.push(topSentences[1].replace(/\s+/g, ' ').trim())
-  }
-
-  // Source attribution
-  points.push(`Source: ${article.source}`)
-
-  return points.slice(0, 5).filter(p => p.length > 10)
+  return points
 }
 
 // ─── Summary Builder ──────────────────────────────────────────────────────────
@@ -285,8 +274,6 @@ function buildKeyPoints(
 function buildSummary(
   headline: string,
   topSentences: string[],
-  numbers: string[],
-  category: NewsCategory,
 ): string {
   const what = topSentences.slice(0, 2).join(' ')
   const context = topSentences.slice(2, 4).join(' ')
@@ -300,10 +287,6 @@ function buildSummary(
 
   if (implications) {
     summary += `\n\n**WHY IT MATTERS**\n${implications}`
-  }
-
-  if (numbers.length > 0) {
-    summary += `\n\n**KEY NUMBERS**\n${numbers.map(n => `— ${n}`).join('\n')}`
   }
 
   return summary.trim()
@@ -323,18 +306,17 @@ export async function summarizeArticle(article: RawArticle): Promise<SummarizedA
   if (!isFinanceRelevant(text, headline)) return null
 
   const topSentences = extractTopSentences(text, 8)
-  const numbers = extractNumbers(text)
   const category = detectCategory(text + ' ' + headline)
   const importanceScore = scoreImportance(text, headline)
   const marketMoving = isMarketMoving(text, headline, importanceScore)
 
-  const summary = buildSummary(headline, topSentences, numbers, category)
-  const keyPoints = buildKeyPoints(article, topSentences.slice(0, 3), numbers)
-  const whyItMatters = topSentences[0]
-    ?? headline
+  const summary = buildSummary(headline, topSentences)
+  const keyPoints = buildKeyPoints(topSentences)
+  // Use a later sentence for why_it_matters to avoid repeating "What Happened"
+  const whyItMatters = topSentences[4] ?? topSentences[2] ?? topSentences[1] ?? headline
 
   // Validate minimum usable output
-  if (!summary || keyPoints.length === 0) return null
+  if (!summary) return null
 
   return {
     headline:         headline.slice(0, 200),
