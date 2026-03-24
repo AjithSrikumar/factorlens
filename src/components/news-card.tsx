@@ -31,6 +31,14 @@ const CATEGORY_CONFIG = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function parseKeyPoints(kp: unknown): string[] {
+  if (Array.isArray(kp)) return kp
+  if (typeof kp === 'string') {
+    try { const p = JSON.parse(kp); return Array.isArray(p) ? p : [] } catch { return [] }
+  }
+  return []
+}
+
 function formatTime(iso: string | null): string {
   if (!iso) return ''
   try {
@@ -339,11 +347,11 @@ export function NewsCard({ article, index, total }: NewsCardProps) {
         )}
 
         {/* Key points */}
-        {article.key_points?.length > 0 && sections.numbers.length === 0 && (
+        {parseKeyPoints(article.key_points).length > 0 && sections.numbers.length === 0 && (
           <>
             <SectionLabel>Key Points</SectionLabel>
             <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' as const, gap: 5 }}>
-              {article.key_points.slice(0, 4).map((pt, i) => (
+              {parseKeyPoints(article.key_points).slice(0, 4).map((pt, i) => (
                 <li key={i} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                   fontSize: 13.5, color: 'rgba(12,14,19,.75)',
