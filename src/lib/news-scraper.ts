@@ -1,43 +1,60 @@
 /**
  * news-scraper.ts
  *
- * RSS-based news scraper for finance-focused Indian business news sources.
- * Parses RSS/Atom feeds, filters for finance relevance, and optionally
- * fetches richer article content for summarization.
+ * Multi-source news scraper for finance-focused Indian business news.
+ * Supports both RSS feeds and HTML listing-page scraping.
+ *
+ * Sources:
+ *  - NDTV Profit       → RSS via FeedBurner
+ *  - Hindu Business Line → RSS (native feed)
+ *  - Business Standard  → HTML scraping (best-effort; CDN may block)
+ *  - MoneyControl       → HTML scraping (best-effort; CDN may block)
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface RawArticle {
   headline:    string
-  content:     string      // RSS description + any scraped body
+  content:     string      // description + any scraped body text
   sourceUrl:   string
   source:      string
   imageUrl:    string | null
   publishedAt: Date | null
 }
 
-// ─── Feed definitions ─────────────────────────────────────────────────────────
-
-export interface FeedConfig {
+interface FeedSource {
   source: string
-  urls:   string[]
+  type:   'rss' | 'html'
+  url:    string
 }
 
-export const NEWS_FEEDS: FeedConfig[] = [
+// ─── Feed definitions ─────────────────────────────────────────────────────────
+
+const FEED_SOURCES: FeedSource[] = [
   {
-    source: 'Google News',
-    urls: [
-      'https://news.google.com/rss/search?q=india+stock+market+nifty+sensex&hl=en-IN&gl=IN&ceid=IN:en',
-      'https://news.google.com/rss/search?q=india+economy+rbi+sebi+budget&hl=en-IN&gl=IN&ceid=IN:en',
-      'https://news.google.com/rss/search?q=india+companies+earnings+profit+ipo&hl=en-IN&gl=IN&ceid=IN:en',
-    ],
+    source: 'NDTV Profit',
+    type:   'rss',
+    url:    'https://feeds.feedburner.com/ndtvprofit-latest',
+  },
+  {
+    source: 'The Hindu Business Line',
+    type:   'rss',
+    url:    'https://www.thehindubusinessline.com/feeder/default.rss',
+  },
+  {
+    source: 'Business Standard',
+    type:   'html',
+    url:    'https://www.business-standard.com/latest-news',
+  },
+  {
+    source: 'MoneyControl',
+    type:   'html',
+    url:    'https://www.moneycontrol.com/news/business/',
   },
 ]
 
 // ─── Finance relevance filter ─────────────────────────────────────────────────
 
-/** Keywords that strongly signal finance-relevant content */
 const FINANCE_KEYWORDS = new Set([
   'stock', 'shares', 'equity', 'market', 'sensex', 'nifty', 'bse', 'nse',
   'rupee', 'forex', 'currency', 'dollar', 'yen', 'euro', 'pound',
@@ -58,7 +75,6 @@ const FINANCE_KEYWORDS = new Set([
   'promoter', 'institutional', 'bulk deal', 'block deal',
 ])
 
-/** Terms that indicate non-finance content — always exclude if in headline */
 const EXCLUDE_TERMS = new Set([
   'cricket', 'football', 'tennis', 'hockey', 'kabaddi', 'chess',
   'bollywood', 'film', 'movie', 'actor', 'actress', 'celebrity', 'entertainment',
@@ -68,30 +84,19 @@ const EXCLUDE_TERMS = new Set([
   'viral', 'trending', 'social media', 'instagram', 'twitter meme',
 ])
 
-/**
- * Score a headline/content for finance relevance.
- * Returns a score: ≥2 is finance-relevant, <2 is filtered out.
- */
 export function financeScore(headline: string, content: string): number {
   const text = `${headline} ${content}`.toLowerCase()
-
-  // Instant reject
   for (const term of EXCLUDE_TERMS) {
     if (text.includes(term)) return 0
   }
-
-  // Count finance keyword hits
   let score = 0
   for (const kw of FINANCE_KEYWORDS) {
     if (text.includes(kw)) score++
   }
-
-  // Boost for headline hits (headline keywords count double)
   const hl = headline.toLowerCase()
   for (const kw of FINANCE_KEYWORDS) {
     if (hl.includes(kw)) score++
   }
-
   return score
 }
 
@@ -99,79 +104,22 @@ export function isFinanceRelevant(headline: string, content: string): boolean {
   return financeScore(headline, content) >= 2
 }
 
-// ─── XML / RSS helpers ────────────────────────────────────────────────────────
+// ─── Shared HTML helpers ───────────────────────────────────────────────────────
 
-/** Extract raw text from a single XML tag (handles CDATA) */
-function extractTag(xml: string, tag: string): string {
-  // Try namespace-prefixed variant first (e.g. content:encoded)
-  const patterns = [
-    new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\/${tag}>`, 'i'),
-    new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'),
-  ]
-  for (const re of patterns) {
-    const m = xml.match(re)
-    if (m?.[1]) return m[1].trim()
-  }
-  return ''
-}
-
-/** Try several tag variants for the link element */
-function extractLink(itemXml: string): string {
-  // <link> can appear as text node between tags OR as href attribute
-  const plain = itemXml.match(/<link>([^<]+)<\/link>/i)
-  if (plain?.[1]) return plain[1].trim()
-
-  const href = itemXml.match(/<link[^>]+href=["']([^"']+)["']/i)
-  if (href?.[1]) return href[1].trim()
-
-  // Atom <id> often contains the URL
-  const id = itemXml.match(/<id>([^<]+)<\/id>/i)
-  if (id?.[1]?.startsWith('http')) return id[1].trim()
-
-  return ''
-}
-
-/** Extract image URL from RSS item (enclosure, media:content, media:thumbnail, og tags) */
-function extractImageUrl(itemXml: string): string | null {
-  // <enclosure url="..." type="image/..."/>
-  const enc = itemXml.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]+type=["']image[^"']*["']/i)
-    || itemXml.match(/<enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']+)["']/i)
-  if (enc?.[1]) return enc[1]
-
-  // <media:content url="..."/>  or  <media:thumbnail url="..."/>
-  const media = itemXml.match(/<media:[^>]+url=["']([^"']+\.(jpg|jpeg|png|webp))[^"']*["']/i)
-  if (media?.[1]) return media[1]
-
-  // <image> block
-  const img = itemXml.match(/<image[^>]*>[\s\S]*?<url>([^<]+)<\/url>/i)
-  if (img?.[1]) return img[1].trim()
-
-  // Inline <img> inside description / content
-  const inlineImg = itemXml.match(/<img[^>]+src=["']([^"']+)["']/i)
-  if (inlineImg?.[1] && !inlineImg[1].includes('spacer') && !inlineImg[1].includes('pixel')) {
-    return inlineImg[1]
-  }
-
-  return null
-}
-
-/** Strip HTML tags and decode basic HTML entities */
+/** Decode HTML entities FIRST, then strip tags */
 function stripHtml(html: string): string {
   return html
-    // Decode HTML entities FIRST so encoded tags (e.g. &lt;a&gt;) are also stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
-    // Strip HTML tags (including any that were previously entity-encoded)
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }
 
-/** Parse a pubDate / dc:date string to a Date object */
 function parseDate(raw: string): Date | null {
   if (!raw) return null
   try {
@@ -182,7 +130,64 @@ function parseDate(raw: string): Date | null {
   }
 }
 
-// ─── RSS feed parser ──────────────────────────────────────────────────────────
+// ─── RSS helpers ──────────────────────────────────────────────────────────────
+
+function extractTag(xml: string, tag: string): string {
+  const patterns = [
+    new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, 'i'),
+    new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'),
+  ]
+  for (const re of patterns) {
+    const m = xml.match(re)
+    if (m?.[1]) return m[1].trim()
+  }
+  return ''
+}
+
+function extractLink(itemXml: string): string {
+  const plain = itemXml.match(/<link>([^<]+)<\/link>/i)
+  if (plain?.[1]) return plain[1].trim()
+
+  const href = itemXml.match(/<link[^>]+href=["']([^"']+)["']/i)
+  if (href?.[1]) return href[1].trim()
+
+  // <guid> often contains the canonical URL
+  const guidCdata = itemXml.match(/<guid[^>]*><!\[CDATA\[([^\]]+)\]\]><\/guid>/i)
+    || itemXml.match(/<guid[^>]*>([^<]+)<\/guid>/i)
+  if (guidCdata?.[1]?.startsWith('http')) return guidCdata[1].trim()
+
+  return ''
+}
+
+function extractImageUrl(itemXml: string): string | null {
+  const enc = itemXml.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]+type=["']image[^"']*["']/i)
+    || itemXml.match(/<enclosure[^>]+type=["']image[^"']*["'][^>]+url=["']([^"']+)["']/i)
+  if (enc?.[1]) return enc[1]
+
+  const media = itemXml.match(/<media:[^>]+url=["']([^"']+\.(jpg|jpeg|png|webp))[^"']*["']/i)
+  if (media?.[1]) return media[1]
+
+  const img = itemXml.match(/<image[^>]*>[\s\S]*?<url>([^<]+)<\/url>/i)
+  if (img?.[1]) return img[1].trim()
+
+  const inlineImg = itemXml.match(/<img[^>]+src=["']([^"']+)["']/i)
+  if (inlineImg?.[1] && !inlineImg[1].includes('spacer') && !inlineImg[1].includes('pixel')) {
+    return inlineImg[1]
+  }
+
+  return null
+}
+
+/** Strip the #publisher=newsstand and similar tracking fragments from URLs */
+function cleanUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    u.hash = ''
+    return u.toString()
+  } catch {
+    return url.split('#')[0]
+  }
+}
 
 interface RSSItem {
   title:       string
@@ -195,8 +200,6 @@ interface RSSItem {
 
 function parseRSSItems(xml: string): RSSItem[] {
   const items: RSSItem[] = []
-
-  // Support both RSS <item> and Atom <entry>
   const tagRe = /<item>([\s\S]*?)<\/item>|<entry>([\s\S]*?)<\/entry>/gi
   let match: RegExpExecArray | null
 
@@ -205,10 +208,13 @@ function parseRSSItems(xml: string): RSSItem[] {
     if (!raw) continue
 
     const title       = stripHtml(extractTag(raw, 'title'))
-    const link        = extractLink(raw)
+    const link        = cleanUrl(extractLink(raw))
     const description = stripHtml(extractTag(raw, 'description') || extractTag(raw, 'summary'))
     const content     = stripHtml(extractTag(raw, 'content:encoded') || extractTag(raw, 'content'))
-    const pubDate     = extractTag(raw, 'pubDate') || extractTag(raw, 'published') || extractTag(raw, 'dc:date') || extractTag(raw, 'updated')
+    const pubDate     = extractTag(raw, 'pubDate')
+      || extractTag(raw, 'published')
+      || extractTag(raw, 'dc:date')
+      || extractTag(raw, 'updated')
     const imageUrl    = extractImageUrl(raw)
 
     if (title && link) {
@@ -219,65 +225,9 @@ function parseRSSItems(xml: string): RSSItem[] {
   return items
 }
 
-// ─── Article content fetcher ─────────────────────────────────────────────────
+// ─── RSS feed fetcher ─────────────────────────────────────────────────────────
 
-/**
- * Attempt to scrape a richer article body from the source URL.
- * Falls back gracefully — never throws.
- */
-async function fetchArticleContent(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      signal:  AbortSignal.timeout(8_000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; FactorLensBot/1.0; +https://factorlens.vercel.app)',
-        'Accept':     'text/html,application/xhtml+xml',
-      },
-    })
-    if (!res.ok) return ''
-
-    const html = await res.text()
-
-    // Extract content from common article containers
-    const contentPatterns = [
-      /<article[^>]*>([\s\S]*?)<\/article>/i,
-      /<div[^>]+class="[^"]*(?:article-body|story-body|entry-content|article-content|post-content|articleBody|article_body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-      /<div[^>]+id="[^"]*(?:article-body|story-content|content-body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
-    ]
-
-    for (const re of contentPatterns) {
-      const m = html.match(re)
-      if (m?.[1]) {
-        const text = stripHtml(m[1])
-        if (text.length > 200) return text.slice(0, 3000)
-      }
-    }
-
-    // Fallback: grab all paragraph text
-    const paragraphs: string[] = []
-    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
-    let pm: RegExpExecArray | null
-    while ((pm = pRe.exec(html)) !== null) {
-      const t = stripHtml(pm[1])
-      if (t.length > 40) paragraphs.push(t)
-      if (paragraphs.join(' ').length > 2500) break
-    }
-    return paragraphs.join(' ').slice(0, 3000)
-  } catch {
-    return ''
-  }
-}
-
-// ─── Main feed fetcher ────────────────────────────────────────────────────────
-
-/**
- * Fetch one RSS feed URL and return parsed raw articles.
- * Tries up to 2 redirects and handles common error cases.
- */
-async function fetchFeed(
-  url:    string,
-  source: string,
-): Promise<RawArticle[]> {
+async function fetchRssFeed(url: string, source: string): Promise<RawArticle[]> {
   try {
     const res = await fetch(url, {
       signal:  AbortSignal.timeout(12_000),
@@ -302,100 +252,279 @@ async function fetchFeed(
       return []
     }
 
-    const articles: RawArticle[] = []
-    for (const item of items) {
-      // Use RSS content if it's rich enough; otherwise schedule a page fetch later
-      const bodyText = item.content.length > 200
-        ? item.content
-        : item.description
+    return items.map(item => ({
+      headline:    item.title,
+      content:     item.content.length > 200 ? item.content : item.description,
+      sourceUrl:   item.link,
+      source,
+      imageUrl:    item.imageUrl,
+      publishedAt: parseDate(item.pubDate),
+    }))
+  } catch (err) {
+    console.warn(`[news-scraper] ${source}: RSS fetch failed:`, err instanceof Error ? err.message : err)
+    return []
+  }
+}
 
-      articles.push({
-        headline:    item.title,
-        content:     bodyText || item.description,
-        sourceUrl:   item.link,
-        source,
-        imageUrl:    item.imageUrl,
-        publishedAt: parseDate(item.pubDate),
-      })
+// ─── HTML listing-page scraper ────────────────────────────────────────────────
+
+/** Resolve a href against a base URL; returns null for non-http/fragment links */
+function resolveUrl(href: string, base: URL): string | null {
+  if (!href) return null
+  const trimmed = href.trim()
+  if (trimmed.startsWith('#') || trimmed.startsWith('javascript:') || trimmed.startsWith('mailto:')) return null
+  try {
+    return new URL(trimmed, base).toString()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Returns true if the URL looks like a news article on the same host:
+ * - Same hostname
+ * - Path has ≥ 2 segments (not a root category page)
+ * - Doesn't look like a nav/tag/author/utility page
+ */
+function isArticleUrl(url: string, base: URL): boolean {
+  try {
+    const u = new URL(url)
+    if (u.hostname !== base.hostname) return false
+    const segments = u.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) return false
+    const blocked = ['/tag/', '/tags/', '/category/', '/author/', '/search/',
+      '/rss/', '/feed/', '/about', '/contact', '/privacy', '/terms',
+      '/login', '/register', '/subscribe', '/profile', '/user/',
+      '/page/', '/amp/', '/sitemap']
+    if (blocked.some(b => u.pathname.includes(b))) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Extract a date from text near an article link.
+ * Handles ISO 8601 datetime attributes and IST-formatted strings.
+ */
+function parseDateFromContext(ctx: string): Date | null {
+  // <time datetime="...">
+  const dtAttr = ctx.match(/datetime=["']([^"']+)["']/i)
+  if (dtAttr?.[1]) {
+    const d = parseDate(dtAttr[1])
+    if (d) return d
+  }
+  // ISO-ish strings: 2024-03-22T10:30:00
+  const iso = ctx.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
+  if (iso) {
+    const d = parseDate(iso[0])
+    if (d) return d
+  }
+  return null
+}
+
+/**
+ * Scrape a news listing page (HTML) and return RawArticle[].
+ * Uses three fallback strategies:
+ *  1. <article> block extraction
+ *  2. Heading+link (<h2>/<h3> with <a href>)
+ *  3. Any <a> whose text is headline-length and href is an article URL
+ */
+async function scrapeHtmlListPage(url: string, source: string): Promise<RawArticle[]> {
+  let html: string
+  try {
+    const res = await fetch(url, {
+      signal:  AbortSignal.timeout(15_000),
+      headers: {
+        'User-Agent':          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept':              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language':     'en-US,en;q=0.9',
+        'Accept-Encoding':     'identity',
+        'Cache-Control':       'no-cache',
+        'Upgrade-Insecure-Requests': '1',
+      },
+    })
+
+    if (!res.ok) {
+      console.warn(`[news-scraper] ${source}: HTTP ${res.status} for ${url} (HTML scraping)`)
+      return []
     }
 
-    return articles
+    const text = await res.text()
+    // Bail out on known block pages (Akamai, Cloudflare)
+    if (text.length < 2000 || /<title>Access Denied/i.test(text) || /<title>.*?Error/i.test(text)) {
+      console.warn(`[news-scraper] ${source}: blocked or empty page at ${url}`)
+      return []
+    }
+    html = text
   } catch (err) {
-    console.warn(`[news-scraper] ${source}: fetch failed for ${url}:`, err instanceof Error ? err.message : err)
+    console.warn(`[news-scraper] ${source}: HTML fetch failed:`, err instanceof Error ? err.message : err)
     return []
+  }
+
+  const base    = new URL(url)
+  const articles: RawArticle[] = []
+  const seen    = new Set<string>()
+
+  function addArticle(href: string, title: string, context: string, imageUrl: string | null = null) {
+    const resolved = resolveUrl(href, base)
+    if (!resolved || !isArticleUrl(resolved, base)) return
+    const cleanedUrl = cleanUrl(resolved)
+    if (seen.has(cleanedUrl)) return
+    const headline = stripHtml(title).trim()
+    if (headline.length < 20 || headline.length > 400) return
+    seen.add(cleanedUrl)
+    articles.push({
+      headline,
+      content:     headline,   // enriched later via fetchArticleContent
+      sourceUrl:   cleanedUrl,
+      source,
+      imageUrl,
+      publishedAt: parseDateFromContext(context),
+    })
+  }
+
+  // ── Strategy 1: <article> blocks ────────────────────────────────────────────
+  const articleRe = /<article[^>]*>([\s\S]*?)<\/article>/gi
+  let m: RegExpExecArray | null
+  while ((m = articleRe.exec(html)) !== null) {
+    const block = m[1]
+    // Find first link with heading-like text inside the block
+    const linkRe = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
+    let lm: RegExpExecArray | null
+    while ((lm = linkRe.exec(block)) !== null) {
+      const text = stripHtml(lm[2]).trim()
+      if (text.length >= 20 && text.length <= 400) {
+        // Check for image
+        const imgM = block.match(/<img[^>]+src=["']([^"']+)["']/i)
+        addArticle(lm[1], text, block, imgM?.[1] ?? null)
+        break  // one article per <article> block
+      }
+    }
+  }
+
+  // ── Strategy 2: <h2>/<h3>/<h4> containing <a href> ──────────────────────────
+  if (articles.length < 5) {
+    const headRe = /<h[2-4][^>]*>([\s\S]*?)<\/h[2-4]>/gi
+    while ((m = headRe.exec(html)) !== null) {
+      const inner = m[1]
+      const linkM = inner.match(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i)
+      if (!linkM) continue
+      // Grab ~200 chars of surrounding HTML for date context
+      const ctx = html.slice(Math.max(0, m.index - 200), m.index + m[0].length + 200)
+      addArticle(linkM[1], linkM[2], ctx)
+    }
+  }
+
+  // ── Strategy 3: any <a> with headline-length text + article-like href ────────
+  if (articles.length < 5) {
+    const allLinkRe = /<a[^>]+href=["']([^"'#][^"']*?)["'][^>]*>([\s\S]*?)<\/a>/gi
+    while ((m = allLinkRe.exec(html)) !== null) {
+      const text = stripHtml(m[2]).trim()
+      if (text.length >= 25 && text.length <= 300) {
+        const ctx = html.slice(Math.max(0, m.index - 100), m.index + m[0].length + 100)
+        addArticle(m[1], text, ctx)
+      }
+    }
+  }
+
+  console.log(`[news-scraper] ${source}: scraped ${articles.length} articles from HTML`)
+  return articles
+}
+
+// ─── Article content enricher ─────────────────────────────────────────────────
+
+async function fetchArticleContent(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      signal:  AbortSignal.timeout(8_000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FactorLensBot/1.0; +https://factorlens.vercel.app)',
+        'Accept':     'text/html,application/xhtml+xml',
+      },
+    })
+    if (!res.ok) return ''
+
+    const html = await res.text()
+
+    const contentPatterns = [
+      /<article[^>]*>([\s\S]*?)<\/article>/i,
+      /<div[^>]+class="[^"]*(?:article-body|story-body|entry-content|article-content|post-content|articleBody|article_body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+id="[^"]*(?:article-body|story-content|content-body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    ]
+
+    for (const re of contentPatterns) {
+      const match = html.match(re)
+      if (match?.[1]) {
+        const text = stripHtml(match[1])
+        if (text.length > 200) return text.slice(0, 3000)
+      }
+    }
+
+    const paragraphs: string[] = []
+    const pRe = /<p[^>]*>([\s\S]*?)<\/p>/gi
+    let pm: RegExpExecArray | null
+    while ((pm = pRe.exec(html)) !== null) {
+      const t = stripHtml(pm[1])
+      if (t.length > 40) paragraphs.push(t)
+      if (paragraphs.join(' ').length > 2500) break
+    }
+    return paragraphs.join(' ').slice(0, 3000)
+  } catch {
+    return ''
   }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export interface ScrapeOptions {
-  /** Max articles to return per source (default 25) */
-  maxPerSource?: number
-  /** Fetch full article body from URL if RSS content is thin (default true) */
-  fetchFullContent?: boolean
-  /** Minimum finance relevance score to pass pre-filter (default 2) */
-  minScore?: number
+  maxPerSource?:    number   // default 25
+  fetchFullContent?: boolean // default true
+  minScore?:        number   // default 2
 }
 
-/**
- * Scrape all configured news feeds, apply finance filtering, and optionally
- * enrich content by fetching full article pages.
- *
- * Returns de-duplicated RawArticle[] sorted by publishedAt DESC.
- */
 export async function scrapeNewsFeeds(opts: ScrapeOptions = {}): Promise<RawArticle[]> {
   const {
-    maxPerSource   = 25,
+    maxPerSource    = 25,
     fetchFullContent = true,
-    minScore       = 2,
+    minScore        = 2,
   } = opts
 
-  const results = await Promise.allSettled(
-    NEWS_FEEDS.flatMap(feed =>
-      // Try each feed URL; first successful one wins (via concurrency)
-      feed.urls.map(url => fetchFeed(url, feed.source))
+  // Fetch all sources concurrently
+  const settled = await Promise.allSettled(
+    FEED_SOURCES.map(src =>
+      src.type === 'rss'
+        ? fetchRssFeed(src.url, src.source)
+        : scrapeHtmlListPage(src.url, src.source)
     )
   )
 
-  // Collect all articles, keeping the best (non-empty) result per source
-  const bySource = new Map<string, RawArticle[]>()
-  for (const r of results) {
+  // Merge results, capped per source, deduped by URL, finance-filtered
+  const seen = new Set<string>()
+  const all:  RawArticle[] = []
+
+  for (let i = 0; i < settled.length; i++) {
+    const r = settled[i]
     if (r.status !== 'fulfilled' || r.value.length === 0) continue
-    const src = r.value[0].source
-    const existing = bySource.get(src)
-    // Keep whichever feed gave us more articles
-    if (!existing || r.value.length > existing.length) {
-      bySource.set(src, r.value)
-    }
-  }
 
-  // Merge, deduplicate by URL, apply pre-filter
-  const seen  = new Set<string>()
-  let all: RawArticle[] = []
-
-  for (const [, articles] of bySource) {
     let count = 0
-    for (const a of articles) {
-      if (seen.has(a.sourceUrl)) continue
+    for (const a of r.value) {
+      if (!a.sourceUrl || seen.has(a.sourceUrl)) continue
       seen.add(a.sourceUrl)
-
       if (!isFinanceRelevant(a.headline, a.content)) continue
       if (financeScore(a.headline, a.content) < minScore) continue
-
       all.push(a)
       if (++count >= maxPerSource) break
     }
   }
 
-  // Optionally enrich with full article content (parallelised, max 10 at once)
+  // Optionally enrich thin articles with full body text (max 10 at once)
   if (fetchFullContent) {
-    const thin = all.filter(a => a.content.length < 300)
+    const thin  = all.filter(a => a.content.length < 300)
     const CHUNK = 10
     for (let i = 0; i < thin.length; i += CHUNK) {
-      const chunk = thin.slice(i, i + CHUNK)
-      const enriched = await Promise.allSettled(
-        chunk.map(a => fetchArticleContent(a.sourceUrl))
-      )
+      const chunk   = thin.slice(i, i + CHUNK)
+      const enriched = await Promise.allSettled(chunk.map(a => fetchArticleContent(a.sourceUrl)))
       for (let j = 0; j < chunk.length; j++) {
         const r = enriched[j]
         if (r.status === 'fulfilled' && r.value.length > chunk[j].content.length) {
@@ -405,7 +534,7 @@ export async function scrapeNewsFeeds(opts: ScrapeOptions = {}): Promise<RawArti
     }
   }
 
-  // Sort by published date (newest first), fall back to scrape order
+  // Sort newest first
   all.sort((a, b) => {
     if (!a.publishedAt && !b.publishedAt) return 0
     if (!a.publishedAt) return 1
