@@ -1,23 +1,28 @@
 """
 EOD scraper for FactorLens — run manually or via CI.
-Fetches latest NAV data for all 28 indices and upserts to Supabase.
+Fetches daily NAV data for all NSE indices and upserts to Supabase.
+New indices are automatically inserted into the `funds` table if missing,
+and historical data is pulled from the index inception date on first run.
 
 Sources:
-  - 26 NSE indices : niftyindices.com POST API
-  - S&P 500 (SPX)  : Yahoo Finance  (^GSPC)
-  - Gold BeES      : Yahoo Finance  (GOLDBEES.NS)
+  - NSE indices : niftyindices.com POST API
 
 Usage:
-    pip install requests yfinance psycopg2-binary
-    python scripts/scrape_eod.py
+    pip install requests psycopg2-binary
+    python scripts/scrape_eod.py                          # normal EOD update
+    python scripts/scrape_eod.py --backfill               # re-fetch ALL indices from inception
+    python scripts/scrape_eod.py --backfill NSC100 NDIV50 # re-fetch specific indices from inception
 """
 
-import os, sys, json, time, math
+import os, sys, json, time, math, argparse
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from typing import Optional
 
 import requests
-import yfinance as yf
+import requests.packages.urllib3
+requests.packages.urllib3.disable_warnings(
+    requests.packages.urllib3.exceptions.InsecureRequestWarning
+)
 import psycopg2
 from psycopg2.extras import execute_values
 
@@ -28,41 +33,532 @@ DB_URL = os.getenv(
     "postgresql://postgres.cxmaeueobsqrbivoqvry:74d4pPImwlV0sCH3LDrUUsB9OIkKHNzSrRZyht8OyWiWSGPr7uA8Iz1qRqlJCxQn@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 )
 
-IST = ZoneInfo("Asia/Kolkata")
+IST = timezone(timedelta(hours=5, minutes=30))
 
 NSE_INDICES = [
-    ("N50",         "NIFTY 50"),
-    ("NN50",        "NIFTY NEXT 50"),
-    ("N500",        "NIFTY 500"),
-    ("NMC150",      "NIFTY MIDCAP 150"),
-    ("NSC250",      "NIFTY SMALLCAP 250"),
-    ("NSC500",      "NIFTY SMALLCAP 500"),
-    ("NμC250",      "NIFTY MICROCAP 250"),
-    ("NTM",         "NIFTY TOTAL MARKET"),
-    ("MC150M50",    "NIFTY MIDCAP150 MOMENTUM 50"),
-    ("N500M50",     "NIFTY500 MOMENTUM 50"),
-    ("N200M30",     "NIFTY200 MOMENTUM 30"),
-    ("NTMMQ50",     "NIFTY TOTAL MARKET MOMENTUM QUALITY 50"),
-    ("MC150Q50",    "NIFTY MIDCAP150 QUALITY 50"),
-    ("N500Q50",     "NIFTY500 QUALITY 50"),
-    ("N200Q30",     "NIFTY200 QUALITY 30"),
-    ("N100Q30",     "NIFTY100 QUALITY 30"),
-    ("SC250Q50",    "NIFTY SMALLCAP250 QUALITY 50"),
-    ("N100LV30",    "NIFTY100 LOW VOLATILITY 30"),
-    ("N500LV50",    "NIFTY500 LOW VOLATILITY 50"),
-    ("N100A30",     "NIFTY100 ALPHA 30"),
-    ("N200A30",     "NIFTY200 ALPHA 30"),
-    ("N500V50",     "NIFTY500 VALUE 50"),
-    ("MMS400MQ100", "NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100"),
-    ("SC250MQ100",  "NIFTY SMALLCAP250 MOMENTUM QUALITY 100"),
-    ("N500MCQ50",   "NIFTY500 MULTICAP MOMENTUM QUALITY 50"),
-    ("N500MF50",    "NIFTY500 MULTIFACTOR MQVLV 50"),
+    # ── Broad Market ──────────────────────────────────────────────────────────
+    ("N50",          "NIFTY 50"),
+    ("NN50",         "NIFTY NEXT 50"),
+    ("N100",         "NIFTY 100"),
+    ("N200",         "NIFTY 200"),
+    ("N500",         "NIFTY 500"),
+    ("NMC50",        "NIFTY MIDCAP 50"),
+    ("NMC100",       "NIFTY MIDCAP 100"),
+    ("NMC150",       "NIFTY MIDCAP 150"),
+    ("NMCSEL",       "NIFTY MIDCAP SELECT"),
+    ("NSC50",        "NIFTY SMALLCAP 50"),
+    ("NSC100",       "NIFTY SMALLCAP 100"),
+    ("NSC250",       "NIFTY SMALLCAP 250"),
+    ("NSC500",       "NIFTY SMALLCAP 500"),
+    ("NμC250",       "NIFTY MICROCAP 250"),
+    ("NTM",          "NIFTY TOTAL MARKET"),
+    ("NMSC400",      "NIFTY MIDSMALLCAP 400"),
+    ("N500MC5025",   "NIFTY500 MULTICAP 50:25:25"),
+    ("NLMC250",      "NIFTY LARGEMIDCAP 250"),
+    ("N500LMSECW",   "NIFTY500 LARGEMIDSMALL EQUAL-CAP WEIGHTED"),
+    ("NIFPI150",     "NIFTY INDIA FPI 150"),
+
+    # ── Factor: Momentum ──────────────────────────────────────────────────────
+    ("MC150M50",     "NIFTY MIDCAP150 MOMENTUM 50"),
+    ("N500M50",      "NIFTY500 MOMENTUM 50"),
+    ("N200M30",      "NIFTY200 MOMENTUM 30"),
+    ("NTMMQ50",      "NIFTY TOTAL MARKET MOMENTUM QUALITY 50"),
+    ("MMS400MQ100",  "NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100"),
+    ("SC250MQ100",   "NIFTY SMALLCAP250 MOMENTUM QUALITY 100"),
+    ("N500MCQ50",    "NIFTY500 MULTICAP MOMENTUM QUALITY 50"),
+
+    # ── Factor: Quality ───────────────────────────────────────────────────────
+    ("MC150Q50",     "NIFTY MIDCAP150 QUALITY 50"),
+    ("N500Q50",      "NIFTY500 QUALITY 50"),
+    ("N200Q30",      "NIFTY200 QUALITY 30"),
+    ("N100Q30",      "NIFTY100 QUALITY 30"),
+    ("SC250Q50",     "NIFTY SMALLCAP250 QUALITY 50"),
+    ("N500FCQ30",    "NIFTY500 FLEXICAP QUALITY 30"),
+
+    # ── Factor: Low Volatility ────────────────────────────────────────────────
+    ("N100LV30",     "NIFTY100 LOW VOLATILITY 30"),
+    ("N500LV50",     "NIFTY500 LOW VOLATILITY 50"),
+    ("NLV50",        "NIFTY LOW VOLATILITY 50"),
+
+    # ── Factor: Alpha ─────────────────────────────────────────────────────────
+    ("NALPHA50",     "NIFTY ALPHA 50"),
+    ("N100A30",      "NIFTY100 ALPHA 30"),
+    ("N200A30",      "NIFTY200 ALPHA 30"),
+
+    # ── Factor: Value ─────────────────────────────────────────────────────────
+    ("N500V50",      "NIFTY500 VALUE 50"),
+    ("N200V30",      "NIFTY200 VALUE 30"),
+    ("N50V20",       "NIFTY50 VALUE 20"),
+
+    # ── Factor: Multi-Factor ─────────────────────────────────────────────────
+    ("N500MF50",     "NIFTY500 MULTIFACTOR MQVLV 50"),
+    ("NALV30",       "NIFTY ALPHA LOW-VOLATILITY 30"),
+    ("NAQLV30",      "NIFTY ALPHA QUALITY LOW-VOLATILITY 30"),
+    ("NAQVLV30",     "NIFTY ALPHA QUALITY VALUE LOW-VOLATILITY 30"),
+    ("NQLV30",       "NIFTY QUALITY LOW-VOLATILITY 30"),
+
+    # ── Factor: Dividend ─────────────────────────────────────────────────────
+    ("NDIV50",       "NIFTY DIVIDEND OPPORTUNITIES 50"),
+    ("N50DP",        "NIFTY50 DIVIDEND POINTS"),
+
+    # ── Factor: Equal Weight ─────────────────────────────────────────────────
+    ("N50EW",        "NIFTY50 EQUAL WEIGHT"),
+    ("N100EW",       "NIFTY100 EQUAL WEIGHT"),
+    ("N500EW",       "NIFTY500 EQUAL WEIGHT"),
+    ("NT10EW",       "NIFTY TOP 10 EQUAL WEIGHT"),
+    ("NT15EW",       "NIFTY TOP 15 EQUAL WEIGHT"),
+    ("NT20EW",       "NIFTY TOP 20 EQUAL WEIGHT"),
+
+    # ── Factor: High Beta ────────────────────────────────────────────────────
+    ("NHBETA50",     "NIFTY HIGH BETA 50"),
+
+    # ── Factor: Growth ───────────────────────────────────────────────────────
+    ("NGRWTH15",     "NIFTY GROWTH SECTORS 15"),
+
+    # ── Leverage / Inverse ───────────────────────────────────────────────────
+    ("N50TR2X",      "NIFTY50 TR 2X LEVERAGE"),
+    ("N50PR2X",      "NIFTY50 PR 2X LEVERAGE"),
+    ("N50TR1XI",     "NIFTY50 TR 1X INVERSE"),
+    ("N50PR1XI",     "NIFTY50 PR 1X INVERSE"),
+
+    # ── USD ──────────────────────────────────────────────────────────────────
+    ("N50USD",       "NIFTY50 USD"),
+
+    # ── Sectoral / Thematic ──────────────────────────────────────────────────
+    ("NBANK",        "NIFTY BANK"),
+    ("NFIN",         "NIFTY FINANCIAL SERVICES"),
+    ("NFIN2550",     "NIFTY FINANCIAL SERVICES 25/50"),
+    ("NFINEXBNK",    "NIFTY FINANCIAL SERVICES EX-BANK"),
+    ("NPVTBNK",      "NIFTY PRIVATE BANK"),
+    ("NPSUBNK",      "NIFTY PSU BANK"),
+    ("NIT",          "NIFTY IT"),
+    ("NPHARMA",      "NIFTY PHARMA"),
+    ("NHCARE",       "NIFTY HEALTHCARE INDEX"),
+    ("NAUTO",        "NIFTY AUTO"),
+    ("NFMCG",        "NIFTY FMCG"),
+    ("NMETAL",       "NIFTY METAL"),
+    ("NENERGY",      "NIFTY ENERGY"),
+    ("NOILGAS",      "NIFTY OIL & GAS"),
+    ("NINFRA",       "NIFTY INFRASTRUCTURE"),
+    ("NREALTY",      "NIFTY REALTY"),
+    ("NMEDIA",       "NIFTY MEDIA"),
+    ("NCONSDUR",     "NIFTY CONSUMER DURABLES"),
+    ("NCHEM",        "NIFTY CHEMICALS"),
+    ("NMNC",         "NIFTY MNC"),
+    ("NPSE",         "NIFTY PSE"),
+    ("NCPSE",        "NIFTY CPSE"),
+    ("NCOMMOD",      "NIFTY COMMODITIES"),
+    ("NCON",         "NIFTY INDIA CONSUMPTION"),
+    ("NSVC",         "NIFTY SERVICES SECTOR"),
+    ("N500HCARE",    "NIFTY500 HEALTHCARE"),
+    ("NMSHCARE",     "NIFTY MIDSMALL HEALTHCARE"),
+    ("NMSFIN",       "NIFTY MIDSMALL FINANCIAL SERVICES"),
+    ("NMSITTEL",     "NIFTY MIDSMALL IT & TELECOM"),
+    ("NINDIDEF",     "NIFTY INDIA DEFENCE"),
+    ("NINDIATRM",    "NIFTY INDIA TOURISM"),
+    ("NCAPITAL",     "NIFTY CAPITAL MARKETS"),
+    ("NEVNAA",       "NIFTY EV & NEW AGE AUTOMOTIVE"),
+    ("NNACON",       "NIFTY INDIA NEW AGE CONSUMPTION"),
+    ("NMATR",        "NIFTY INDIA SELECT 5 CORPORATE GROUPS (MAATR)"),
+    ("NMOBIL",       "NIFTY MOBILITY"),
+    ("NCOREHSE",     "NIFTY CORE HOUSING"),
+    ("NHOUSING",     "NIFTY HOUSING"),
+    ("NIPO",         "NIFTY IPO"),
+    ("NMSCON",       "NIFTY MIDSMALL INDIA CONSUMPTION"),
+    ("NNCC",         "NIFTY NON-CYCLICAL CONSUMER"),
+    ("NRURAL",       "NIFTY RURAL"),
+    ("NSHAR25",      "NIFTY SHARIAH 25"),
+    ("N50SHAR",      "NIFTY50 SHARIAH"),
+    ("N500SHAR",     "NIFTY500 SHARIAH"),
+    ("NTRANLOG",     "NIFTY TRANSPORTATION & LOGISTICS"),
+    ("NSMEEMERGE",   "NIFTY SME EMERGE"),
+    ("NINDINTRN",    "NIFTY INDIA INTERNET"),
+    ("NWAVES",       "NIFTY WAVES"),
+    ("NIIL",         "NIFTY INDIA INFRASTRUCTURE & LOGISTICS"),
+    ("NIRNPSU",      "NIFTY INDIA RAILWAYS PSU"),
+    ("NCONG50",      "NIFTY CONGLOMERATE 50"),
+    ("NINDIAMFG",    "NIFTY INDIA MANUFACTURING"),
+    ("NITATACG",     "NIFTY INDIA CORPORATE GROUP INDEX - TATA GROUP 25% CAP"),
+    ("N500MCIM",     "NIFTY500 MULTICAP INDIA MANUFACTURING 50:30:20"),
+    ("N500MCINFRA",  "NIFTY500 MULTICAP INFRASTRUCTURE 50:30:20"),
+    ("N100ESGSL",    "NIFTY100 ESG SECTOR LEADERS"),
+    ("N100ESG",      "NIFTY100 ESG"),
+    ("N100EESG",     "NIFTY100 ENHANCED ESG"),
+    ("NINDIDIG",     "NIFTY INDIA DIGITAL"),
+
+    # ── Liquidity ────────────────────────────────────────────────────────────
+    ("N100LQ15",     "NIFTY100 LIQUID 15"),
+    ("NMCLQ15",      "NIFTY MIDCAP LIQUID 15"),
+
+    # ── Volatility ───────────────────────────────────────────────────────────
+    ("IVIX",         "INDIA VIX"),
+
+    # ── Fixed Income / G-Sec / Bharat Bond ───────────────────────────────────
+    ("N813GSEC",     "NIFTY 8-13 YR G-SEC"),
+    ("N10GSEC",      "NIFTY 10 YR BENCHMARK G-SEC"),
+    ("N10GSECCP",    "NIFTY 10 YR BENCHMARK G-SEC (CLEAN PRICE)"),
+    ("N48GSEC",      "NIFTY 4-8 YR G-SEC INDEX"),
+    ("N1115GSEC",    "NIFTY 11-15 YR G-SEC INDEX"),
+    ("N15PGSEC",     "NIFTY 15 YR AND ABOVE G-SEC INDEX"),
+    ("NCGSEC",       "NIFTY COMPOSITE G-SEC INDEX"),
+    ("NBB2030",      "NIFTY BHARAT BOND INDEX - APRIL 2030"),
+    ("NBB2031",      "NIFTY BHARAT BOND INDEX - APRIL 2031"),
+    ("NBB2032",      "NIFTY BHARAT BOND INDEX - APRIL 2032"),
+    ("NBB2033",      "NIFTY BHARAT BOND INDEX - APRIL 2033"),
+
+    # ── Fixed Income / Duration / Debt Category ───────────────────────────────
+    ("NLIQ",         "NIFTY LIQUID INDEX"),
+    ("NMMI",         "NIFTY MONEY MARKET INDEX"),
+    ("NUSDD",        "NIFTY ULTRA SHORT DURATION DEBT INDEX"),
+    ("NLDD",         "NIFTY LOW DURATION DEBT INDEX"),
+    ("NSDD",         "NIFTY SHORT DURATION DEBT INDEX"),
+    ("NMDD",         "NIFTY MEDIUM DURATION DEBT INDEX"),
+    ("NMLDD",        "NIFTY MEDIUM TO LONG DURATION DEBT INDEX"),
+    ("NLNGDD",       "NIFTY LONG DURATION DEBT INDEX"),
+    ("NCOMPD",       "NIFTY COMPOSITE DEBT INDEX"),
+    ("NCORPBD",      "NIFTY CORPORATE BOND INDEX"),
+    ("NCRBOND",      "NIFTY CREDIT RISK BOND INDEX"),
+    ("NBPSUD",       "NIFTY BANKING & PSU DEBT INDEX"),
+    ("NADSEC",       "NIFTY ALL DURATION G-SEC INDEX"),
+
+    # ── Fixed Income / Overnight & Liquid Fund ────────────────────────────────
+    ("N1DR",         "NIFTY 1D RATE INDEX"),
+    ("NLIQF",        "NIFTY LIQUID FUND INDEX"),
+
+    # ── Fixed Income / G-Sec Benchmark ───────────────────────────────────────
+    ("N5GSEC",       "NIFTY 5 YR BENCHMARK G-SEC INDEX"),
+
+    # ── Fixed Income / G-Sec Target Maturity ─────────────────────────────────
+    ("NGSDEC26",     "NIFTY G-SEC DEC 2026 INDEX"),
+    ("NGSJUN27",     "NIFTY G-SEC JUN 2027 INDEX"),
+    ("NGSJUL27",     "NIFTY G-SEC JUL 2027 INDEX"),
+    ("NGSSEP27",     "NIFTY G-SEC SEP 2027 INDEX"),
+    ("NGSOCT28",     "NIFTY G-SEC OCT 2028 INDEX"),
+    ("NGSAPR29",     "NIFTY G-SEC APR 2029 INDEX"),
+    ("NGSDEC29",     "NIFTY G-SEC DEC 2029 INDEX"),
+    ("NGSDEC30",     "NIFTY G-SEC DEC 2030 INDEX"),
+    ("NGSJUL31",     "NIFTY G-SEC JULY 2031 INDEX"),
+    ("NGSSEP32",     "NIFTY G-SEC SEP 2032 INDEX"),
+    ("NGSJUL33",     "NIFTY G-SEC JULY 2033 INDEX"),
+    ("NGSJUN36",     "NIFTY G-SEC JUN 2036 INDEX"),
+
+    # ── Fixed Income / SDL (State Development Loans) ─────────────────────────
+    ("NSDLJUL26",    "NIFTY SDL JUL 2026 INDEX"),
+    ("NSDLSEP26",    "NIFTY SDL SEP 2026 INDEX"),
+    ("NSDLOCT26",    "NIFTY SDL OCT 2026 INDEX"),
+    ("NSDLDEC26",    "NIFTY SDL DECEMBER 2026 INDEX"),
+    ("NSDLAPR27",    "NIFTY SDL APR 2027 INDEX"),
+    ("NSDLJUN27",    "NIFTY SDL JUN 2027 INDEX"),
+    ("NSDLSEP27",    "NIFTY SDL SEP 2027 INDEX"),
+    ("NSDLJUN28",    "NIFTY SDL JUNE 2028 INDEX"),
+    ("NSDLDEC28",    "NIFTY SDL DEC 2028 INDEX"),
+    ("NSDLJUL33",    "NIFTY SDL JUL 2033 INDEX"),
+
+    # ── Fixed Income / SDL Equal-Weight ──────────────────────────────────────
+    ("NSDLT20A26",   "NIFTY SDL APR 2026 TOP 20 EQUAL WEIGHT INDEX"),
+    ("NSDLT12A27",   "NIFTY SDL APR 2027 TOP 12 EQUAL WEIGHT INDEX"),
+    ("NSDLT12A32",   "NIFTY SDL APR 2032 TOP 12 EQUAL WEIGHT INDEX"),
+
+    # ── Fixed Income / SDL + G-Sec Blends ────────────────────────────────────
+    ("NSDLGSJ27",    "NIFTY SDL PLUS G-SEC JUN 2027 40:60 INDEX"),
+    ("NSDLGSS27",    "NIFTY SDL PLUS G-SEC SEP 2027 50:50 INDEX"),
+    ("NSDLGSJ28",    "NIFTY SDL PLUS G-SEC JUN 2028 70:30 INDEX"),
+    ("NSDLGSJ29",    "NIFTY SDL PLUS G-SEC JUN 2029 70:30 INDEX"),
+
+    # ── Fixed Income / SDL + AAA PSU Bond Blends ─────────────────────────────
+    ("NSDLAAA26",    "NIFTY SDL PLUS AAA PSU BOND APR 2026 75:25 INDEX"),
+    ("NSDLAAD27",    "NIFTY SDL PLUS AAA PSU BOND DEC 2027 60:40 INDEX - TRI"),
+    ("NSDLAAJ28",    "NIFTY SDL PLUS AAA PSU BOND JUL 2028 60:40 INDEX"),
+    ("NSDLAAA28",    "NIFTY SDL PLUS AAA PSU BOND APR 2028 75:25 INDEX"),
+
+    # ── Fixed Income / SDL + PSU Bond Blend ──────────────────────────────────
+    ("NSDLPSP26",    "NIFTY SDL PLUS PSU BOND SEP 2026 60:40 INDEX"),
+
+    # ── Fixed Income / PSU Bond + SDL Blends ─────────────────────────────────
+    ("NPSUA26",      "NIFTY PSU BOND PLUS SDL APR 2026 50:50 INDEX"),
+    ("NPSUA27",      "NIFTY PSU BOND PLUS SDL APR 2027 50:50 INDEX"),
+    ("NPSUSP27",     "NIFTY PSU BOND PLUS SDL SEP 2027 40:60 INDEX"),
+
+    # ── Fixed Income / AAA Bond Blends ───────────────────────────────────────
+    ("NAAAS26",      "NIFTY AAA BOND PLUS SDL APR 2026 50:50 INDEX"),
+    ("NAAAFM28",     "NIFTY AAA FINANCIAL SERVICES BOND MAR 2028 INDEX"),
+    ("NAAACSA27",    "NIFTY AAA CPSE BOND PLUS SDL APR 2027 60:40 INDEX"),
+    ("NAAAPSS26",    "NIFTY AAA PSU BOND PLUS SDL SEP 2026 50:50 INDEX"),
+
+    # ── Fixed Income / CPSE Bond ──────────────────────────────────────────────
+    ("NCPSESS26",    "NIFTY CPSE BOND PLUS SDL SEP 2026 50:50 INDEX"),
 ]
 
-YAHOO_FUNDS = [
-    ("SPX",  "^GSPC"),
-    ("GOLD", "GOLDBEES.NS"),
-]
+# ── Inception dates for new indices (used on first DB insert / first fetch) ───
+# These are approximate launch dates; actual first data point may differ slightly.
+INCEPTION_DATES = {
+    # Broad Market
+    "N50":         "1995-11-03",  "NN50":        "1997-01-01",
+    "N100":        "2004-01-01",  "N200":        "2004-01-01",
+    "N500":        "1995-11-03",  "NMC50":       "2004-01-01",
+    "NMC100":      "2004-01-01",  "NMC150":      "2004-01-01",
+    "NMCSEL":      "2014-01-01",  "NSC50":       "2004-01-01",
+    "NSC100":      "2004-01-01",  "NSC250":      "2004-01-01",
+    "NSC500":      "2005-01-03",  "NμC250":      "2005-01-03",
+    "NTM":         "2005-01-03",  "NMSC400":     "2004-01-01",
+    "N500MC5025":  "2005-01-03",  "NLMC250":     "2004-01-01",
+    "N500LMSECW":  "2005-01-03",  "NIFPI150":    "2015-01-01",
+    # Momentum
+    "MC150M50":    "2005-01-03",  "N500M50":     "2005-01-03",
+    "N200M30":     "2005-01-03",  "NTMMQ50":     "2005-01-03",
+    "MMS400MQ100": "2005-01-03",  "SC250MQ100":  "2005-01-03",
+    "N500MCQ50":   "2005-01-03",
+    # Quality
+    "MC150Q50":    "2005-01-03",  "N500Q50":     "2005-01-03",
+    "N200Q30":     "2005-01-03",  "N100Q30":     "2005-01-03",
+    "SC250Q50":    "2005-01-03",  "N500FCQ30":   "2018-01-01",
+    # Low Vol
+    "N100LV30":    "2005-01-03",  "N500LV50":    "2005-01-03",
+    "NLV50":       "2005-01-03",
+    # Alpha
+    "NALPHA50":    "2005-01-03",  "N100A30":     "2005-01-03",
+    "N200A30":     "2005-01-03",
+    # Value
+    "N500V50":     "2005-01-03",  "N200V30":     "2005-01-03",
+    "N50V20":      "2005-01-03",
+    # Multi-Factor
+    "N500MF50":    "2005-01-03",  "NALV30":      "2005-01-03",
+    "NAQLV30":     "2005-01-03",  "NAQVLV30":    "2005-01-03",
+    "NQLV30":      "2005-01-03",
+    # Dividend
+    "NDIV50":      "2005-01-03",  "N50DP":       "2002-01-01",
+    # Equal Weight
+    "N50EW":       "2003-01-01",  "N100EW":      "2003-01-01",
+    "N500EW":      "2005-01-03",  "NT10EW":      "2005-01-03",
+    "NT15EW":      "2005-01-03",  "NT20EW":      "2005-01-03",
+    # High Beta / Growth
+    "NHBETA50":    "2005-01-03",  "NGRWTH15":    "2005-01-03",
+    # Leverage
+    "N50TR2X":     "2010-01-04",  "N50PR2X":     "2010-01-04",
+    "N50TR1XI":    "2010-01-04",  "N50PR1XI":    "2010-01-04",
+    "N50USD":      "1995-11-03",
+    # Sectoral
+    "NBANK":       "2000-01-01",  "NFIN":        "2004-01-01",
+    "NFIN2550":    "2004-01-01",  "NFINEXBNK":   "2017-01-01",
+    "NPVTBNK":     "2006-04-03",  "NPSUBNK":     "2004-01-01",
+    "NIT":         "1996-01-01",  "NPHARMA":     "2001-01-01",
+    "NHCARE":      "2017-01-01",  "NAUTO":       "2001-01-01",
+    "NFMCG":       "1996-01-01",  "NMETAL":      "2004-01-01",
+    "NENERGY":     "2001-01-01",  "NOILGAS":     "2018-01-01",
+    "NINFRA":      "2004-01-01",  "NREALTY":     "2007-01-01",
+    "NMEDIA":      "2004-01-01",  "NCONSDUR":    "2018-01-01",
+    "NCHEM":       "2018-01-01",  "NMNC":        "1996-01-01",
+    "NPSE":        "2007-01-01",  "NCPSE":       "2013-01-01",
+    "NCOMMOD":     "2004-01-01",  "NCON":        "2011-01-03",
+    "NSVC":        "2004-01-01",  "N500HCARE":   "2017-01-01",
+    "NMSHCARE":    "2017-01-01",  "NMSFIN":      "2017-01-01",
+    "NMSITTEL":    "2017-01-01",  "NINDIDEF":    "2018-01-01",
+    "NINDIATRM":   "2022-01-03",  "NCAPITAL":    "2022-01-03",
+    "NEVNAA":      "2022-01-03",  "NNACON":      "2022-01-03",
+    "NMATR":       "2022-01-03",  "NMOBIL":      "2022-01-03",
+    "NCOREHSE":    "2021-01-04",  "NHOUSING":    "2019-01-01",
+    "NIPO":        "2010-01-04",  "NMSCON":      "2017-01-01",
+    "NNCC":        "2019-01-01",  "NRURAL":      "2019-01-01",
+    "NSHAR25":     "2004-01-01",  "N50SHAR":     "2009-01-01",
+    "N500SHAR":    "2012-01-02",  "NTRANLOG":    "2022-01-03",
+    "NSMEEMERGE":  "2015-01-01",  "NINDINTRN":   "2021-01-04",
+    "NWAVES":      "2022-01-03",  "NIIL":        "2022-01-03",
+    "NIRNPSU":     "2022-01-03",  "NCONG50":     "2022-01-03",
+    "NINDIAMFG":   "2018-01-01",  "NITATACG":    "2019-01-01",
+    "N500MCIM":    "2020-01-01",  "N500MCINFRA": "2020-01-01",
+    "N100ESGSL":   "2019-01-01",  "N100ESG":     "2011-01-03",
+    "N100EESG":    "2019-01-01",  "NINDIDIG":    "2020-01-01",
+    # Liquidity
+    "N100LQ15":    "2003-01-01",  "NMCLQ15":     "2004-01-01",
+    # Volatility
+    "IVIX":        "2008-01-01",
+    # Fixed Income — G-Sec / Bharat Bond
+    "N813GSEC":    "2001-01-01",  "N10GSEC":     "2001-01-01",
+    "N10GSECCP":   "2001-01-01",  "N48GSEC":     "2001-01-01",
+    "N1115GSEC":   "2001-01-01",  "N15PGSEC":    "2001-01-01",
+    "NCGSEC":      "2001-01-01",  "NBB2030":     "2020-01-01",
+    "NBB2031":     "2021-01-04",  "NBB2032":     "2022-01-03",
+    "NBB2033":     "2023-01-02",
+    # Fixed Income — Duration / Debt Category (base date 2001-09-03)
+    "NLIQ":        "2001-09-03",  "NMMI":        "2001-09-03",
+    "NUSDD":       "2001-09-03",  "NLDD":        "2001-09-03",
+    "NSDD":        "2001-09-03",  "NMDD":        "2001-09-03",
+    "NMLDD":       "2001-09-03",  "NLNGDD":      "2001-09-03",
+    "NCOMPD":      "2001-09-03",  "NCORPBD":     "2001-09-03",
+    "NCRBOND":     "2001-09-03",  "NBPSUD":      "2001-09-03",
+    "NADSEC":      "2001-09-03",
+    # Fixed Income — Overnight & Liquid Fund
+    "N1DR":        "2015-01-01",  "NLIQF":       "2015-01-01",
+    # Fixed Income — G-Sec Benchmark
+    "N5GSEC":      "2004-01-01",
+    # Fixed Income — G-Sec Target Maturity
+    "NGSDEC26":    "2019-01-01",  "NGSJUN27":    "2020-01-01",
+    "NGSJUL27":    "2020-01-01",  "NGSSEP27":    "2020-01-01",
+    "NGSOCT28":    "2021-01-01",  "NGSAPR29":    "2022-01-01",
+    "NGSDEC29":    "2020-01-01",  "NGSDEC30":    "2020-01-01",
+    "NGSJUL31":    "2020-01-01",  "NGSSEP32":    "2021-01-01",
+    "NGSJUL33":    "2021-01-01",  "NGSJUN36":    "2022-01-01",
+    # Fixed Income — SDL Single
+    "NSDLJUL26":   "2019-01-01",  "NSDLSEP26":   "2019-01-01",
+    "NSDLOCT26":   "2019-01-01",  "NSDLDEC26":   "2019-01-01",
+    "NSDLAPR27":   "2020-01-01",  "NSDLJUN27":   "2020-01-01",
+    "NSDLSEP27":   "2020-01-01",  "NSDLJUN28":   "2021-01-01",
+    "NSDLDEC28":   "2021-01-01",  "NSDLJUL33":   "2021-01-01",
+    # Fixed Income — SDL Equal-Weight
+    "NSDLT20A26":  "2019-01-01",  "NSDLT12A27":  "2020-01-01",
+    "NSDLT12A32":  "2021-01-01",
+    # Fixed Income — SDL + G-Sec Blends
+    "NSDLGSJ27":   "2020-01-01",  "NSDLGSS27":   "2020-01-01",
+    "NSDLGSJ28":   "2021-01-01",  "NSDLGSJ29":   "2022-01-01",
+    # Fixed Income — SDL + AAA PSU Bond Blends
+    "NSDLAAA26":   "2019-01-01",  "NSDLAAD27":   "2020-01-01",
+    "NSDLAAJ28":   "2021-01-01",  "NSDLAAA28":   "2021-01-01",
+    # Fixed Income — SDL + PSU Bond Blend
+    "NSDLPSP26":   "2019-01-01",
+    # Fixed Income — PSU Bond + SDL Blends
+    "NPSUA26":     "2019-01-01",  "NPSUA27":     "2020-01-01",
+    "NPSUSP27":    "2020-01-01",
+    # Fixed Income — AAA Bond Blends
+    "NAAAS26":     "2019-01-01",  "NAAAFM28":    "2021-01-01",
+    "NAAACSA27":   "2020-01-01",  "NAAAPSS26":   "2019-01-01",
+    # Fixed Income — CPSE Bond
+    "NCPSESS26":   "2019-01-01",
+}
+
+# Fixed income index codes — these use a separate niftyindices.com endpoint
+FIXED_INCOME_CODES = {
+    # G-Sec / Bharat Bond
+    "N813GSEC", "N10GSEC", "N10GSECCP", "N48GSEC",
+    "N1115GSEC", "N15PGSEC", "NCGSEC",
+    "NBB2030", "NBB2031", "NBB2032", "NBB2033",
+    # Duration / Debt Category
+    "NLIQ", "NMMI", "NUSDD", "NLDD", "NSDD", "NMDD",
+    "NMLDD", "NLNGDD", "NCOMPD", "NCORPBD", "NCRBOND",
+    "NBPSUD", "NADSEC",
+    # Overnight & Liquid Fund
+    "N1DR", "NLIQF",
+    # G-Sec Benchmark
+    "N5GSEC",
+    # G-Sec Target Maturity
+    "NGSDEC26", "NGSJUN27", "NGSJUL27", "NGSSEP27",
+    "NGSOCT28", "NGSAPR29", "NGSDEC29", "NGSDEC30",
+    "NGSJUL31", "NGSSEP32", "NGSJUL33", "NGSJUN36",
+    # SDL Single
+    "NSDLJUL26", "NSDLSEP26", "NSDLOCT26", "NSDLDEC26",
+    "NSDLAPR27", "NSDLJUN27", "NSDLSEP27", "NSDLJUN28",
+    "NSDLDEC28", "NSDLJUL33",
+    # SDL Equal-Weight
+    "NSDLT20A26", "NSDLT12A27", "NSDLT12A32",
+    # SDL + G-Sec Blends
+    "NSDLGSJ27", "NSDLGSS27", "NSDLGSJ28", "NSDLGSJ29",
+    # SDL + AAA PSU Bond Blends
+    "NSDLAAA26", "NSDLAAD27", "NSDLAAJ28", "NSDLAAA28",
+    # SDL + PSU Bond Blend
+    "NSDLPSP26",
+    # PSU Bond + SDL Blends
+    "NPSUA26", "NPSUA27", "NPSUSP27",
+    # AAA Bond Blends
+    "NAAAS26", "NAAAFM28", "NAAACSA27", "NAAAPSS26",
+    # CPSE Bond
+    "NCPSESS26",
+}
+
+# ── Category helper for auto-insert ──────────────────────────────────────────
+
+def derive_index_category(code: str, name: str) -> str:
+    """Derive a display category for a new index based on its code/name."""
+    n = name.lower()
+    if code in ("IVIX",):                          return "Volatility"
+    if code in FIXED_INCOME_CODES:                 return "Fixed Income"
+    if any(x in n for x in (
+        "g-sec", "bharat bond", "liquid index", "money market",
+        "duration debt", "composite debt", "corporate bond",
+        "credit risk bond", "banking & psu debt",
+    )):                                            return "Fixed Income"
+    if any(x in n for x in ("momentum",)):         return "Momentum"
+    if "multifactor" in n or "mqvlv" in n:         return "Multi-Factor"
+    if any(x in n for x in ("alpha", "low vol", "quality", "value")):
+        if sum(1 for x in ("alpha","low vol","quality","value") if x in n) >= 2:
+            return "Multi-Factor"
+        if "momentum" in n:                        return "Momentum"
+        if "alpha" in n:                           return "Alpha"
+        if "low vol" in n or "low-vol" in n:       return "Low Vol"
+        if "quality" in n:                         return "Quality"
+        if "value" in n:                           return "Value"
+    if "dividend" in n:                            return "Dividend"
+    if "equal weight" in n or "equal-cap" in n:    return "Equal Weight"
+    if "high beta" in n:                           return "High Beta"
+    if any(x in n for x in (
+        "bank","financial","it ","pharma","health","auto","fmcg","metal",
+        "energy","oil","infra","realty","media","psu","cpse","defence",
+        "consumption","tourism","capital market","ev ","digital","rural",
+        "shariah","transport","housing","ipo","manufacturing","mnc","pse",
+        "chemical","conglomerate","internet","waves","railways","mobility",
+        "esg","commodit","service","emerge",
+    )):
+        return "Thematic"
+    return "Broad Market"
+
+# ── Auto-insert new index funds into the `funds` table ───────────────────────
+
+def ensure_funds_in_db(conn, cur) -> dict:
+    """
+    Insert any index codes from NSE_INDICES that are not yet
+    in the `funds` table.  Returns the refreshed code→id mapping.
+    """
+    cur.execute("SELECT code FROM funds")
+    existing = {row[0] for row in cur.fetchall()}
+
+    to_insert = []
+    for code, name in NSE_INDICES:
+        if code not in existing:
+            inception = INCEPTION_DATES.get(code, "2000-01-01")
+            category  = derive_index_category(code, name)
+            to_insert.append((code, name, category, inception))
+
+    if to_insert:
+        print(f"  Auto-inserting {len(to_insert)} new fund(s) into `funds` table …")
+        execute_values(
+            cur,
+            """
+            INSERT INTO funds (code, name, category, inception_date)
+            VALUES %s
+            ON CONFLICT (code) DO UPDATE
+              SET name           = EXCLUDED.name,
+                  category       = EXCLUDED.category,
+                  inception_date = EXCLUDED.inception_date
+            """,
+            to_insert,
+        )
+        conn.commit()
+        for code, name, cat, inc in to_insert:
+            print(f"    + [{code}] {name}  ({cat}, from {inc})")
+
+    # Return refreshed map
+    cur.execute("SELECT id, code FROM funds")
+    return {row[1]: row[0] for row in cur.fetchall()}
+
+# niftyindices API is limited in how much data it returns per request.
+# We chunk large date ranges into CHUNK_DAYS-day windows to fetch full history.
+CHUNK_DAYS = 365
+
+# ── API name overrides ────────────────────────────────────────────────────────
+# The niftyindices.com API uses abbreviated Trading_Index_Name values for some
+# indices (from IndexMapping.json at iislliveblob.niftyindices.com).  The
+# display names in NSE_INDICES are correct for the DB / UI; these overrides
+# supply the correct string to send as `name` in the POST body.
+INDEX_API_NAMES: dict[str, str] = {
+    "N50EW":    "NIFTY50 EQL WGT",
+    "N100EW":   "NIFTY100 EQL WGT",
+    "NDIV50":   "NIFTY DIV OPPS 50",
+    "N50DP":    "NIFTY50 DIV POINT",
+    "NGRWTH15": "NIFTY GROWSECT 15",
+    "N50TR2X":  "NIFTY50 TR 2X LEV",
+    "N50PR2X":  "NIFTY50 PR 2X LEV",
+    "N50TR1XI": "NIFTY50 TR 1X INV",
+    "N50PR1XI": "NIFTY50 PR 1X INV",
+}
+
 
 NIFTY_HEADERS = {
     "Content-Type":     "application/json; charset=utf-8",
@@ -130,6 +626,12 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
                     continue
                 if date_iso and val > 0:
                     result.append((date_iso, val))
+            if not result and rows:
+                print(f"  [warn] {index_name}: API returned {len(rows)} rows but none parsed (check field names: {list(rows[0].keys()) if rows else []})")
+            elif not result:
+                print(f"  [warn] {index_name}: API returned empty data for {from_iso}→{to_iso}")
+            # Sort ascending so new_rows[-1] is the latest date
+            result.sort(key=lambda x: x[0])
             return result
         except Exception as e:
             print(f"  [attempt {attempt+1}/{retries}] {index_name}: {e}")
@@ -137,23 +639,100 @@ def fetch_nifty_index(index_name: str, from_iso: str, to_iso: str, retries=3):
                 time.sleep(2 ** attempt)
     return []
 
-def fetch_yahoo(symbol: str, from_iso: str, to_iso: str):
-    """Return list of (date_iso, close_value) tuples via yfinance."""
-    try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(start=from_iso, end=add_days(to_iso, 1), interval="1d", auto_adjust=True)
-        if df.empty:
-            return []
-        result = []
-        for ts, row in df.iterrows():
-            date_iso = ts.strftime("%Y-%m-%d")
-            val = float(row["Close"])
-            if val > 0:
-                result.append((date_iso, val))
-        return result
-    except Exception as e:
-        print(f"  Yahoo {symbol}: {e}")
-        return []
+def fetch_nifty_index_chunked(index_name: str, from_iso: str, to_iso: str) -> list:
+    """
+    Fetch a potentially multi-year date range by splitting into CHUNK_DAYS-day
+    windows and merging results.  Deduplicates on date and returns sorted list.
+    """
+    all_rows: dict = {}
+    chunk_start = from_iso
+    while chunk_start <= to_iso:
+        chunk_end_dt = datetime.strptime(chunk_start, "%Y-%m-%d") + timedelta(days=CHUNK_DAYS - 1)
+        chunk_end = min(chunk_end_dt.strftime("%Y-%m-%d"), to_iso)
+
+        rows = fetch_nifty_index(index_name, chunk_start, chunk_end)
+        for d, v in rows:
+            all_rows[d] = v          # last write wins on duplicates
+
+        chunk_start = add_days(chunk_end, 1)
+        if rows:
+            time.sleep(0.3)          # be polite between chunks
+
+    return sorted(all_rows.items())  # [(date_iso, value), ...] ascending
+
+# ── Fixed Income scrapers ─────────────────────────────────────────────────────
+
+def fetch_nifty_fixed_income(index_name: str, from_iso: str, to_iso: str, retries=3):
+    """
+    Return list of (date_iso, close_value) tuples for fixed income indices.
+    Uses the dedicated niftyindices.com fixed income endpoint which may return
+    TRI_CLOSE or Value fields in addition to the standard CLOSE field.
+    """
+    cinfo = json.dumps({
+        "name": index_name,
+        "startDate": iso_to_nifty_req(from_iso),
+        "endDate":   iso_to_nifty_req(to_iso),
+        "indexName": index_name,
+    })
+    payload = json.dumps({"cinfo": cinfo})
+
+    for attempt in range(retries):
+        try:
+            resp = requests.post(
+                "https://www.niftyindices.com/Backpage.aspx/getHistoricalDataFixedIncometoString",
+                data=payload,
+                headers=NIFTY_HEADERS,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            outer = resp.json()
+            rows = json.loads(outer.get("d", "[]"))
+            result = []
+            for row in rows:
+                date_str  = row.get("HistoricalDate") or row.get("Date") or row.get("date", "")
+                close_str = (
+                    row.get("CLOSE") or row.get("Close") or row.get("close") or
+                    row.get("TRI_CLOSE") or row.get("TRI Close") or
+                    row.get("Value") or row.get("value", "")
+                )
+                date_iso = nifty_resp_to_iso(date_str)
+                try:
+                    val = float(str(close_str).replace(",", ""))
+                except (ValueError, AttributeError):
+                    continue
+                if date_iso and val > 0:
+                    result.append((date_iso, val))
+            if not result and rows:
+                print(f"  [warn] {index_name}: FI API returned {len(rows)} rows but none parsed "
+                      f"(fields: {list(rows[0].keys()) if rows else []})")
+            elif not result:
+                print(f"  [warn] {index_name}: FI API returned empty data for {from_iso}→{to_iso}")
+            result.sort(key=lambda x: x[0])
+            return result
+        except Exception as e:
+            print(f"  [attempt {attempt+1}/{retries}] {index_name} (FI): {e}")
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return []
+
+
+def fetch_nifty_fixed_income_chunked(index_name: str, from_iso: str, to_iso: str) -> list:
+    """
+    Chunked version of fetch_nifty_fixed_income for multi-year date ranges.
+    """
+    all_rows: dict = {}
+    chunk_start = from_iso
+    while chunk_start <= to_iso:
+        chunk_end_dt = datetime.strptime(chunk_start, "%Y-%m-%d") + timedelta(days=CHUNK_DAYS - 1)
+        chunk_end = min(chunk_end_dt.strftime("%Y-%m-%d"), to_iso)
+        rows = fetch_nifty_fixed_income(index_name, chunk_start, chunk_end)
+        for d, v in rows:
+            all_rows[d] = v
+        chunk_start = add_days(chunk_end, 1)
+        if rows:
+            time.sleep(0.3)
+    return sorted(all_rows.items())
+
 
 # ── Metric computation ────────────────────────────────────────────────────────
 
@@ -167,6 +746,30 @@ def compute_cagr(nav: list) -> float:
     if years <= 0:
         return 0.0
     return (end_val / start_val) ** (1.0 / years) - 1.0
+
+def compute_period_cagr(nav: list, years: float) -> Optional[float]:
+    """Compute CAGR over the last `years` years from the most recent NAV date.
+    Returns None if there is insufficient history (< 90% of the requested window)."""
+    if len(nav) < 2:
+        return None
+    end_dt  = datetime.strptime(nav[-1][0], "%Y-%m-%d")
+    end_val = nav[-1][1]
+    target  = end_dt - timedelta(days=int(years * 365.25))
+    # Need at least 90% of the window to be valid
+    cutoff  = end_dt - timedelta(days=int(years * 365.25 * 0.90))
+    # Find the NAV row closest to the target start date (without going past the cutoff)
+    best = None
+    for date_str, val in nav:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if dt > cutoff:
+            break
+        best = (dt, val)
+    if best is None:
+        return None
+    actual_years = (end_dt - best[0]).days / 365.25
+    if actual_years <= 0:
+        return None
+    return (end_val / best[1]) ** (1.0 / actual_years) - 1.0
 
 def compute_volatility(nav: list) -> float:
     if len(nav) < 2:
@@ -205,21 +808,341 @@ def compute_metrics(nav: list) -> dict:
     calmar  = cagr / abs(max_dd) if max_dd != 0 else 0.0
     rolling = compute_rolling_3y(nav)
     avg3y   = (sum(rolling) / len(rolling) / 100) if rolling else 0.0
-    return dict(cagr=cagr, vol=vol, max_dd=max_dd, sharpe=sharpe,
-                calmar=calmar, avg3y=avg3y)
+    return dict(
+        cagr=cagr, vol=vol, max_dd=max_dd, sharpe=sharpe, calmar=calmar, avg3y=avg3y,
+        cagr_1y=compute_period_cagr(nav, 1),
+        cagr_3y=compute_period_cagr(nav, 3),
+        cagr_5y=compute_period_cagr(nav, 5),
+        cagr_10y=compute_period_cagr(nav, 10),
+        cagr_20y=compute_period_cagr(nav, 20),
+    )
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── mfapi.in EOD update ────────────────────────────────────────────────────────
+
+MFAPI_BASE = "https://api.mfapi.in/mf"
+MF_FETCH_DELAY = 0.25   # seconds between mfapi requests
+
+MF_MONTHS = {
+    "Jan":"01","Feb":"02","Mar":"03","Apr":"04","May":"05","Jun":"06",
+    "Jul":"07","Aug":"08","Sep":"09","Oct":"10","Nov":"11","Dec":"12",
+}
+
+def mfapi_date_to_iso(s: str) -> str:
+    """'13-Mar-2026' → '2026-03-13'"""
+    parts = s.strip().split("-")
+    if len(parts) != 3:
+        return ""
+    dd, mon, yyyy = parts
+    mm = MF_MONTHS.get(mon, "")
+    if not mm:
+        return ""
+    return f"{yyyy}-{mm}-{dd.zfill(2)}"
+
+def fetch_mf_latest(scheme_code: int, retries: int = 3):
+    """Return (date_iso, nav_float) for the latest NAV, or None on failure."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                f"{MFAPI_BASE}/{scheme_code}/latest",
+                timeout=10,
+                verify=False,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") != "SUCCESS":
+                print(f"  [mfapi] scheme {scheme_code}: status={data.get('status')} msg={data.get('message','')}")
+                return None
+            if not data.get("data"):
+                print(f"  [mfapi] scheme {scheme_code}: SUCCESS but empty data")
+                return None
+            row = data["data"][0]
+            date_iso = mfapi_date_to_iso(row.get("date", ""))
+            try:
+                nav = float(row.get("nav", "0"))
+            except (ValueError, TypeError):
+                return None
+            if not date_iso or nav <= 0:
+                return None
+            return (date_iso, nav)
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                print(f"  [mfapi] scheme {scheme_code} failed: {e}")
+    return None
+
+def fetch_mf_since(scheme_code: int, after_date: str, retries: int = 3):
+    """Fetch full history and return rows with date > after_date."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                f"{MFAPI_BASE}/{scheme_code}",
+                timeout=30,
+                verify=False,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") != "SUCCESS" or not data.get("data"):
+                return []
+            rows = []
+            for row in data["data"]:
+                date_iso = mfapi_date_to_iso(row.get("date", ""))
+                try:
+                    nav = float(row.get("nav", "0"))
+                except (ValueError, TypeError):
+                    continue
+                if date_iso and nav > 0 and date_iso > after_date:
+                    rows.append((date_iso, nav))
+            return rows
+        except Exception as e:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+    return []
+
+def update_mf_nav(conn, cur) -> None:
+    """Fetch latest NAV for all funds in mf_funds and upsert into mf_nav_data."""
+    today = today_ist()
+    print(f"\n=== MF NAV UPDATE (mfapi.in) — {today} ===")
+
+    # Load all scheme codes
+    cur.execute("SELECT scheme_code, scheme_name FROM mf_funds ORDER BY scheme_code")
+    mf_funds = cur.fetchall()
+    if not mf_funds:
+        print("  No funds in mf_funds table — run mfapi_loader.py first")
+        return
+
+    print(f"  {len(mf_funds)} funds in mf_funds")
+
+    # Get latest date per scheme from mf_nav_data
+    cur.execute("""
+        SELECT DISTINCT ON (scheme_code) scheme_code, date
+        FROM mf_nav_data
+        ORDER BY scheme_code, date DESC
+    """)
+    latest_by_scheme = {row[0]: row[1].strftime("%Y-%m-%d") for row in cur.fetchall()}
+
+    to_insert = []   # (scheme_code, date, nav)
+    skipped   = 0
+    errors    = 0
+
+    for scheme_code, scheme_name in mf_funds:
+        last_date = latest_by_scheme.get(scheme_code, "2000-01-01")
+
+        result = fetch_mf_latest(scheme_code)
+        time.sleep(MF_FETCH_DELAY)
+
+        if not result:
+            errors += 1
+            continue
+
+        latest_date, latest_nav = result
+
+        if latest_date <= last_date:
+            skipped += 1
+            continue
+
+        # Missed multiple days — backfill from full history
+        day_gap = (
+            datetime.strptime(latest_date, "%Y-%m-%d") -
+            datetime.strptime(last_date,   "%Y-%m-%d")
+        ).days
+
+        if day_gap > 3:
+            rows = fetch_mf_since(scheme_code, last_date)
+            time.sleep(MF_FETCH_DELAY)
+            to_insert.extend((scheme_code, d, v) for d, v in rows)
+            print(f"  [{scheme_code}] backfill {len(rows)} rows (gap={day_gap}d) → {latest_date}")
+        else:
+            to_insert.append((scheme_code, latest_date, latest_nav))
+
+    # Upsert collected rows
+    if to_insert:
+        execute_values(
+            cur,
+            """
+            INSERT INTO mf_nav_data (scheme_code, date, nav)
+            VALUES %s
+            ON CONFLICT DO NOTHING
+            """,
+            to_insert,
+        )
+        conn.commit()
+
+    inserted = len(to_insert)
+    print(f"  Inserted {inserted} rows | skipped {skipped} (up to date) | errors {errors}")
+
+
+def _recompute_rankings(conn, cur):
+    """
+    Rank only funds with at least 10 years of history (cagr_10y IS NOT NULL).
+    Funds with insufficient history get score=NULL, final_rank=NULL.
+
+    Scoring weights (match the Next.js admin route):
+      20Y CAGR              30 %  (falls back to 10Y CAGR when 20Y not available)
+      Avg 3Y rolling return 25 %
+      Sharpe ratio          30 %
+      Max drawdown          15 %  (less negative = better)
+
+    Each metric is percentile-ranked across the eligible universe
+    (0 = best → lower composite score → better final_rank).
+    """
+    print("=== RECOMPUTING SCORES & RANKINGS ===")
+
+    # Clear existing ranks for all funds first
+    cur.execute("UPDATE funds SET score = NULL, final_rank = NULL")
+
+    # Only rank equity funds with at least 10 years of history.
+    # Fixed Income indices are excluded — they are displayed separately on the
+    # rankings page and have fundamentally different return/risk profiles.
+    cur.execute("""
+        SELECT id, code,
+               COALESCE(cagr_20y, cagr_10y) AS long_cagr,
+               avg_3y_rolling_return, sharpe_ratio, max_drawdown
+        FROM funds
+        WHERE cagr_10y IS NOT NULL
+          AND avg_3y_rolling_return IS NOT NULL
+          AND sharpe_ratio IS NOT NULL
+          AND max_drawdown IS NOT NULL
+          AND category != 'Fixed Income'
+        ORDER BY id
+    """)
+    rows = cur.fetchall()
+
+    if len(rows) < 2:
+        print("  Not enough funds with 10y+ history to rank.")
+        conn.commit()
+        return
+
+    ids, codes, long_cagrs, avg3ys, sharpes, dds = zip(*rows)
+    n = len(ids)
+
+    def percentile_rank(values):
+        """Return 0-100 rank where 0 = best (higher raw value = better, sort descending)."""
+        indexed = sorted(enumerate(values), key=lambda x: x[1], reverse=True)
+        ranks = [0.0] * n
+        for rank_pos, (orig_idx, _) in enumerate(indexed):
+            ranks[orig_idx] = (rank_pos / (n - 1)) * 100
+        return ranks
+
+    cagr_r   = percentile_rank(long_cagrs)  # 20Y CAGR (or 10Y fallback); higher = better
+    avg3y_r  = percentile_rank(avg3ys)       # higher avg 3Y rolling = better
+    sharpe_r = percentile_rank(sharpes)      # higher Sharpe = better
+    dd_r     = percentile_rank(dds)          # max_drawdown is negative; less negative (higher) = better
+
+    scored = [
+        (ids[i], codes[i], cagr_r[i] * 0.30 + avg3y_r[i] * 0.25 + sharpe_r[i] * 0.30 + dd_r[i] * 0.15)
+        for i in range(n)
+    ]
+    scored.sort(key=lambda x: x[2])  # lower score = better rank
+
+    for rank_pos, (fund_id, code, score) in enumerate(scored, start=1):
+        cur.execute(
+            "UPDATE funds SET score = %s, final_rank = %s WHERE id = %s",
+            (score, rank_pos, fund_id)
+        )
+
+    conn.commit()
+    print(f"  Ranked {n} funds (10y+ history).  Unranked: funds with <10y history.")
+    print(f"\n  Top 10:")
+    for rank_pos, (fund_id, code, score) in enumerate(scored[:10], start=1):
+        print(f"    #{rank_pos:>3}  {code:<14}  score={score:6.2f}")
+
 
 def main():
+    # ── CLI args ──────────────────────────────────────────────────────────────
+    parser = argparse.ArgumentParser(description="FactorLens EOD scraper")
+    parser.add_argument(
+        "--backfill", nargs="*", metavar="CODE",
+        help="Re-fetch from inception date. No codes = all indices; else space-separated codes."
+    )
+    parser.add_argument(
+        "--recompute-all", action="store_true",
+        help="Recompute metrics for ALL funds in the DB (no scraping)."
+    )
+    parser.add_argument(
+        "--rank-only", action="store_true",
+        help="Recompute score + final_rank for all funds that have metrics (no scraping, no metric recalc)."
+    )
+    args = parser.parse_args()
+
+    recompute_all = args.recompute_all
+    rank_only     = args.rank_only
+
+    # Determine which codes to backfill (empty set = normal run)
+    backfill_all   = args.backfill is not None and len(args.backfill) == 0
+    backfill_codes = set(c.upper() for c in (args.backfill or []))
+    is_backfill    = backfill_all or bool(backfill_codes)
+
     today = today_ist()
-    print(f"EOD scraper — {today} IST\n")
+    print(f"EOD scraper — {today} IST")
+    if is_backfill:
+        label = "ALL indices" if backfill_all else ", ".join(sorted(backfill_codes))
+        print(f"  *** BACKFILL MODE: {label} ***")
+    print()
 
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor()
 
-    # Load fund id map
-    cur.execute("SELECT id, code FROM funds")
-    code_to_id = {row[1]: row[0] for row in cur.fetchall()}
+    # ── Schema migration: add period-CAGR columns if they don't exist yet ────
+    for col in ("cagr_1y", "cagr_3y", "cagr_5y", "cagr_10y", "cagr_20y"):
+        cur.execute(f"ALTER TABLE funds ADD COLUMN IF NOT EXISTS {col} NUMERIC")
+    conn.commit()
+
+    # ── Fast path: recompute metrics only ────────────────────────────────────
+    if recompute_all:
+        print("=== RECOMPUTING METRICS FOR ALL FUNDS ===")
+        cur.execute("SELECT id, code FROM funds")
+        funds_list = cur.fetchall()   # [(id, code), ...]
+        code_by_id = {row[0]: row[1] for row in funds_list}
+
+        updated = 0
+        for fund_id, code in funds_list:
+            # Fetch nav_data for one fund at a time to avoid connection timeout
+            cur2 = conn.cursor()
+            cur2.execute(
+                "SELECT date, nav_value FROM nav_data WHERE fund_id = %s ORDER BY date",
+                (fund_id,)
+            )
+            rows = cur2.fetchall()
+            cur2.close()
+
+            if len(rows) < 2:
+                continue
+
+            nav = [(dt.strftime("%Y-%m-%d"), float(val)) for dt, val in rows]
+            m = compute_metrics(nav)
+
+            cur.execute("""
+                UPDATE funds SET
+                    cagr = %s, volatility = %s, max_drawdown = %s,
+                    sharpe_ratio = %s, calmar_ratio = %s, avg_3y_rolling_return = %s,
+                    cagr_1y = %s, cagr_3y = %s, cagr_5y = %s, cagr_10y = %s, cagr_20y = %s
+                WHERE id = %s
+            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"],
+                  m["cagr_1y"], m["cagr_3y"], m["cagr_5y"], m["cagr_10y"], m["cagr_20y"], fund_id))
+            conn.commit()   # commit after each fund so connection stays alive
+
+            print(f"  [{code:12}] CAGR={m['cagr']*100:6.2f}%  Sharpe={m['sharpe']:5.2f}  MaxDD={m['max_dd']*100:6.2f}%  rows={len(nav)}")
+            updated += 1
+
+        print(f"\nUpdated metrics for {updated} funds.")
+        _recompute_rankings(conn, cur)
+        cur.close()
+        conn.close()
+        print("Done!")
+        return
+
+    # ── Fast path: recompute score + final_rank only ──────────────────────────
+    if rank_only:
+        _recompute_rankings(conn, cur)
+        cur.close()
+        conn.close()
+        print("Done!")
+        return
+
+    # ── Ensure all index entries exist in the `funds` table ──────────────────
+    print("=== ENSURING FUND ENTRIES IN DB ===")
+    code_to_id = ensure_funds_in_db(conn, cur)
 
     # Latest nav date per fund
     cur.execute("""
@@ -229,7 +1152,10 @@ def main():
     """)
     latest_by_fund = {row[0]: row[1].strftime("%Y-%m-%d") for row in cur.fetchall()}
 
-    DEFAULT_FROM = "2026-02-28"
+    # Row count per fund (to detect suspiciously sparse data)
+    cur.execute("SELECT fund_id, COUNT(*) FROM nav_data GROUP BY fund_id")
+    row_count_by_fund = {row[0]: row[1] for row in cur.fetchall()}
+
     total_inserted = 0
     funds_updated = []
 
@@ -241,66 +1167,70 @@ def main():
             print(f"  [{code}] not in DB, skipping")
             continue
 
-        last_date = latest_by_fund.get(fund_id, DEFAULT_FROM)
-        from_iso  = add_days(last_date, 1)
+        # Decide whether to backfill this specific index
+        do_backfill = backfill_all or (code in backfill_codes)
+
+        inception     = INCEPTION_DATES.get(code, "2000-01-01")
+        last_date     = latest_by_fund.get(fund_id)
+
+        if do_backfill:
+            # Delete all existing data so we start fresh from inception
+            cur.execute("DELETE FROM nav_data WHERE fund_id = %s", (fund_id,))
+            conn.commit()
+            from_iso  = inception
+            last_date = add_days(inception, -1)   # sentinel: accept all rows
+            print(f"  [{code}] BACKFILL from {inception} (deleted existing rows)")
+        elif last_date is None:
+            # No data at all — fetch from inception
+            from_iso  = inception
+            last_date = add_days(inception, -1)
+        else:
+            from_iso = add_days(last_date, 1)
 
         if from_iso > today:
             print(f"  [{code}] up to date ({last_date})")
             continue
 
-        print(f"  [{code}] {index_name}: fetching {from_iso} → {today} ...", end=" ", flush=True)
-        rows = fetch_nifty_index(index_name, from_iso, today)
+        # Determine fetch strategy (chunked for large ranges, FI endpoint for bonds)
+        span_days = (
+            datetime.strptime(today, "%Y-%m-%d") -
+            datetime.strptime(from_iso, "%Y-%m-%d")
+        ).days
+
+        is_fi   = code in FIXED_INCOME_CODES
+        chunked = span_days > CHUNK_DAYS
+        api_name = INDEX_API_NAMES.get(code, index_name)
+        if chunked:
+            tag = "FI chunked" if is_fi else "chunked"
+            print(f"  [{code}] {index_name}: {tag} fetch {from_iso} → {today} ({span_days}d) …")
+            rows = (fetch_nifty_fixed_income_chunked if is_fi else fetch_nifty_index_chunked)(
+                api_name, from_iso, today
+            )
+        else:
+            fi_tag = " (FI)" if is_fi else ""
+            print(f"  [{code}] {index_name}: fetching{fi_tag} {from_iso} → {today} ...", end=" ", flush=True)
+            rows = (fetch_nifty_fixed_income if is_fi else fetch_nifty_index)(
+                api_name, from_iso, today
+            )
 
         new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
         if not new_rows:
-            print("no new data")
+            if not chunked:
+                print("no new data")
+            else:
+                print(f"  [{code}] no new data")
             continue
 
-        min_date, max_date = new_rows[0][1], new_rows[-1][1]
-        cur.execute(
-            "DELETE FROM nav_data WHERE fund_id = %s AND date BETWEEN %s AND %s",
-            (fund_id, min_date, max_date)
+        execute_values(
+            cur,
+            "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s",
+            new_rows,
         )
-        execute_values(cur, "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s", new_rows)
         conn.commit()
-        print(f"{len(new_rows)} rows → latest {new_rows[-1][1]}")
+        print(f"  [{code}] {len(new_rows)} rows → {new_rows[0][1]} … {new_rows[-1][1]}")
         total_inserted += len(new_rows)
         funds_updated.append(fund_id)
         time.sleep(0.3)  # be polite to niftyindices
-
-    # ── Yahoo Finance funds ──────────────────────────────────────────────────
-    print("\n=== YAHOO FINANCE (SPX / Gold) ===")
-    for code, symbol in YAHOO_FUNDS:
-        fund_id = code_to_id.get(code)
-        if not fund_id:
-            print(f"  [{code}] not in DB, skipping")
-            continue
-
-        last_date = latest_by_fund.get(fund_id, DEFAULT_FROM)
-        from_iso  = add_days(last_date, 1)
-
-        if from_iso > today:
-            print(f"  [{code}] up to date ({last_date})")
-            continue
-
-        print(f"  [{code}] {symbol}: fetching {from_iso} → {today} ...", end=" ", flush=True)
-        rows = fetch_yahoo(symbol, from_iso, today)
-
-        new_rows = [(fund_id, d, v) for d, v in rows if d > last_date]
-        if not new_rows:
-            print("no new data")
-            continue
-
-        min_date, max_date = new_rows[0][1], new_rows[-1][1]
-        cur.execute(
-            "DELETE FROM nav_data WHERE fund_id = %s AND date BETWEEN %s AND %s",
-            (fund_id, min_date, max_date)
-        )
-        execute_values(cur, "INSERT INTO nav_data (fund_id, date, nav_value) VALUES %s", new_rows)
-        conn.commit()
-        print(f"{len(new_rows)} rows → latest {new_rows[-1][1]}")
-        total_inserted += len(new_rows)
-        funds_updated.append(fund_id)
 
     print(f"\nTotal new rows inserted: {total_inserted}")
 
@@ -329,17 +1259,23 @@ def main():
                     max_drawdown = %s,
                     sharpe_ratio = %s,
                     calmar_ratio = %s,
-                    avg_3y_rolling_return = %s
+                    avg_3y_rolling_return = %s,
+                    cagr_1y = %s, cagr_3y = %s, cagr_5y = %s, cagr_10y = %s, cagr_20y = %s
                 WHERE id = %s
-            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"], fund_id))
+            """, (m["cagr"], m["vol"], m["max_dd"], m["sharpe"], m["calmar"], m["avg3y"],
+                  m["cagr_1y"], m["cagr_3y"], m["cagr_5y"], m["cagr_10y"], m["cagr_20y"], fund_id))
             code = next((c for c, i in code_to_id.items() if i == fund_id), str(fund_id))
             print(f"  [{code}] CAGR={m['cagr']*100:.2f}%  Sharpe={m['sharpe']:.2f}  MaxDD={m['max_dd']*100:.2f}%")
 
         conn.commit()
 
+    # ── mfapi.in NAV update ──────────────────────────────────────────────────
+    update_mf_nav(conn, cur)
+
     cur.close()
     conn.close()
     print("\nDone!")
+
 
 if __name__ == "__main__":
     main()

@@ -5,6 +5,8 @@ import {
   computeAllMetrics,
   computeDrawdownSeries,
   computeRolling3YCAGR,
+  computeFYRawRows,
+  type FYRawRow,
 } from '@/lib/calculations'
 
 const supabase = createClient(
@@ -21,9 +23,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No allocations provided' }, { status: 400 })
     }
 
-    const totalWeight = allocations.reduce((sum, a) => sum + a.weight, 0)
-    if (Math.abs(totalWeight - 100) > 0.5) {
-      return NextResponse.json({ error: 'Weights must sum to 100' }, { status: 400 })
+    // Normalise weights in case of small floating-point drift (e.g. 99.97 → 100)
+    const rawTotal = allocations.reduce((sum, a) => sum + a.weight, 0)
+    if (rawTotal <= 0 || Math.abs(rawTotal - 100) > 2) {
+      return NextResponse.json({ error: 'Weights must sum to approximately 100' }, { status: 400 })
+    }
+    if (Math.abs(rawTotal - 100) > 0.01) {
+      allocations.forEach(a => { a.weight = (a.weight / rawTotal) * 100 })
     }
 
     // Look up Nifty 50 (N50) by code to avoid hardcoding ID
@@ -65,13 +71,22 @@ export async function POST(req: NextRequest) {
         navSeries: navByFund.get(a.fundId) ?? [],
       }))
 
-      // Validate all funds have NAV data
+      // Separate funds with and without NAV data
       const missingFunds = fundNavs.filter((f) => f.navSeries.length === 0)
-      if (missingFunds.length > 0) {
-        return NextResponse.json({ error: `No NAV data found for fund ID(s): ${missingFunds.map(f => f.fundId).join(', ')}` }, { status: 400 })
+      const validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
+
+      if (validFundNavs.length === 0) {
+        return NextResponse.json({ error: 'No NAV data found for any selected funds' }, { status: 400 })
       }
 
-    const portfolioNav = computePortfolioNav(fundNavs)
+      // If some funds have no NAV data, redistribute their weights proportionally among valid funds
+      if (missingFunds.length > 0) {
+        const validTotalWeight = validFundNavs.reduce((s, f) => s + f.weight, 0)
+        validFundNavs.forEach(f => { f.weight = (f.weight / validTotalWeight) * 100 })
+        console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
+      }
+
+    const portfolioNav = computePortfolioNav(validFundNavs)
     const metrics = computeAllMetrics(portfolioNav)
     const drawdownSeries = computeDrawdownSeries(portfolioNav)
     const rollingReturns = computeRolling3YCAGR(portfolioNav)
@@ -95,6 +110,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Compute FY raw data for the detail table — use validFundNavs so missing funds are excluded
+    const today = new Date().toISOString().slice(0, 10)
+    const fyTableFunds: Record<number, FYRawRow[]> = {}
+    for (const alloc of validFundNavs) {
+      const raw = navByFund.get(alloc.fundId) ?? []
+      fyTableFunds[alloc.fundId] = computeFYRawRows(raw, today)
+    }
+    const fyTableBenchmark = computeFYRawRows(nifty50NavRaw, today)
+    // Portfolio FY rows (computed from rebased portfolio NAV)
+    const fyTablePortfolio = computeFYRawRows(portfolioNav, today)
+
     return NextResponse.json({
       portfolioNav,
       metrics,
@@ -104,7 +130,14 @@ export async function POST(req: NextRequest) {
       benchmarkMetrics,
       benchmarkDrawdown,
       benchmarkRolling,
-    })
+      fyTableData: {
+        portfolio:  fyTablePortfolio,
+        funds:      fyTableFunds,
+        benchmark:  fyTableBenchmark,
+      },
+      // Funds excluded from backtest due to no NAV data (e.g. not yet scraped)
+      skippedFundIds: missingFunds.map(f => f.fundId),
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

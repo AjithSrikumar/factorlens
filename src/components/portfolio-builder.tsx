@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useCallback } from "react"
-import { X, Plus, ChevronDown, Search } from "lucide-react"
+import { useState, useCallback, useEffect, useRef } from "react"
+import { X, Plus, ChevronDown, Search, Equal } from "lucide-react"
+import { amcLogoUrl } from "@/lib/amc"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -40,19 +41,55 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Low Vol": "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   "Alpha": "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
   "Value": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  "Global/Other": "bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-300",
+  "Global/Other": "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-300",
 }
 
 export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loading }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [catFilter, setCatFilter] = useState("All")
+  // MF trackers: keyed by fund code
+  const [mfTrackers, setMfTrackers] = useState<Record<string, { schemeName: string; amcLogo: string | null }>>({})
+  const fetchedCodes = useRef<Set<string>>(new Set())
+
+  // Fetch MF tracker for any newly added fund
+  useEffect(() => {
+    const toFetch = allocations.filter(a => !fetchedCodes.current.has(a.fund.code))
+    if (toFetch.length === 0) return
+    toFetch.forEach(a => fetchedCodes.current.add(a.fund.code))
+    Promise.all(
+      toFetch.map(a =>
+        fetch(`/api/mffunds/byindex?indexName=${encodeURIComponent(a.fund.name)}`)
+          .then(r => r.json())
+          .then((d: unknown) => {
+            const arr = Array.isArray(d) ? d : []
+            const top = arr[0] as { scheme_name?: string; fund_house?: string } | undefined
+            return {
+              code: a.fund.code,
+              schemeName: top?.scheme_name ?? '',
+              amcLogo: top?.fund_house ? amcLogoUrl(top.fund_house) : null,
+            }
+          })
+          .catch(() => ({ code: a.fund.code, schemeName: '', amcLogo: null }))
+      )
+    ).then(results => {
+      setMfTrackers(prev => {
+        const next = { ...prev }
+        results.forEach(r => { next[r.code] = { schemeName: r.schemeName, amcLogo: r.amcLogo } })
+        return next
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allocations.length])
 
   const categories = ["All", ...Array.from(new Set(funds.map((f) => f.category)))]
   const totalWeight = allocations.reduce((sum, a) => sum + a.weight, 0)
   const weightError = Math.abs(totalWeight - 100) > 0.5
-
   const selectedIds = new Set(allocations.map((a) => a.fund.id))
+
+  // Detect if weights are unequal (to highlight the Equalize button)
+  const equalWeight = allocations.length > 0 ? Math.round(100 / allocations.length) : 0
+  const weightsUnequal = allocations.length > 1 && allocations.some(a => Math.round(a.weight) !== equalWeight)
 
   const filteredFunds = funds.filter((f) => {
     const matchCat = catFilter === "All" || f.category === catFilter
@@ -62,12 +99,13 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
 
   const addFund = useCallback((fund: Fund) => {
     if (allocations.length >= 10) return
-    const remaining = 100 - totalWeight
-    const newWeight = Math.max(5, Math.min(remaining, Math.round(remaining / (allocations.length + 1))))
-    onChange([...allocations, { fund, weight: newWeight }])
+    const newAllocations = [...allocations, { fund, weight: 0 }]
+    const equal = Math.floor(100 / newAllocations.length)
+    const remainder = 100 - equal * newAllocations.length
+    onChange(newAllocations.map((a, i) => ({ ...a, weight: equal + (i === 0 ? remainder : 0) })))
     setOpen(false)
     setSearch("")
-  }, [allocations, onChange, totalWeight])
+  }, [allocations, onChange])
 
   const removeFund = useCallback((id: number) => {
     onChange(allocations.filter((a) => a.fund.id !== id))
@@ -85,133 +123,195 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
   }, [allocations, onChange])
 
   return (
-    <div className="space-y-6">
-      {/* Fund selector */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            Selected Funds ({allocations.length}/10)
-          </h3>
-          {allocations.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={autoNormalize} className="text-xs h-7">
-              Auto-Equalise
-            </Button>
-          )}
-        </div>
+    <div className="space-y-5">
 
-        {/* Selected funds list */}
-        {allocations.length === 0 ? (
-          <div className="border-2 border-dashed border-border rounded-xl p-8 text-center">
-            <p className="text-muted-foreground text-sm">No funds selected yet.</p>
-              <p className="text-xs text-muted-foreground mt-1">Click &ldquo;Add Fund&rdquo; to get started.</p>
-          </div>
-        ) : (
-            <div className="space-y-4">
-              {allocations.map((a) => (
-                <div key={a.fund.id} className="border-2 rounded-2xl p-4 bg-card hover:border-primary/40 transition-all shadow-sm">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1 min-w-0 mr-3">
-                      <p className="font-bold text-[15px] leading-tight text-foreground truncate">{a.fund.name}</p>
-                      <Badge variant="secondary" className={cn("text-[10px] mt-1.5 px-2 py-0 h-4.5 uppercase font-bold tracking-wider", CATEGORY_COLORS[a.fund.category])}>
-                        {a.fund.category}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className="bg-primary/10 px-2 py-1 rounded-lg">
-                        <span className="font-black text-lg text-primary tabular-nums">{a.weight}%</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => removeFund(a.fund.id)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="px-1.5 pb-2">
-                    <Slider
-                      value={[a.weight]}
-                      onValueChange={([v]) => updateWeight(a.fund.id, v)}
-                      min={1}
-                      max={100}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-        )}
-
-        {/* Weight indicator */}
-        {allocations.length > 0 && (
-          <div className={cn(
-            "mt-3 flex items-center justify-between text-sm px-1",
-            weightError ? "text-destructive" : "text-muted-foreground"
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+            Selected Funds
+          </span>
+          <span className={cn(
+            "text-xs font-bold px-2 py-0.5 rounded-full",
+            allocations.length >= 10
+              ? "bg-destructive/10 text-destructive"
+              : "bg-muted text-muted-foreground"
           )}>
-            <span>Total weight: <strong>{totalWeight}%</strong></span>
-            {weightError && <span className="text-xs">Must equal 100%</span>}
-            {!weightError && <span className="text-xs text-teal-600 font-medium">Ready to generate</span>}
-          </div>
+            {allocations.length}/10
+          </span>
+        </div>
+        {allocations.length > 1 && (
+          <button
+            onClick={autoNormalize}
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-semibold transition-all px-2.5 py-1.5 rounded-lg",
+              weightsUnequal
+                ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 animate-in fade-in duration-200"
+                : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+            )}
+          >
+            <Equal className="h-3 w-3" />
+            Equalize
+          </button>
         )}
+      </div>
 
-        {/* Progress bar */}
-        {allocations.length > 0 && (
-          <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+      {/* Selected funds list */}
+      {allocations.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-border p-10 text-center">
+          <div className="w-10 h-10 rounded-full bg-muted/60 flex items-center justify-center mx-auto mb-3">
+            <Plus className="h-5 w-5 text-muted-foreground/60" />
+          </div>
+          <p className="text-sm font-semibold text-foreground/70">No funds selected</p>
+          <p className="text-xs text-muted-foreground mt-1">Tap &ldquo;Add Fund&rdquo; below to get started</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {allocations.map((a) => (
+            <div
+              key={a.fund.id}
+              className="rounded-2xl border border-border/70 bg-card p-4 hover:border-primary/30 transition-all"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0 mr-3">
+                  <p className="font-semibold text-[14px] leading-snug text-foreground truncate">
+                    {a.fund.name}
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "text-[9px] px-1.5 py-0 h-4 uppercase font-bold tracking-wider",
+                        CATEGORY_COLORS[a.fund.category]
+                      )}
+                    >
+                      {a.fund.category}
+                    </Badge>
+                    <span className="text-[10px] font-mono text-muted-foreground/70">
+                      {a.fund.code}
+                    </span>
+                  </div>
+                  {/* MF tracker — AMC logo + scheme name */}
+                  {mfTrackers[a.fund.code]?.schemeName && (
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      {mfTrackers[a.fund.code].amcLogo && (
+                        <img
+                          src={mfTrackers[a.fund.code].amcLogo!}
+                          alt=""
+                          style={{ width: 16, height: 16, objectFit: 'contain', borderRadius: 3, flexShrink: 0 }}
+                        />
+                      )}
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        {mfTrackers[a.fund.code].schemeName}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="text-right">
+                    <span className="font-bold text-[22px] metric-value text-primary tabular-nums leading-none">
+                      {a.weight}
+                    </span>
+                    <span className="text-xs font-bold text-primary/70">%</span>
+                  </div>
+                  <button
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                    onClick={() => removeFund(a.fund.id)}
+                    aria-label="Remove fund"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+              <Slider
+                value={[a.weight]}
+                onValueChange={([v]) => updateWeight(a.fund.id, v)}
+                min={1}
+                max={100}
+                step={1}
+                className="w-full"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Weight progress bar + status */}
+      {allocations.length > 0 && (
+        <div className="space-y-2">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
               className={cn(
-                "h-full rounded-full transition-all",
-                totalWeight > 100 ? "bg-destructive" : totalWeight === 100 ? "bg-teal-500" : "bg-primary"
+                "h-full rounded-full transition-all duration-300",
+                totalWeight > 100 ? "bg-destructive" :
+                totalWeight === 100 ? "bg-emerald-500" : "bg-primary"
               )}
               style={{ width: `${Math.min(totalWeight, 100)}%` }}
             />
           </div>
-        )}
-      </div>
+          <div className={cn(
+            "flex items-center justify-between text-xs",
+            weightError ? "text-destructive" : "text-muted-foreground"
+          )}>
+            <span>
+              Total: <span className="font-bold font-mono">{totalWeight}%</span>
+            </span>
+            {weightError
+              ? <span className="font-medium">Must equal 100%</span>
+              : <span className="text-emerald-600 dark:text-emerald-400 font-semibold">✓ Ready to generate</span>
+            }
+          </div>
+        </div>
+      )}
 
-      {/* Add Fund button + dropdown */}
+      {/* Add Fund dropdown */}
       <div className="relative">
-        <Button
-          variant="outline"
-          className="w-full h-12 gap-3 border-dashed border-2 rounded-2xl font-bold text-muted-foreground hover:text-primary hover:border-primary/50 transition-all"
-          onClick={() => setOpen(!open)}
+        <button
+          className={cn(
+            "w-full h-11 flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed font-semibold text-sm transition-all",
+            allocations.length >= 10
+              ? "opacity-40 cursor-not-allowed border-border text-muted-foreground"
+              : "border-border text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-primary/5 active:scale-[0.99]"
+          )}
+          onClick={() => allocations.length < 10 && setOpen(!open)}
           disabled={allocations.length >= 10}
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-4 w-4" />
           Add Fund
-          <ChevronDown className={cn("h-4 w-4 ml-auto transition-transform duration-300", open && "rotate-180")} />
-        </Button>
+          <ChevronDown className={cn(
+            "h-4 w-4 ml-auto mr-1 transition-transform duration-200",
+            open && "rotate-180"
+          )} />
+        </button>
 
         {open && (
-          <div className="absolute top-full left-0 right-0 mt-3 z-50 bg-popover border-2 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top">
+          <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-popover border-2 border-border rounded-2xl shadow-2xl overflow-hidden origin-top animate-in fade-in zoom-in-95 duration-150">
+
             {/* Search */}
-            <div className="p-4 border-b">
+            <div className="p-3 border-b border-border/60">
               <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                 <Input
-                  placeholder="Search 28 factor indexes..."
+                  placeholder={`Search ${filteredFunds.length + allocations.length} factor indices…`}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10 h-11 text-[15px] font-medium rounded-xl border-muted bg-muted/30 focus-visible:ring-primary/20"
+                  className="pl-9 h-10 rounded-xl bg-muted/40 border-muted text-sm"
                   autoFocus
                 />
               </div>
             </div>
 
-            {/* Category filter */}
-            <div className="p-2.5 border-b flex gap-1.5 overflow-x-auto no-scrollbar bg-muted/10">
+            {/* Category filter chips */}
+            <div className="px-3 py-2 border-b border-border/40 flex gap-1.5 overflow-x-auto no-scrollbar bg-muted/20">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCatFilter(cat)}
                   className={cn(
-                    "px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap font-bold transition-all flex-shrink-0",
+                    "px-3 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex-shrink-0 transition-all",
                     catFilter === cat
-                      ? "bg-primary text-primary-foreground shadow-md scale-105"
-                      : "bg-background text-muted-foreground hover:bg-accent border"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-card text-muted-foreground hover:bg-accent border border-border/60"
                   )}
                 >
                   {cat}
@@ -220,34 +320,39 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
             </div>
 
             {/* Fund list */}
-            <div className="max-h-80 overflow-y-auto scrollbar-thin">
+            <div className="max-h-72 overflow-y-auto">
               {filteredFunds.length === 0 ? (
-                <div className="p-12 text-center space-y-2">
-                  <div className="bg-muted rounded-full w-10 h-10 flex items-center justify-center mx-auto opacity-50">
-                    <Search className="h-5 w-5" />
-                  </div>
-                  <p className="text-sm font-bold text-muted-foreground">No funds found</p>
+                <div className="py-10 text-center">
+                  <p className="text-sm text-muted-foreground">No funds found</p>
                 </div>
               ) : (
                 filteredFunds.map((fund) => (
                   <button
                     key={fund.id}
                     onClick={() => addFund(fund)}
-                    className="w-full text-left px-5 py-4 hover:bg-accent/60 transition-all flex items-center justify-between gap-4 border-b last:border-0 group active:bg-accent"
+                    className="w-full text-left px-4 py-3.5 flex items-center justify-between gap-3 border-b last:border-0 border-border/40 hover:bg-accent/50 active:bg-accent transition-colors group"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-black leading-tight text-foreground group-hover:text-primary transition-colors truncate">{fund.name}</p>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <Badge variant="secondary" className={cn("text-[9px] h-4 py-0 px-1.5 uppercase font-bold tracking-wider", CATEGORY_COLORS[fund.category])}>
+                      <p className="text-[13px] font-semibold leading-tight text-foreground group-hover:text-primary transition-colors truncate">
+                        {fund.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "text-[9px] h-4 py-0 px-1.5 uppercase font-bold tracking-wider",
+                            CATEGORY_COLORS[fund.category]
+                          )}
+                        >
                           {fund.category}
                         </Badge>
-                        <span className="text-[11px] font-bold text-teal-600">
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                           {(fund.cagr * 100).toFixed(1)}% CAGR
                         </span>
                       </div>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all">
-                      <Plus className="h-4 w-4" />
+                    <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-all flex-shrink-0">
+                      <Plus className="h-3.5 w-3.5" />
                     </div>
                   </button>
                 ))
@@ -259,14 +364,14 @@ export function PortfolioBuilder({ funds, allocations, onChange, onGenerate, loa
 
       {/* Generate button */}
       <Button
-        className="w-full h-12 text-base bg-gradient-to-r from-indigo-600 to-teal-500 hover:from-indigo-700 hover:to-teal-600 text-white border-0 font-semibold"
+        className="w-full h-12 text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-teal-500 hover:from-indigo-700 hover:to-teal-600 text-white border-0 rounded-2xl shadow-md shadow-indigo-900/20 active:scale-[0.99] transition-all"
         onClick={onGenerate}
         disabled={loading || allocations.length === 0 || weightError}
       >
         {loading ? (
           <span className="flex items-center gap-2">
             <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-            Computing Portfolio...
+            Computing Portfolio…
           </span>
         ) : (
           "Generate Portfolio"

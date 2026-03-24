@@ -7,6 +7,7 @@ export interface NavPoint {
 
 export interface PortfolioMetrics {
   cagr: number
+  cagr_10y: number | null   // CAGR over last 10 years (null if < 10Y of data)
   volatility: number
   sharpe: number
   maxDrawdown: number
@@ -90,7 +91,7 @@ export function computeVolatility(navSeries: NavPoint[]): number {
     dailyReturns.push(ret)
   }
   const mean = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-  const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / dailyReturns.length
+  const variance = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (dailyReturns.length - 1)
   return Math.sqrt(variance) * Math.sqrt(252)
 }
 
@@ -149,20 +150,116 @@ export function computeSortino(navSeries: NavPoint[], riskFreeRate = 0.06): numb
   return downsideDevAnnualized > 0 ? (cagr - riskFreeRate) / downsideDevAnnualized : 0
 }
 
+// ── Fiscal Year raw-data rows ──────────────────────────────────────────────
+
+export interface FYRawRow {
+  fy: string         // e.g. "FY24"
+  startDate: string  // actual first trading day on/after Apr 1
+  startValue: number // raw index value on startDate
+  endDate: string    // actual last trading day on/before Mar 31 (or today if live)
+  endValue: number   // raw index value on endDate
+  returnPct: number  // (endValue/startValue - 1) * 100
+  isLive: boolean    // FY not yet complete
+}
+
+function _findFloorPoint(
+  sortedDates: string[],
+  navMap: Map<string, number>,
+  targetDate: string
+): { date: string; value: number } | null {
+  let lo = 0, hi = sortedDates.length - 1, result = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (sortedDates[mid] <= targetDate) { result = mid; lo = mid + 1 }
+    else hi = mid - 1
+  }
+  if (result === -1) return null
+  const d = sortedDates[result]
+  return { date: d, value: navMap.get(d)! }
+}
+
+function _findCeilPoint(
+  sortedDates: string[],
+  navMap: Map<string, number>,
+  targetDate: string
+): { date: string; value: number } | null {
+  let lo = 0, hi = sortedDates.length - 1, result = -1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (sortedDates[mid] >= targetDate) { result = mid; hi = mid - 1 }
+    else lo = mid + 1
+  }
+  if (result === -1) return null
+  const d = sortedDates[result]
+  return { date: d, value: navMap.get(d)! }
+}
+
+export function computeFYRawRows(nav: NavPoint[], today: string): FYRawRow[] {
+  if (nav.length === 0) return []
+  const sorted = [...nav].sort((a, b) => a.date.localeCompare(b.date))
+  const navMap = new Map(sorted.map(p => [p.date, p.value]))
+  const sortedDates = sorted.map(p => p.date)
+  const firstDate = sortedDates[0]
+
+  const todayYear = parseInt(today.slice(0, 4))
+  const todayMonth = parseInt(today.slice(5, 7))
+  const currentFYYear = todayMonth >= 4 ? todayYear + 1 : todayYear
+
+  const results: FYRawRow[] = []
+  for (let fyYear = 2006; fyYear <= currentFYYear; fyYear++) {
+    const fyStart = `${fyYear - 1}-04-01`
+    const fyEnd   = `${fyYear}-03-31`
+    if (firstDate > fyEnd) continue
+
+    const isLive = fyEnd > today
+    const effectiveEnd   = isLive ? today : fyEnd
+    const effectiveStart = fyStart < firstDate ? firstDate : fyStart
+
+    const startPoint = _findCeilPoint(sortedDates, navMap, effectiveStart)
+    const endPoint   = _findFloorPoint(sortedDates, navMap, effectiveEnd)
+
+    if (!startPoint || !endPoint || startPoint.value === 0) continue
+
+    const returnPct = ((endPoint.value / startPoint.value) - 1) * 100
+    results.push({
+      fy: `FY${String(fyYear).slice(2)}`,
+      startDate:  startPoint.date,
+      startValue: startPoint.value,
+      endDate:    endPoint.date,
+      endValue:   endPoint.value,
+      returnPct:  parseFloat(returnPct.toFixed(2)),
+      isLive,
+    })
+  }
+  return results
+}
+
 // Full metrics computation
 export function computeAllMetrics(navSeries: NavPoint[]): PortfolioMetrics {
   const cagr = computeCAGR(navSeries)
   const vol = computeVolatility(navSeries)
   const maxDD = computeMaxDrawdown(navSeries)
-  const sharpe = vol > 0 ? cagr / vol : 0
+  const sharpe = vol > 0 ? (cagr - 0.06) / vol : 0
   const calmar = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0
   const sortino = computeSortino(navSeries)
   const totalReturn = navSeries.length > 1
     ? (navSeries[navSeries.length - 1].value / navSeries[0].value - 1) * 100
     : 0
 
+  // 10-year CAGR: slice the last 10 calendar years
+  let cagr_10y: number | null = null
+  if (navSeries.length > 1) {
+    const endDate = navSeries[navSeries.length - 1].date
+    const tenYAgo = endDate.slice(0, 4).replace(/\d{4}/, y => String(parseInt(y) - 10)) + endDate.slice(4)
+    const from10y = navSeries.filter(n => n.date >= tenYAgo)
+    if (from10y.length >= 200) {   // at least ~200 trading days of 10Y window
+      cagr_10y = computeCAGR(from10y)
+    }
+  }
+
   return {
     cagr,
+    cagr_10y,
     volatility: vol,
     sharpe,
     maxDrawdown: maxDD,

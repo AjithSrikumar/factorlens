@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { VisualEditsMessenger } from "orchids-visual-edits";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "factorlens — Institutional-Grade Portfolio Dashboard",
+  title: "FactorLens — Institutional Portfolio Analytics",
   description:
     "Build smarter portfolios backed by 20+ years of NSE backtest data. Select funds, allocate weights, and instantly see risk-adjusted performance.",
 };
@@ -23,10 +17,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <body className="font-sans antialiased">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <Navbar />
-          <main>{children}</main>
+          {/* pt-[52px] on mobile for top bar; pb-[72px] for bottom nav */}
+          <main className="pt-[52px] md:pt-0 pb-[72px] md:pb-0">{children}</main>
         </ThemeProvider>
         <VisualEditsMessenger />
       </body>

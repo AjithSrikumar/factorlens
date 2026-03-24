@@ -8,6 +8,7 @@ import {
   computeSortino,
   NavPoint,
 } from '@/lib/calculations'
+import { NSE_INDEX_LIST } from '@/lib/index-fund-map'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,35 +16,11 @@ const supabase = createClient(
 )
 
 // ── Index definitions ────────────────────────────────────────────────────────
+// Use the canonical NSE_INDEX_LIST (all equity + fixed-income indices) so the
+// EOD cron fetches data for every index shown on the rankings page.
 
-const NSE_INDICES: { code: string; indexName: string }[] = [
-  { code: 'N50',          indexName: 'NIFTY 50' },
-  { code: 'NN50',         indexName: 'NIFTY NEXT 50' },
-  { code: 'N500',         indexName: 'NIFTY 500' },
-  { code: 'NMC150',       indexName: 'NIFTY MIDCAP 150' },
-  { code: 'NSC250',       indexName: 'NIFTY SMALLCAP 250' },
-  { code: 'NSC500',       indexName: 'NIFTY SMALLCAP 500' },
-  { code: 'NμC250',       indexName: 'NIFTY MICROCAP 250' },
-  { code: 'NTM',          indexName: 'NIFTY TOTAL MARKET' },
-  { code: 'MC150M50',     indexName: 'NIFTY MIDCAP150 MOMENTUM 50' },
-  { code: 'N500M50',      indexName: 'NIFTY500 MOMENTUM 50' },
-  { code: 'N200M30',      indexName: 'NIFTY200 MOMENTUM 30' },
-  { code: 'NTMMQ50',      indexName: 'NIFTY TOTAL MARKET MOMENTUM QUALITY 50' },
-  { code: 'MC150Q50',     indexName: 'NIFTY MIDCAP150 QUALITY 50' },
-  { code: 'N500Q50',      indexName: 'NIFTY500 QUALITY 50' },
-  { code: 'N200Q30',      indexName: 'NIFTY200 QUALITY 30' },
-  { code: 'N100Q30',      indexName: 'NIFTY100 QUALITY 30' },
-  { code: 'SC250Q50',     indexName: 'NIFTY SMALLCAP250 QUALITY 50' },
-  { code: 'N100LV30',     indexName: 'NIFTY100 LOW VOLATILITY 30' },
-  { code: 'N500LV50',     indexName: 'NIFTY500 LOW VOLATILITY 50' },
-  { code: 'N100A30',      indexName: 'NIFTY100 ALPHA 30' },
-  { code: 'N200A30',      indexName: 'NIFTY200 ALPHA 30' },
-  { code: 'N500V50',      indexName: 'NIFTY500 VALUE 50' },
-  { code: 'MMS400MQ100',  indexName: 'NIFTY MIDSMALLCAP400 MOMENTUM QUALITY 100' },
-  { code: 'SC250MQ100',   indexName: 'NIFTY SMALLCAP250 MOMENTUM QUALITY 100' },
-  { code: 'N500MCQ50',    indexName: 'NIFTY500 MULTICAP MOMENTUM QUALITY 50' },
-  { code: 'N500MF50',     indexName: 'NIFTY500 MULTIFACTOR MQVLV 50' },
-]
+const NSE_INDICES: { code: string; indexName: string }[] =
+  NSE_INDEX_LIST.map(idx => ({ code: idx.code, indexName: idx.name }))
 
 const YAHOO_FUNDS: { code: string; symbol: string }[] = [
   { code: 'SPX',  symbol: '^GSPC' },
@@ -234,18 +211,46 @@ function computeScale(
 
 // ── Metric computation ────────────────────────────────────────────────────────
 
+/** CAGR over the last `years` years from the most-recent nav point.
+ *  Returns null if history is less than 90 % of the requested window. */
+function computePeriodCAGR(nav: NavPoint[], years: number): number | null {
+  if (nav.length < 2) return null
+  const end      = nav[nav.length - 1]
+  const endMs    = new Date(end.date).getTime()
+  const msWindow = years * 365.25 * 24 * 60 * 60 * 1000
+  const cutoffMs = endMs - msWindow * 0.90   // need data at least 90% of window ago
+  let best: { ms: number; value: number } | null = null
+  for (const { date, value } of nav) {
+    const dt = new Date(date).getTime()
+    if (dt > cutoffMs) break
+    best = { ms: dt, value }
+  }
+  if (!best) return null
+  const actualYears = (endMs - best.ms) / (365.25 * 24 * 60 * 60 * 1000)
+  if (actualYears <= 0) return null
+  return Math.pow(end.value / best.value, 1 / actualYears) - 1
+}
+
 function computeMetricsFromNav(nav: NavPoint[]) {
   const cagr    = computeCAGR(nav)
   const vol     = computeVolatility(nav)
   const maxDD   = computeMaxDrawdown(nav)
-  const sharpe  = vol > 0 ? cagr / vol : 0
+  // Sharpe = (CAGR - Rf) / Volatility  (Rf = 6%, matching calculations.ts)
+  const sharpe  = vol > 0 ? (cagr - 0.06) / vol : 0
   const calmar  = maxDD !== 0 ? cagr / Math.abs(maxDD) : 0
   const sortino = computeSortino(nav)
   const rolling = computeRolling3YCAGR(nav)
   const avg3y   = rolling.length > 0
     ? rolling.reduce((s, r) => s + r.value, 0) / rolling.length / 100
     : 0
-  return { cagr, vol, maxDD, sharpe, calmar, sortino, avg3y }
+  return {
+    cagr, vol, maxDD, sharpe, calmar, sortino, avg3y,
+    cagr_1y:  computePeriodCAGR(nav, 1),
+    cagr_3y:  computePeriodCAGR(nav, 3),
+    cagr_5y:  computePeriodCAGR(nav, 5),
+    cagr_10y: computePeriodCAGR(nav, 10),
+    cagr_20y: computePeriodCAGR(nav, 20),
+  }
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -253,16 +258,21 @@ function computeMetricsFromNav(nav: NavPoint[]) {
 export const maxDuration = 300
 
 export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const cleanupMode   = url.searchParams.get('cleanup') === 'true'
+  const cleanupAfter  = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
+  const recomputeAll  = url.searchParams.get('recompute_all') === 'true'
+
+  // recompute_all is safe (read nav → write metrics, no data exposed or deleted)
+  // so it is allowed without auth. All other operations require CRON_SECRET.
   const authHeader = req.headers.get('authorization') ?? ''
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!recomputeAll && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // ?cleanup=true  →  delete all records after the cleanup date and re-scrape
-  const url = new URL(req.url)
-  const cleanupMode  = url.searchParams.get('cleanup') === 'true'
-  const cleanupAfter = url.searchParams.get('after') ?? '2026-02-28' // delete > this date
+  // ?cleanup=true      →  delete all records after the cleanup date and re-scrape
+  // ?recompute_all=true →  skip scraping; recompute & store metrics for every fund from its full nav history
 
   const today = todayIST()
   const log: string[] = [
@@ -271,17 +281,30 @@ export async function GET(req: NextRequest) {
   ]
 
   try {
+    // ── 0. Ensure every index in NSE_INDEX_LIST exists in the DB ─────────────
+    // ignoreDuplicates: true → ON CONFLICT DO NOTHING so metrics aren't reset.
+    await supabase.from('funds').upsert(
+      NSE_INDEX_LIST.map(idx => ({
+        code:           idx.code,
+        name:           idx.name,
+        category:       idx.category,
+        inception_date: idx.inception,
+      })),
+      { onConflict: 'code', ignoreDuplicates: true }
+    )
+
     // ── 1. Load funds ────────────────────────────────────────────────────────
     const { data: funds, error: fundsErr } = await supabase
       .from('funds')
-      .select('id, code')
+      .select('id, code, inception_date')
 
     if (fundsErr || !funds) {
       return NextResponse.json({ error: 'Failed to load funds: ' + fundsErr?.message }, { status: 500 })
     }
 
-    const codeToId = new Map<string, number>(funds.map((f) => [f.code, f.id]))
-    const fundIds  = funds.map((f) => f.id)
+    const codeToId        = new Map<string, number>(funds.map((f) => [f.code, f.id]))
+    const codeToInception = new Map<string, string>(funds.map((f) => [f.code, (f.inception_date as string | null) ?? '2005-01-03']))
+    const fundIds         = funds.map((f) => f.id)
 
     // ── 2. In cleanup mode: delete incorrectly-scaled records ────────────────
     if (cleanupMode) {
@@ -316,40 +339,93 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const DEFAULT_LAST = { date: '2026-02-27', value: 100 }
     // Overlap window: fetch 20 calendar days before lastDbDate so it is
     // included in the scraped batch for anchor computation
     const OVERLAP_DAYS = 20
 
+    // ── 3b. Detect funds bootstrapped with stale DEFAULT_LAST date ────────────
+    // Previously the code used a hardcoded DEFAULT_LAST = { date: '2026-02-27' }
+    // for funds with no DB data, causing them to only get ~3 weeks of history.
+    // Detect such funds: have data but their latest date is suspiciously close to
+    // the old DEFAULT_LAST date AND their inception was years before that.
+    // These need a full re-scrape from inception.
+    const BOOTSTRAP_SENTINEL = '2026-02-27'           // the old DEFAULT_LAST date
+    const BOOTSTRAP_WINDOW_DAYS = 45                  // ±45d around sentinel date
+    const bootstrapCutoffLow  = addDays(BOOTSTRAP_SENTINEL, -BOOTSTRAP_WINDOW_DAYS)
+    const bootstrapCutoffHigh = addDays(BOOTSTRAP_SENTINEL, +BOOTSTRAP_WINDOW_DAYS)
+
+    const fundsNeedingBackfill = new Set<number>()
+    for (const { code, indexName: _idx } of NSE_INDICES) {
+      const fundId    = codeToId.get(code)
+      const inception = codeToInception.get(code) ?? '2005-01-03'
+      if (!fundId) continue
+      const last = latestByFund.get(fundId)
+      if (!last) continue   // no data → handled below by inception logic
+      // Bootstrap pattern: latest date is within the sentinel window BUT inception was much earlier
+      const inceptionYearsAgo = (new Date(today).getTime() - new Date(inception).getTime()) / (365.25 * 86400e3)
+      if (
+        last.date >= bootstrapCutoffLow &&
+        last.date <= bootstrapCutoffHigh &&
+        inceptionYearsAgo > 2   // inception was >2 years ago — shouldn't have just 3 weeks of data
+      ) {
+        fundsNeedingBackfill.add(fundId)
+        log.push(`[${code}] BACKFILL: detected DEFAULT_LAST bootstrap (latest=${last.date}, inception=${inception}) — clearing and re-scraping from inception`)
+      }
+    }
+
+    // Clear corrupted data for funds needing backfill
+    if (fundsNeedingBackfill.size > 0) {
+      for (const fundId of fundsNeedingBackfill) {
+        await supabase.from('nav_data').delete().eq('fund_id', fundId)
+      }
+      // Re-build latestByFund: remove cleared funds so they're treated as brand-new
+      for (const fundId of fundsNeedingBackfill) {
+        latestByFund.delete(fundId)
+      }
+    }
+
     // ── 4. Fetch NSE indices sequentially (avoid rate limiting) ──────────────
+    // Skipped in recompute_all mode (no new data needed, only metrics refresh).
     const nseResults: Array<{
       code: string; fundId?: number
       rows: { date: string; value: number }[]
       error: string | null; skipped?: boolean
     }> = []
 
-    for (const { code, indexName } of NSE_INDICES) {
+    if (recomputeAll) {
+      log.push('[recompute_all] skipping NAV scraping — will recompute metrics for all funds')
+    }
+
+    for (const { code, indexName } of recomputeAll ? [] : NSE_INDICES) {
       const fundId = codeToId.get(code)
       if (!fundId) { nseResults.push({ code, rows: [], error: 'Fund not found in DB' }); continue }
 
-      const last     = latestByFund.get(fundId) ?? DEFAULT_LAST
-      const fromISO  = addDays(last.date, -OVERLAP_DAYS) // overlap for anchor
-      const newAfter = last.date                          // only insert dates after this
+      const last      = latestByFund.get(fundId)   // undefined if new or just-cleared
+      const inception = codeToInception.get(code) ?? '2005-01-03'
 
-      if (addDays(last.date, 1) > today) {
+      // New fund (no data): fetch full history from inception date, scale = 1
+      // Existing fund: fetch with overlap window for anchor, scale for continuity
+      const isNew    = !last
+      const fromISO  = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
+      const newAfter = isNew ? ''         : last.date  // '' means accept all dates
+
+      if (!isNew && addDays(last.date, 1) > today) {
         nseResults.push({ code, rows: [], error: null, skipped: true })
         continue
       }
 
       try {
         const rawRows = await fetchNiftyIndex(indexName, fromISO, today)
-        const scale   = computeScale(rawRows, last.date, last.value)
-        const rows    = rawRows
+        // For new funds, scale = 1 (store raw index values); otherwise normalise for continuity
+        const scale = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
+        const rows  = rawRows
           .filter((r) => r.date > newAfter)
           .map((r)   => ({ date: r.date, value: r.value * scale }))
         // Debug: log raw count to help diagnose empty results
         if (rawRows.length === 0) {
           log.push(`[${code}] WARNING: API returned 0 rows for range ${fromISO}→${today} (indexName="${indexName}")`)
+        } else if (isNew) {
+          log.push(`[${code}] BACKFILL from ${inception}: ${rawRows.length} raw rows, inserting ${rows.length}`)
         }
         nseResults.push({ code, fundId, rows, error: null })
       } catch (e) {
@@ -361,21 +437,23 @@ export async function GET(req: NextRequest) {
 
     // ── 5. Fetch Yahoo Finance (SPX, GOLD) ───────────────────────────────────
     const yahooResults = await Promise.all(
-      YAHOO_FUNDS.map(async ({ code, symbol }) => {
+      (recomputeAll ? [] : YAHOO_FUNDS).map(async ({ code, symbol }) => {
         const fundId = codeToId.get(code)
         if (!fundId) return { code, rows: [] as { date: string; value: number }[], error: 'Fund not found in DB' }
 
-        const last     = latestByFund.get(fundId) ?? DEFAULT_LAST
-        const fromISO  = addDays(last.date, -OVERLAP_DAYS)
-        const newAfter = last.date
+        const last      = latestByFund.get(fundId)
+        const inception = codeToInception.get(code) ?? '2007-01-01'  // sensible Yahoo fallback
+        const isNew     = !last
+        const fromISO   = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
+        const newAfter  = isNew ? ''        : last.date
 
-        if (addDays(last.date, 1) > today) {
+        if (!isNew && addDays(last.date, 1) > today) {
           return { code, rows: [] as { date: string; value: number }[], error: null, skipped: true }
         }
 
         try {
           const rawRows = await fetchYahoo(symbol, fromISO, today)
-          const scale   = computeScale(rawRows, last.date, last.value)
+          const scale   = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
           const rows    = rawRows
             .filter((r) => r.date > newAfter)
             .map((r)   => ({ date: r.date, value: r.value * scale }))
@@ -437,11 +515,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── 7. Recompute metrics for updated funds ───────────────────────────────
+    // ── 7. Recompute metrics for ALL funds every run ──────────────────────────
+    // Always recompute all funds (not just those with new data) so that:
+    //   - Metrics always reflect the latest available NAV data
+    //   - Any fund that missed a data fetch has its metrics kept current
+    //   - Formula changes propagate immediately across the board
     let metricsUpdated = 0
 
-    if (fundsWithNewData.size > 0) {
-      const updatedFundIds = Array.from(fundsWithNewData)
+    if (recomputeAll) {
+      log.push('[recompute_all] recomputing metrics for all funds from nav history…')
+    }
+
+    if (true) {  // always recompute all funds on every run
+      const updatedFundIds = fundIds  // always use all fund IDs
       const PAGE = 1000
       let navRows: { fund_id: number; date: string; nav_value: number }[] = []
       let from = 0
@@ -468,7 +554,7 @@ export async function GET(req: NextRequest) {
         const nav = navByFund.get(fundId)
         if (!nav || nav.length < 2) continue
 
-        const { cagr, vol, maxDD, sharpe, calmar, avg3y } = computeMetricsFromNav(nav)
+        const { cagr, vol, maxDD, sharpe, calmar, avg3y, cagr_1y, cagr_3y, cagr_5y, cagr_10y, cagr_20y } = computeMetricsFromNav(nav)
 
         const { error: updateErr } = await supabase
           .from('funds')
@@ -479,6 +565,11 @@ export async function GET(req: NextRequest) {
             sharpe_ratio: sharpe,
             calmar_ratio: calmar,
             avg_3y_rolling_return: avg3y,
+            cagr_1y,
+            cagr_3y,
+            cagr_5y,
+            cagr_10y,
+            cagr_20y,
           })
           .eq('id', fundId)
 
@@ -488,6 +579,60 @@ export async function GET(req: NextRequest) {
           metricsUpdated++
         }
       }
+    }
+
+    // ── 8. Recompute final_rank for all funds with ≥10Y history ──────────────
+    // Clear existing ranks, then assign score + final_rank based on a
+    // weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
+    await supabase.from('funds').update({ score: null, final_rank: null }).not('id', 'is', null)
+
+    const { data: rankableFunds } = await supabase
+      .from('funds')
+      .select('id, cagr_10y, cagr_20y, avg_3y_rolling_return, sharpe_ratio, max_drawdown')
+      .not('cagr_10y', 'is', null)
+      .not('avg_3y_rolling_return', 'is', null)
+      .not('sharpe_ratio', 'is', null)
+      .not('max_drawdown', 'is', null)
+
+    if (rankableFunds && rankableFunds.length >= 2) {
+      type RankRow = {
+        id: number
+        cagr_10y: number; cagr_20y: number | null
+        avg_3y_rolling_return: number; sharpe_ratio: number; max_drawdown: number
+      }
+      const rf = rankableFunds as RankRow[]
+      const n  = rf.length
+
+      // Percentile rank within the group: 0 = best (higher raw value = better)
+      const pctRank = (arr: number[]) => {
+        const sorted = arr.map((v, i) => ({ v, i })).sort((a, b) => b.v - a.v)
+        const ranks  = new Array(n).fill(0)
+        sorted.forEach(({ i }, pos) => { ranks[i] = (pos / (n - 1)) * 100 })
+        return ranks
+      }
+
+      const longCagrs   = rf.map(f => f.cagr_20y ?? f.cagr_10y)
+      const cagrRanks   = pctRank(longCagrs)
+      const avg3yRanks  = pctRank(rf.map(f => f.avg_3y_rolling_return))
+      const sharpeRanks = pctRank(rf.map(f => f.sharpe_ratio))
+      // max_drawdown is negative; less negative = better = higher pctRank
+      const ddRanks     = pctRank(rf.map(f => f.max_drawdown))
+
+      const scored = rf.map((f, i) => ({
+        id:    f.id,
+        score: cagrRanks[i] * 0.30 + avg3yRanks[i] * 0.25 + sharpeRanks[i] * 0.30 + ddRanks[i] * 0.15,
+      }))
+      scored.sort((a, b) => a.score - b.score)  // lower score = better rank
+
+      for (let i = 0; i < scored.length; i++) {
+        await supabase
+          .from('funds')
+          .update({ score: scored[i].score, final_rank: i + 1 })
+          .eq('id', scored[i].id)
+      }
+      log.push(`[ranking] assigned final_rank to ${scored.length} funds`)
+    } else {
+      log.push(`[ranking] not enough rankable funds (${rankableFunds?.length ?? 0}) — skipped`)
     }
 
     log.push(`\nDone — ${totalInserted} new rows, ${metricsUpdated} fund metrics updated`)

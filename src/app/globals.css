@@ -1,3 +1,6 @@
+/* Google Fonts — loaded at runtime (no build-time network required) */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap");
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -6,8 +9,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -41,35 +45,62 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
 }
 
+/* ─────────────────────────────────────────
+   LIGHT THEME  (off-white + navy system)
+───────────────────────────────────────── */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.13 0.01 264);
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  --radius: 0.75rem;
+
+  /* Backgrounds */
+  --background: oklch(0.975 0.003 90);       /* #F5F5F3 warm off-white */
+  --foreground: oklch(0.11 0.012 264);        /* near-black navy */
+
+  /* Cards */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0.01 264);
+  --card-foreground: oklch(0.11 0.012 264);
+
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0.01 264);
-  /* Indigo primary */
+  --popover-foreground: oklch(0.11 0.012 264);
+
+  /* Primary blue #1A56DB */
   --primary: oklch(0.46 0.22 264);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.01 264);
+
+  --secondary: oklch(0.955 0.01 264);
   --secondary-foreground: oklch(0.25 0.05 264);
-  --muted: oklch(0.96 0.005 264);
+
+  --muted: oklch(0.955 0.005 264);
   --muted-foreground: oklch(0.52 0.04 264);
+
   --accent: oklch(0.94 0.03 190);
   --accent-foreground: oklch(0.25 0.05 264);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.01 264);
-  --input: oklch(0.92 0.01 264);
+
+  /* Destructive red #C5271E */
+  --destructive: oklch(0.50 0.22 27);
+
+  --border: oklch(0.90 0.008 264);
+  --input: oklch(0.93 0.008 264);
   --ring: oklch(0.46 0.22 264);
-  /* Teal chart colors */
+
+  /* Charts */
   --chart-1: oklch(0.46 0.22 264);
   --chart-2: oklch(0.63 0.19 190);
-  --chart-3: oklch(0.7 0.16 150);
+  --chart-3: oklch(0.70 0.16 150);
   --chart-4: oklch(0.76 0.18 80);
   --chart-5: oklch(0.65 0.22 30);
+
+  /* Green #0A7C4E */
+  --success: oklch(0.45 0.14 160);
+  --success-foreground: oklch(0.985 0 0);
+
+  /* Sidebar */
   --sidebar: oklch(0.97 0.005 264);
   --sidebar-foreground: oklch(0.13 0.01 264);
   --sidebar-primary: oklch(0.46 0.22 264);
@@ -80,50 +111,397 @@
   --sidebar-ring: oklch(0.46 0.22 264);
 }
 
+/* ─────────────────────────────────────────
+   DARK THEME  (navy-900 system)
+───────────────────────────────────────── */
 .dark {
-  --background: oklch(0.12 0.015 264);
+  --background: oklch(0.10 0.012 264);        /* near-black navy #0C0E13 */
   --foreground: oklch(0.96 0.005 264);
-  --card: oklch(0.16 0.015 264);
+
+  --card: oklch(0.145 0.013 264);             /* slightly lighter navy */
   --card-foreground: oklch(0.96 0.005 264);
-  --popover: oklch(0.16 0.015 264);
+
+  --popover: oklch(0.145 0.013 264);
   --popover-foreground: oklch(0.96 0.005 264);
-  --primary: oklch(0.62 0.2 264);
-  --primary-foreground: oklch(0.12 0.015 264);
-  --secondary: oklch(0.22 0.02 264);
+
+  --primary: oklch(0.62 0.20 264);
+  --primary-foreground: oklch(0.10 0.012 264);
+
+  --secondary: oklch(0.20 0.018 264);
   --secondary-foreground: oklch(0.96 0.005 264);
-  --muted: oklch(0.22 0.02 264);
-  --muted-foreground: oklch(0.65 0.05 264);
-  --accent: oklch(0.25 0.05 190);
+
+  --muted: oklch(0.20 0.018 264);
+  --muted-foreground: oklch(0.60 0.05 264);
+
+  --accent: oklch(0.22 0.05 190);
   --accent-foreground: oklch(0.96 0.005 264);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.62 0.2 264);
-  --chart-1: oklch(0.62 0.2 264);
-  --chart-2: oklch(0.7 0.17 190);
+
+  --destructive: oklch(0.65 0.20 22);
+
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.62 0.20 264);
+
+  --chart-1: oklch(0.62 0.20 264);
+  --chart-2: oklch(0.70 0.17 190);
   --chart-3: oklch(0.75 0.14 150);
-  --chart-4: oklch(0.8 0.16 80);
-  --chart-5: oklch(0.7 0.2 30);
-  --sidebar: oklch(0.14 0.015 264);
+  --chart-4: oklch(0.80 0.16 80);
+  --chart-5: oklch(0.70 0.20 30);
+
+  --success: oklch(0.60 0.16 160);
+  --success-foreground: oklch(0.10 0.012 264);
+
+  --sidebar: oklch(0.13 0.013 264);
   --sidebar-foreground: oklch(0.96 0.005 264);
-  --sidebar-primary: oklch(0.62 0.2 264);
+  --sidebar-primary: oklch(0.62 0.20 264);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.22 0.03 264);
+  --sidebar-accent: oklch(0.20 0.025 264);
   --sidebar-accent-foreground: oklch(0.96 0.005 264);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.2 264);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.62 0.20 264);
 }
 
+/* ─────────────────────────────────────────
+   BASE STYLES
+───────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+  h1, h2, h3 {
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ─────────────────────────────────────────
+   UTILITY CLASSES
+───────────────────────────────────────── */
+/* Monospace numbers for data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono), 'Courier New', monospace;
+}
+
+/* Serif metric values — big impactful numbers */
+.metric-value {
+  font-family: var(--font-serif), Georgia, serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Hide scrollbar but allow scrolling */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Premium card hover */
+.card-hover {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.05);
+}
+
+/* Smooth number transitions */
+.num-transition {
+  transition: color 0.2s ease;
 }
 
 /* Hide Next.js error overlay portal */
 nextjs-portal {
   display: none !important;
+}
+
+/* ─────────────────────────────────────────
+   LANDING PAGE STYLES
+───────────────────────────────────────── */
+
+/* Hero pulsing green dot */
+.hero-pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #22D3A0; flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(34,211,160,.4);
+  animation: hero-pulse 2.2s ease infinite;
+  display: inline-block;
+}
+@keyframes hero-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(34,211,160,.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,211,160,0); }
+  100% { box-shadow: 0 0 0 0   rgba(34,211,160,0); }
+}
+
+/* Landing page: pull hero flush against fixed mobile navbar */
+@media (max-width: 767px) {
+  .landing-hero-offset {
+    margin-top: -52px;
+  }
+}
+
+/* CTA button row — stack on mobile, row on ≥480px */
+.hero-actions-wrap { flex-direction: column !important; align-items: center !important; }
+@media (min-width: 480px) {
+  .hero-actions-wrap { flex-direction: row !important; justify-content: center !important; }
+}
+
+/* Hero stats grid — 2-col on very small screens */
+@media (max-width: 460px) {
+  .hero-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Feature cards grid — 4 → 2 → 1 col */
+.feat-grid-landing {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .feat-grid-landing { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .feat-grid-landing { grid-template-columns: 1fr; gap: 12px; }
+}
+
+/* Feature card */
+.feat-card-landing {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px 24px;
+  transition: box-shadow .22s, transform .22s;
+}
+.feat-card-landing:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.08);
+  transform: translateY(-3px);
+}
+
+/* Steps grid — 4 → 2 → 1 col */
+.steps-grid-landing {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+@media (max-width: 860px) {
+  .steps-grid-landing { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .steps-grid-landing { grid-template-columns: 1fr; gap: 16px; }
+}
+
+/* Why section — 2-col layout */
+.why-grid-landing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 52px;
+  align-items: center;
+}
+@media (max-width: 800px) {
+  .why-grid-landing { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* Why cards 2×2 */
+.why-cards-landing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.why-card-landing {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: box-shadow .18s;
+}
+.why-card-landing:hover {
+  box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+
+/* Diversification banner stats grid — 3 → 1 col */
+.div-stats-landing {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 36px 0 44px;
+  position: relative;
+  z-index: 1;
+}
+@media (max-width: 480px) {
+  .div-stats-landing { grid-template-columns: 1fr; }
+}
+
+/* Responsive horizontal padding for landing sections */
+@media (max-width: 767px) {
+  .landing-pw { padding: 0 16px !important; }
+}
+
+/* Banner border-radius + padding on small screens */
+@media (max-width: 600px) {
+  .div-banner-landing { padding: 44px 22px !important; border-radius: 20px !important; }
+}
+
+/* Footer — stack on mobile */
+@media (max-width: 640px) {
+  .footer-inner-landing { flex-direction: column !important; text-align: center !important; }
+}
+
+/* Footer link hover */
+.footer-link-landing:hover { color: var(--foreground) !important; }
+
+/* Learn button hover */
+.learn-btn-landing:hover {
+  background: var(--secondary) !important;
+  border-color: var(--primary) !important;
+}
+
+/* Hero primary button hover */
+.hbtn-main:hover { opacity: 0.9; transform: translateY(-1px); }
+/* Hero secondary button hover */
+.hbtn-sec:hover { background: rgba(255,255,255,.12) !important; }
+
+/* ─────────────────────────────────────────
+   DASHBOARD — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Portfolio Snapshot — 3-tile grid */
+.snap-3-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 640px) {
+  .snap-3-grid { grid-template-columns: 1fr; }
+  .snap-tile-resp { padding: 18px 16px !important; border-right: none !important; border-bottom: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-tile-resp:last-child { border-bottom: none !important; }
+}
+
+/* Portfolio Snapshot — 6-mini metrics strip */
+.snap-6-grid { display: grid; grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 767px) {
+  .snap-6-grid { grid-template-columns: repeat(3, 1fr); }
+  .snap-mini-resp { border-right: 1px solid rgba(12,14,19,.08) !important; border-bottom: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-mini-resp:nth-child(3n) { border-right: none !important; }
+  .snap-mini-resp:nth-last-child(-n+3) { border-bottom: none !important; }
+}
+@media (max-width: 420px) {
+  .snap-6-grid { grid-template-columns: repeat(2, 1fr); }
+  .snap-mini-resp:nth-child(2n) { border-right: none !important; }
+  .snap-mini-resp:nth-child(3n) { border-right: 1px solid rgba(12,14,19,.08) !important; }
+  .snap-mini-resp:nth-last-child(-n+2) { border-bottom: none !important; }
+  .snap-mini-resp:nth-last-child(-n+3) { border-bottom: 1px solid rgba(12,14,19,.08) !important; }
+}
+
+/* Drawdown + Composition side-by-side */
+.side2-resp { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 768px) { .side2-resp { grid-template-columns: 1fr; } }
+
+/* Dashboard wrapper padding */
+@media (max-width: 767px) {
+  .dash-wrap-resp { padding: 0 12px !important; }
+  .ccard-body-resp { padding: 14px 14px !important; }
+  .bld-body-resp { padding: 16px 14px !important; }
+}
+
+/* ─────────────────────────────────────────
+   RANKINGS — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Leader grid — 3 cols on desktop, horizontal scroll on mobile */
+.leader-grid-resp {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 700px) {
+  .leader-grid-resp {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 10px;
+    padding-bottom: 6px;
+  }
+  .leader-grid-resp::-webkit-scrollbar { display: none; }
+  .leader-grid-resp > * {
+    flex: 0 0 260px;
+    min-width: 260px;
+  }
+}
+
+/* Rankings wrapper padding */
+@media (max-width: 767px) {
+  .rank-wrap-resp { padding: 0 12px !important; }
+}
+
+/* Filter bar responsive */
+@media (max-width: 600px) {
+  .rfilt-resp { flex-direction: column !important; }
+  .rfilt-search { max-width: none !important; width: 100% !important; }
+}
+
+/* Category pills scrollable on mobile */
+.rcats-scroll {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rcats-scroll::-webkit-scrollbar { display: none; }
+
+/* Mobile rank cards — 2×2 metric grid */
+.mrc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ─────────────────────────────────────────
+   ACADEMY — RESPONSIVE GRIDS
+───────────────────────────────────────── */
+
+/* Factor grid — 2 → 1 col */
+.fgrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 500px) {
+  .fgrid2 { grid-template-columns: 1fr; }
+}
+
+/* Active vs passive comparison — 2 → 1 col */
+.cmp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .cmp-grid { grid-template-columns: 1fr; }
+}
+
+/* Backtest highlights — 2 → 1 col */
+.hl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .hl-grid { grid-template-columns: 1fr; }
+}
+
+/* ─────────────────────────────────────────
+   ANIMATIONS
+───────────────────────────────────────── */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
