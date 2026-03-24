@@ -1,7 +1,7 @@
 /**
  * GET /api/news
  *
- * Paginated, filtered news endpoint.
+ * Paginated, filtered news endpoint using direct Postgres connection.
  *
  * Query params:
  *   category   — 'Markets' | 'Companies' | 'Economy' | 'Policy'
@@ -12,43 +12,35 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+import postgres from 'postgres'
 
 export async function GET(req: NextRequest) {
   const params   = req.nextUrl.searchParams
   const category = params.get('category')
   const topOnly  = params.get('top') === 'true'
   const limit    = Math.min(50, Math.max(1, Number(params.get('limit') ?? 20)))
-  const cursor   = params.get('cursor')    // ISO date string
+  const cursor   = params.get('cursor')
   const q        = params.get('q')?.trim()
 
+  const sql = postgres(process.env.SUPABASE_DB_URL!, { ssl: 'require', max: 3 })
+
   try {
-    let query = supabase
-      .from('news')
-      .select('id, headline, summary, source, source_url, image_url, category, published_at, importance_score, key_points, why_it_matters, is_market_moving')
-      .order('published_at', { ascending: false, nullsFirst: false })
-      .order('scraped_at',   { ascending: false })
-      .limit(limit)
+    const articles = await sql`
+      SELECT
+        id, headline, summary, source, source_url, image_url, category,
+        published_at, importance_score, key_points, why_it_matters, is_market_moving
+      FROM news
+      WHERE TRUE
+        ${category ? sql`AND category = ${category}` : sql``}
+        ${topOnly  ? sql`AND importance_score >= 7`  : sql``}
+        ${cursor   ? sql`AND published_at < ${new Date(cursor)}` : sql``}
+        ${q        ? sql`AND headline ILIKE ${'%' + q + '%'}`    : sql``}
+      ORDER BY published_at DESC NULLS LAST, scraped_at DESC
+      LIMIT ${limit}
+    `
 
-    if (category) query = query.eq('category', category)
-    if (topOnly)  query = query.gte('importance_score', 7)
-    if (cursor)   query = query.lt('published_at', cursor)
-    if (q)        query = query.ilike('headline', `%${q}%`)
-
-    const { data, error } = await query
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    const articles = data ?? []
     const nextCursor = articles.length === limit
-      ? articles[articles.length - 1]?.published_at ?? null
+      ? (articles[articles.length - 1]?.published_at ?? null)
       : null
 
     return NextResponse.json(
@@ -58,5 +50,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: msg }, { status: 500 })
+  } finally {
+    await sql.end()
   }
 }

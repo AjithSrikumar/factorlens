@@ -5,7 +5,7 @@
  * then hydrates the client-side NewsFeed component for live updates.
  */
 
-import { createClient } from '@supabase/supabase-js'
+import postgres          from 'postgres'
 import { NewsFeed }     from '@/components/news-feed'
 import type { NewsArticle } from '@/components/news-card'
 import type { Metadata }    from 'next'
@@ -20,20 +20,19 @@ export const revalidate = 60
 
 async function getInitialArticles(): Promise<NewsArticle[]> {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    )
-
-    const { data } = await supabase
-      .from('news')
-      .select('id, headline, summary, source, source_url, image_url, category, published_at, importance_score, key_points, why_it_matters, is_market_moving')
-      .order('published_at', { ascending: false, nullsFirst: false })
-      .order('scraped_at',   { ascending: false })
-      .limit(30)
-
-    if (!data) console.error('[news/page] Supabase returned no data — check that the news table exists (run supabase/news_schema.sql)')
-    return (data ?? []) as NewsArticle[]
+    const sql = postgres(process.env.SUPABASE_DB_URL!, { ssl: 'require', max: 1 })
+    try {
+      const rows = await sql`
+        SELECT id, headline, summary, source, source_url, image_url, category,
+               published_at, importance_score, key_points, why_it_matters, is_market_moving
+        FROM news
+        ORDER BY published_at DESC NULLS LAST, scraped_at DESC
+        LIMIT 30
+      `
+      return rows as unknown as NewsArticle[]
+    } finally {
+      await sql.end()
+    }
   } catch (err) {
     console.error('[news/page] Failed to fetch initial articles:', err)
     return []
