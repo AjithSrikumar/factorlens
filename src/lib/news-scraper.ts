@@ -158,13 +158,15 @@ function extractImageUrl(itemXml: string): string | null {
 /** Strip HTML tags and decode basic HTML entities */
 function stripHtml(html: string): string {
   return html
-    .replace(/<[^>]+>/g, ' ')
+    // Decode HTML entities FIRST so encoded tags (e.g. &lt;a&gt;) are also stripped
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
+    // Strip HTML tags (including any that were previously entity-encoded)
+    .replace(/<[^>]+>/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
 }

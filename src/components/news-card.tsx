@@ -52,6 +52,20 @@ function formatTime(iso: string | null): string {
   } catch { return '' }
 }
 
+/** Strip any residual HTML tags from text (guards against bad data in DB) */
+function stripHtml(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 /**
  * Parse the AI-generated summary into named sections.
  * Summary format uses bold **SECTION HEADER** markers.
@@ -68,22 +82,22 @@ function parseSummary(raw: string): { what: string; context: string; why: string
     sections[key] = val
   }
 
-  result.what    = sections['WHAT HAPPENED'] ?? ''
-  result.context = sections['CONTEXT'] ?? ''
-  result.why     = sections['WHY IT MATTERS'] ?? ''
+  result.what    = stripHtml(sections['WHAT HAPPENED'] ?? '')
+  result.context = stripHtml(sections['CONTEXT'] ?? '')
+  result.why     = stripHtml(sections['WHY IT MATTERS'] ?? '')
 
   const numbersRaw = sections['KEY NUMBERS'] ?? ''
   if (numbersRaw) {
     result.numbers = numbersRaw
       .split(/[\n•\-–—]/)
-      .map(s => s.trim())
+      .map(s => stripHtml(s.trim()))
       .filter(s => s.length > 5)
       .slice(0, 5)
   }
 
   // If no section markers found, use the raw text as "what"
   if (!result.what && !result.context && !result.why) {
-    result.what = raw
+    result.what = stripHtml(raw)
   }
 
   return result
@@ -320,7 +334,7 @@ export function NewsCard({ article, index, total }: NewsCardProps) {
               Why it matters
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.6, color: 'rgba(12,14,19,.8)', margin: 0, fontWeight: 500 }}>
-              {sections.why || article.why_it_matters}
+              {sections.why || stripHtml(article.why_it_matters ?? '')}
             </p>
           </div>
         )}
@@ -360,7 +374,7 @@ export function NewsCard({ article, index, total }: NewsCardProps) {
                     width: 5, height: 5, borderRadius: '50%',
                     background: cfg.bg, marginTop: 6, flexShrink: 0,
                   }} />
-                  {pt}
+                  {stripHtml(pt)}
                 </li>
               ))}
             </ul>
