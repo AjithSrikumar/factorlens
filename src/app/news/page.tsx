@@ -32,8 +32,10 @@ async function getInitialArticles(): Promise<NewsArticle[]> {
       .order('scraped_at',   { ascending: false })
       .limit(30)
 
+    if (!data) console.error('[news/page] Supabase returned no data — check that the news table exists (run supabase/news_schema.sql)')
     return (data ?? []) as NewsArticle[]
-  } catch {
+  } catch (err) {
+    console.error('[news/page] Failed to fetch initial articles:', err)
     return []
   }
 }
