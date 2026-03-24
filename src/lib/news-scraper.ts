@@ -26,18 +26,17 @@ export interface FeedConfig {
 
 export const NEWS_FEEDS: FeedConfig[] = [
   {
-    source: 'Business Standard',
+    source: 'Livemint',
     urls: [
-      'https://www.business-standard.com/rss/markets-106.rss',
-      'https://www.business-standard.com/rss/finance-103.rss',
-      'https://www.business-standard.com/rss/latest.rss',
+      'https://www.livemint.com/rss/markets',
+      'https://www.livemint.com/rss/companies',
+      'https://www.livemint.com/rss/economy',
     ],
   },
   {
     source: 'NDTV Profit',
     urls: [
       'https://feeds.feedburner.com/ndtvprofit-latest',
-      'https://www.ndtvprofit.com/feeds/news',
     ],
   },
   {
@@ -45,15 +44,7 @@ export const NEWS_FEEDS: FeedConfig[] = [
     urls: [
       'https://www.thehindubusinessline.com/markets/?service=rss',
       'https://www.thehindubusinessline.com/economy/?service=rss',
-      'https://www.thehindubusinessline.com/feeder/default.rss',
-    ],
-  },
-  {
-    source: 'Moneycontrol',
-    urls: [
-      'https://www.moneycontrol.com/rss/marketsindia.xml',
-      'https://www.moneycontrol.com/rss/business.xml',
-      'https://www.moneycontrol.com/rss/MCtopnews.xml',
+      'https://www.thehindubusinessline.com/companies/?service=rss',
     ],
   },
 ]
@@ -83,7 +74,7 @@ const FINANCE_KEYWORDS = new Set([
 
 /** Terms that indicate non-finance content — always exclude if in headline */
 const EXCLUDE_TERMS = new Set([
-  'cricket', 'ipl', 'football', 'tennis', 'hockey', 'kabaddi', 'chess',
+  'cricket', 'football', 'tennis', 'hockey', 'kabaddi', 'chess',
   'bollywood', 'film', 'movie', 'actor', 'actress', 'celebrity', 'entertainment',
   'recipe', 'restaurant', 'cuisine', 'food festival',
   'fashion', 'beauty', 'lifestyle', 'travel', 'tourism',

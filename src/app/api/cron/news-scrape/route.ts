@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const scraped = await scrapeNewsFeeds({
       maxPerSource:    20,
       fetchFullContent: true,
-      minScore:        2,
+      minScore:        1,
     })
     log.push(`[scrape] ${scraped.length} articles after finance filter`)
 
