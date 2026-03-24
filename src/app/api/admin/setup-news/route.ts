@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
       END $$
     `
 
+    // Reload PostgREST schema cache so the REST API recognizes the new table
+    await sql`NOTIFY pgrst, 'reload schema'`
+
     return NextResponse.json({ ok: true, message: 'news table created successfully' })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
