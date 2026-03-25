@@ -161,7 +161,10 @@ export default function RankingsPage() {
     })
       .then((r) => r.json())
       .then((data) => {
-        setChartCache((prev) => ({ ...prev, [expandedId]: data }))
+        // Only cache valid portfolio responses (must have portfolioNav array)
+        if (data && Array.isArray(data.portfolioNav)) {
+          setChartCache((prev) => ({ ...prev, [expandedId]: data }))
+        }
         setChartLoading(false)
       })
       .catch(() => setChartLoading(false))

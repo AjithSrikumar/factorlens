@@ -46,7 +46,7 @@ export async function GET(
     return NextResponse.json({
       fund,
       nav: navRows.map(r => ({ date: r.date, value: Number(r.nav_value) }))
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
