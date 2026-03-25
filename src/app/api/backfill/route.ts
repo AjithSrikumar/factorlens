@@ -120,11 +120,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ?probe=NTM → test what API returns for that code, without inserting
+  // ?probe=NTM&name=CUSTOM+NAME → test what API returns for that code/name, without inserting
   const probeCode = url.searchParams.get('probe')
   if (probeCode) {
     const entry = NSE_INDEX_LIST.find(i => i.code === probeCode)
-    if (!entry) return NextResponse.json({ error: `Code ${probeCode} not in NSE_INDEX_LIST` })
+    const customName = url.searchParams.get('name')
+    const testName = customName ?? entry?.name ?? probeCode
+    if (!entry && !customName) return NextResponse.json({ error: `Code ${probeCode} not in NSE_INDEX_LIST` })
 
     const today = todayIST()
     const fromISO = addDays(today, -30)
@@ -141,10 +143,10 @@ export async function GET(req: NextRequest) {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
           },
           body: JSON.stringify({ cinfo: JSON.stringify({
-            name: entry.name,
+            name: testName,
             startDate: isoToNiftyReqDate(fromISO),
             endDate: isoToNiftyReqDate(today),
-            indexName: entry.name,
+            indexName: testName,
           })}),
           signal: AbortSignal.timeout(25_000),
         }
@@ -154,7 +156,7 @@ export async function GET(req: NextRequest) {
       try { rows = JSON.parse(outer.d) } catch { /* empty */ }
       return NextResponse.json({
         code: probeCode,
-        name: entry.name,
+        testedName: testName,
         httpStatus: res.status,
         rowCount: rows.length,
         firstRow: rows[0] ?? null,
