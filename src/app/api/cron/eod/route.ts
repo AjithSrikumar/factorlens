@@ -347,47 +347,6 @@ export async function GET(req: NextRequest) {
     // included in the scraped batch for anchor computation
     const OVERLAP_DAYS = 20
 
-    // ── 3b. Detect funds bootstrapped with stale DEFAULT_LAST date ────────────
-    // Previously the code used a hardcoded DEFAULT_LAST = { date: '2026-02-27' }
-    // for funds with no DB data, causing them to only get ~3 weeks of history.
-    // Detect such funds: have data but their latest date is suspiciously close to
-    // the old DEFAULT_LAST date AND their inception was years before that.
-    // These need a full re-scrape from inception.
-    const BOOTSTRAP_SENTINEL = '2026-02-27'           // the old DEFAULT_LAST date
-    const BOOTSTRAP_WINDOW_DAYS = 45                  // ±45d around sentinel date
-    const bootstrapCutoffLow  = addDays(BOOTSTRAP_SENTINEL, -BOOTSTRAP_WINDOW_DAYS)
-    const bootstrapCutoffHigh = addDays(BOOTSTRAP_SENTINEL, +BOOTSTRAP_WINDOW_DAYS)
-
-    const fundsNeedingBackfill = new Set<number>()
-    for (const { code, indexName: _idx } of NSE_INDICES) {
-      const fundId    = codeToId.get(code)
-      const inception = codeToInception.get(code) ?? '2005-01-03'
-      if (!fundId) continue
-      const last = latestByFund.get(fundId)
-      if (!last) continue   // no data → handled below by inception logic
-      // Bootstrap pattern: latest date is within the sentinel window BUT inception was much earlier
-      const inceptionYearsAgo = (new Date(today).getTime() - new Date(inception).getTime()) / (365.25 * 86400e3)
-      if (
-        last.date >= bootstrapCutoffLow &&
-        last.date <= bootstrapCutoffHigh &&
-        inceptionYearsAgo > 2   // inception was >2 years ago — shouldn't have just 3 weeks of data
-      ) {
-        fundsNeedingBackfill.add(fundId)
-        log.push(`[${code}] BACKFILL: detected DEFAULT_LAST bootstrap (latest=${last.date}, inception=${inception}) — clearing and re-scraping from inception`)
-      }
-    }
-
-    // Clear corrupted data for funds needing backfill
-    if (fundsNeedingBackfill.size > 0) {
-      for (const fundId of fundsNeedingBackfill) {
-        await supabase.from('nav_data').delete().eq('fund_id', fundId)
-      }
-      // Re-build latestByFund: remove cleared funds so they're treated as brand-new
-      for (const fundId of fundsNeedingBackfill) {
-        latestByFund.delete(fundId)
-      }
-    }
-
     // ── 4. Fetch + insert NSE indices (ranked funds first, inline saves) ────────
     // Ranked funds are prioritised so that even if the cron times out mid-loop,
     // the visible rankings page already has up-to-date data.
