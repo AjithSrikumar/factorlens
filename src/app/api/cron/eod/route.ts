@@ -523,10 +523,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 8. Recompute final_rank for all funds with ≥10Y history ──────────────
-    // Clear existing ranks, then assign score + final_rank based on a
-    // weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
-    await supabase.from('funds').update({ score: null, final_rank: null }).not('id', 'is', null)
-
+    // Weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
+    // NOTE: do NOT clear all ranks first — if the function is killed mid-step
+    // that would leave the rankings table empty. Instead compute new ranks and
+    // overwrite only the updated rows; unranked funds keep their old rank until
+    // they have enough history.
     const { data: rankableFunds } = await supabase
       .from('funds')
       .select('id, cagr_10y, cagr_20y, avg_3y_rolling_return, sharpe_ratio, max_drawdown')
