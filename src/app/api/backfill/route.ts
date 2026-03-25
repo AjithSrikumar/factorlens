@@ -167,6 +167,80 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ?findnames=NTM,NLMC250 → try many name variations and return which work
+  const findNames = url.searchParams.get('findnames')
+  if (findNames) {
+    const codes = findNames.split(',').map(s => s.trim())
+    const today = todayIST()
+    const fromISO = addDays(today, -30)
+    const results: Record<string, string | null> = {}
+
+    // Helper to test a name
+    async function testName(testName: string): Promise<boolean> {
+      try {
+        const res = await fetch(
+          'https://www.niftyindices.com/Backpage.aspx/getHistoricaldatatabletoString',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'X-Requested-With': 'XMLHttpRequest',
+              'Referer': 'https://www.niftyindices.com/reports/historical-data',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            },
+            body: JSON.stringify({ cinfo: JSON.stringify({ name: testName, startDate: isoToNiftyReqDate(fromISO), endDate: isoToNiftyReqDate(today), indexName: testName }) }),
+            signal: AbortSignal.timeout(15_000),
+          }
+        )
+        const outer = await res.json() as { d: string }
+        const rows = JSON.parse(outer.d ?? '[]') as unknown[]
+        return rows.length > 0
+      } catch {
+        return false
+      }
+    }
+
+    for (const code of codes.slice(0, 5)) {
+      const entry = NSE_INDEX_LIST.find(i => i.code === code)
+      if (!entry) { results[code] = 'NOT IN LIST'; continue }
+
+      const base = entry.name
+      // Generate variations
+      const variations = [
+        base,
+        base.replace('MARKET', 'MKT'),
+        base.replace('LARGEMIDCAP', 'LARGEMID').replace(' ', ''),
+        base.replace(' AND ', ' & ').replace(' & ', ' and '),
+        base.replace('SMALLCAP', 'SMALL CAP'),
+        base.replace('MIDCAP', 'MID CAP'),
+        // Title case version
+        base.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
+        // Try without spaces in number parts
+        base.replace(/(\D)\s+(\d)/, '$1$2'),
+        base.replace('EQUAL WEIGHT', 'EW'),
+        base.replace('FINANCIAL SERVICES', 'FIN SERV'),
+        base.replace('FINANCIAL SERVICES', 'FINANCIAL SVC'),
+        base.replace('SELECT', 'SEL'),
+        base.replace('DIVIDEND', 'DIV'),
+        base.replace('INFRASTRUCTURE', 'INFRA'),
+        base.replace('MANUFACTURING', 'MFG'),
+        base.replace('CONSUMER DURABLES', 'CON DUR'),
+        base.replace('LOW VOLATILITY', 'LV'),
+        base.replace(' BANK', 'BANK'),
+      ]
+
+      let found = null
+      for (const v of [...new Set(variations)]) {
+        if (await testName(v)) { found = v; break }
+        await new Promise(r => setTimeout(r, 200))
+      }
+      results[code] = found
+    }
+
+    return NextResponse.json({ results })
+  }
+
   // ?codes=NTM,NLMC250,... → process only these codes
   // if omitted, process all codes with no nav data
   const codesParam = url.searchParams.get('codes')
