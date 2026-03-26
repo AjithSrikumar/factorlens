@@ -113,7 +113,10 @@ async function fetchNiftyIndex(
   const parsed = rows
     .map((row) => {
       const dateStr  = row['HistoricalDate'] ?? row['Date'] ?? row['date'] ?? ''
-      const closeStr = row['CLOSE'] ?? row['Close'] ?? row['close'] ?? ''
+      const closeStr =
+        row['CLOSE'] ?? row['Close'] ?? row['close'] ??
+        row['TotalReturnsIndex'] ?? row['IndexValue'] ?? row['Value'] ??
+        row['CloseValue'] ?? row['NET_ASSET_VALUE'] ?? ''
       const date  = niftyDateToISO(dateStr)
       const value = parseNum(closeStr)
       return { date, value }
