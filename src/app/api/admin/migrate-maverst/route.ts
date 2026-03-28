@@ -94,6 +94,10 @@ export async function POST(req: NextRequest) {
     `
     log.push('RLS policies: OK')
 
+    // Reload PostgREST schema cache so the new tables are visible immediately
+    await sql`select pg_notify('pgrst', 'reload schema')`
+    log.push('PostgREST schema cache reloaded: OK')
+
     return NextResponse.json({ ok: true, log })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
