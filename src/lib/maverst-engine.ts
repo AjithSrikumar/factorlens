@@ -124,6 +124,7 @@ export async function fetchNavData(
     .in('fund_id', fundIds)
     .gte('date', fromDate)
     .order('date', { ascending: true })
+    .limit(100_000)
 
   const result = new Map<string, NavPoint[]>()
   for (const row of rows ?? []) {
@@ -145,6 +146,7 @@ export async function fetchExternalData(
     .select('date, india_vix, usdinr, fii_net_crore')
     .gte('date', fromDate)
     .order('date', { ascending: true })
+    .limit(10_000)
   return (data ?? []) as ExternalDataRow[]
 }
 

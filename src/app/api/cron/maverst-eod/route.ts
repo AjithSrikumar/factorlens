@@ -298,6 +298,7 @@ export async function GET(req: NextRequest) {
         .select('date')
         .gte('date', fromDate)
         .lt('date', recomputeAfter)   // only skip dates older than 30 days
+        .limit(10_000)
       for (const r of existing ?? []) existingDates.add(r.date)
     }
 
