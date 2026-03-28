@@ -7,8 +7,8 @@ import { NSE_INDEX_LIST } from '@/lib/index-fund-map'
 export const maxDuration = 300
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 )
 
 const MONTHS: Record<string, string> = {
