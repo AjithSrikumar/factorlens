@@ -10,10 +10,10 @@ import { AMC_LIST } from '@/lib/amc'
 // Use service role key if available, otherwise fall back to anon key
 // (works when RLS is disabled on mf_funds / mf_nav_data tables).
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here')
     ? process.env.SUPABASE_SERVICE_ROLE_KEY
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 )
 
 const AMFI_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt'
