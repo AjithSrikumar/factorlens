@@ -24,6 +24,19 @@ export async function GET() {
       .single()
 
     if (stored) {
+      // Check if stored data is complete enough — if too many z-scores are null,
+      // the stored scores were computed with incomplete data. Fall through to
+      // on-the-fly computation which uses the latest nav_data and external_data.
+      const zCols = [
+        stored.z_trend, stored.z_momentum, stored.z_midcap_ratio, stored.z_ew_ratio,
+        stored.z_vix, stored.z_gold_ratio, stored.z_usdinr, stored.z_fii_flows, stored.z_sector_ratio,
+      ]
+      const nonNullCount = zCols.filter((z: number | null) => z !== null).length
+      if (nonNullCount < 5) {
+        console.log(`[regime/latest] stored data only has ${nonNullCount}/9 indicators — recomputing on-the-fly`)
+        // fall through to on-the-fly computation below
+      } else {
+
       const result: RegimeResult = {
         date:       stored.date,
         score:      Number(stored.score),
@@ -56,9 +69,10 @@ export async function GET() {
         .slice(0, 3)
       result.insightLine = insightLine(result.regime, result.confidence)
       return NextResponse.json(result)
-    }
+      } // end else (nonNullCount >= 5)
+    } // end if (stored)
 
-    // 2. Compute on-the-fly if no stored data
+    // 2. Compute on-the-fly if no stored data or stored data is stale
     const navData     = await fetchNavData(supabaseAdmin, '2010-01-01')
     const extData     = await fetchExternalData(supabaseAdmin, '2010-01-01')
     const n50         = navData.get('N50') ?? []

@@ -123,6 +123,83 @@ async function fetchIndiaVIX(fromISO: string, toISO: string): Promise<{ date: st
   }
 }
 
+/** Fetch FII net equity flows from NSE India (in ₹ crore). */
+async function fetchFIIFlows(fromISO: string, toISO: string): Promise<{ date: string; value: number }[]> {
+  const MONTHS: Record<string, string> = {
+    Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+    Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+  }
+  function toNSEDate(iso: string): string {
+    const d = new Date(iso)
+    const day = String(d.getUTCDate()).padStart(2, '0')
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]
+    return `${day}-${mon}-${d.getUTCFullYear()}`
+  }
+  function fromNSEDate(s: string): string {
+    const parts = s.trim().split('-')
+    if (parts.length !== 3) return ''
+    const [day, mon, year] = parts
+    const month = MONTHS[mon]
+    if (!month) return ''
+    return `${year}-${month}-${day.padStart(2, '0')}`
+  }
+  function parseNum(s: string): number {
+    return parseFloat(String(s).replace(/,/g, ''))
+  }
+
+  try {
+    // NSE India requires a session cookie — fetch the market-data page first
+    const cookieRes = await fetch('https://www.nseindia.com/market-data/fii-dii-activity', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!cookieRes.ok) return []
+
+    // Extract Set-Cookie headers
+    const rawCookies = (cookieRes.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.()
+      ?? cookieRes.headers.get('set-cookie')?.split(/,(?=[^;]+=[^;]+)/) ?? []
+    const cookies = rawCookies.map((c: string) => c.split(';')[0].trim()).filter(Boolean).join('; ')
+    if (!cookies) return []
+
+    // Fetch FII historical data
+    const url = `https://www.nseindia.com/api/historicalFiiDii?instrumentType=EQ&category=FII&startDate=${toNSEDate(fromISO)}&endDate=${toNSEDate(toISO)}`
+    const dataRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.nseindia.com/market-data/fii-dii-activity',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Cookie': cookies,
+      },
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!dataRes.ok) return []
+
+    const json = await dataRes.json() as unknown
+    // NSE response can be { data: [...] } or a direct array
+    const rows: Record<string, string>[] = Array.isArray(json)
+      ? json as Record<string, string>[]
+      : ((json as { data?: Record<string, string>[] })?.data ?? [])
+
+    return rows
+      .map(row => {
+        const dateStr = row['Date'] ?? row['date'] ?? ''
+        // NSE returns net purchase/sales as "Net Purchase/ Sales" or similar
+        const netStr  = row['Net Purchase/ Sales'] ?? row['Net Purchase/Sales'] ?? row['netValue'] ?? row['Net'] ?? ''
+        const date    = fromNSEDate(dateStr)
+        const value   = parseNum(netStr)
+        return { date, value }
+      })
+      .filter(r => r.date.length === 10 && !isNaN(r.value))
+  } catch {
+    return []
+  }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayIST(): string {
@@ -157,23 +234,26 @@ export async function GET(req: NextRequest) {
     // ── 1. Fetch + upsert external data ──────────────────────────────────────
     log.push('[step 1] fetching external data…')
 
-    const [vixRows, usdinrRows] = await Promise.all([
+    const [vixRows, usdinrRows, fiiRows] = await Promise.all([
       fetchIndiaVIX(fromDate, today),
       fetchUSDINR(fromDate, today),
+      fetchFIIFlows(fromDate, today),
     ])
 
-    log.push(`  VIX rows: ${vixRows.length}, USD/INR rows: ${usdinrRows.length}`)
+    log.push(`  VIX rows: ${vixRows.length}, USD/INR rows: ${usdinrRows.length}, FII rows: ${fiiRows.length}`)
 
     // Merge into a combined map by date
-    const extByDate = new Map<string, { india_vix?: number; usdinr?: number }>()
-    for (const r of vixRows)   { const e = extByDate.get(r.date) ?? {}; e.india_vix = r.value; extByDate.set(r.date, e) }
-    for (const r of usdinrRows){ const e = extByDate.get(r.date) ?? {}; e.usdinr    = r.value; extByDate.set(r.date, e) }
+    const extByDate = new Map<string, { india_vix?: number; usdinr?: number; fii_net_crore?: number }>()
+    for (const r of vixRows)   { const e = extByDate.get(r.date) ?? {}; e.india_vix     = r.value; extByDate.set(r.date, e) }
+    for (const r of usdinrRows){ const e = extByDate.get(r.date) ?? {}; e.usdinr        = r.value; extByDate.set(r.date, e) }
+    for (const r of fiiRows)   { const e = extByDate.get(r.date) ?? {}; e.fii_net_crore = r.value; extByDate.set(r.date, e) }
 
     if (extByDate.size > 0) {
       const extRows = Array.from(extByDate.entries()).map(([date, v]) => ({
         date,
-        india_vix: v.india_vix ?? null,
-        usdinr:    v.usdinr    ?? null,
+        india_vix:     v.india_vix     ?? null,
+        usdinr:        v.usdinr        ?? null,
+        fii_net_crore: v.fii_net_crore ?? null,
         updated_at: new Date().toISOString(),
       }))
       const { error: extErr } = await supabase
@@ -202,13 +282,22 @@ export async function GET(req: NextRequest) {
 
     const extMap = new Map(externalData.map(r => [r.date, r]))
 
-    // Filter to dates we need to (re)compute
+    // Filter to dates we need to (re)compute.
+    // In non-backfill mode: recompute the last 30 days regardless (to pick up
+    // any newly available external data), plus any dates missing from the DB.
+    const recomputeAfter = (() => {
+      const d = new Date(today)
+      d.setUTCDate(d.getUTCDate() - 30)
+      return d.toISOString().slice(0, 10)
+    })()
+
     const existingDates = new Set<string>()
     if (!backfill) {
       const { data: existing } = await supabase
         .from('maverst_regime_scores')
         .select('date')
         .gte('date', fromDate)
+        .lt('date', recomputeAfter)   // only skip dates older than 30 days
       for (const r of existing ?? []) existingDates.add(r.date)
     }
 
