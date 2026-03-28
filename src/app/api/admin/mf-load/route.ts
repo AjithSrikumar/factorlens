@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/admin/mf-load?offset=0&limit=20&secret=<CRON_SECRET>
  *

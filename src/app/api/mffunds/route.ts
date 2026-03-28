@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextResponse } from 'next/server'
 import postgres from 'postgres'
 import { discoverSchemeEntries } from '@/lib/mf-funds'

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import postgres from 'postgres'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
