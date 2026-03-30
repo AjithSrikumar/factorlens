@@ -302,6 +302,14 @@ export async function GET(req: NextRequest) {
       { onConflict: 'code', ignoreDuplicates: true }
     )
 
+    // Also ensure Yahoo-sourced funds (GOLD, SPX) exist in the DB.
+    // These are NOT in NSE_INDEX_LIST but are fetched via Yahoo Finance below.
+    // Without this upsert, fetchAndInsert() silently skips them.
+    await supabase.from('funds').upsert([
+      { code: 'GOLD', name: 'Gold ETF (GOLDBEES)',   category: 'Commodity', inception_date: '2007-03-22' },
+      { code: 'SPX',  name: 'S&P 500 (^GSPC)',       category: 'Global',    inception_date: '2000-01-03' },
+    ], { onConflict: 'code', ignoreDuplicates: true })
+
     // ── 1. Load funds ────────────────────────────────────────────────────────
     const { data: funds, error: fundsErr } = await supabase
       .from('funds')

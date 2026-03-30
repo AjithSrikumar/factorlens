@@ -24,16 +24,21 @@ export async function GET() {
       .single()
 
     if (stored) {
-      // Check if stored data is complete enough — if too many z-scores are null,
-      // the stored scores were computed with incomplete data. Fall through to
-      // on-the-fly computation which uses the latest nav_data and external_data.
+      // Serve from stored data whenever at least 1 z-score is non-null.
+      // If the stored data is genuinely stale (older than 5 calendar days),
+      // fall through to on-the-fly computation so fresh data is reflected.
       const zCols = [
         stored.z_trend, stored.z_momentum, stored.z_midcap_ratio, stored.z_ew_ratio,
         stored.z_vix, stored.z_gold_ratio, stored.z_usdinr, stored.z_fii_flows, stored.z_sector_ratio,
       ]
       const nonNullCount = zCols.filter((z: number | null) => z !== null).length
-      if (nonNullCount < 5) {
-        console.log(`[regime/latest] stored data only has ${nonNullCount}/9 indicators — recomputing on-the-fly`)
+      const dataDate = stored.date as string
+      const todayIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const daysDiff = Math.floor((new Date(todayIST).getTime() - new Date(dataDate).getTime()) / (1000 * 86400))
+      const isStale  = daysDiff > 5
+
+      if (nonNullCount === 0 || isStale) {
+        console.log(`[regime/latest] stored data has ${nonNullCount}/9 indicators, age ${daysDiff}d — recomputing on-the-fly`)
         // fall through to on-the-fly computation below
       } else {
 
@@ -43,22 +48,27 @@ export async function GET() {
         regime:     stored.regime,
         confidence: stored.confidence,
         allocation: { midcapMomentum: Number(stored.alloc_momentum), gold: Number(stored.alloc_gold) },
-        indicators: [
-          { key: 'trend',       label: 'Trend',         description: 'Nifty 50 vs 200-day moving average',                   rawValue: stored.raw_trend,        zscore: stored.z_trend,       weight: 1/9, interpretation: '' },
-          { key: 'momentum',    label: 'Momentum',       description: 'Nifty 50 12-month price return',                        rawValue: stored.raw_momentum,     zscore: stored.z_momentum,    weight: 1/9, interpretation: '' },
-          { key: 'midcapRatio', label: 'Midcap Ratio',   description: 'Midcap 150 vs Nifty 50 relative strength (1M)',         rawValue: stored.raw_midcap_ratio, zscore: stored.z_midcap_ratio,weight: 1/9, interpretation: '' },
-          { key: 'ewRatio',     label: 'Breadth',        description: 'Equal-weight vs cap-weight breadth (1M)',                rawValue: stored.raw_ew_ratio,     zscore: stored.z_ew_ratio,    weight: 1/9, interpretation: '' },
-          { key: 'vix',         label: 'Volatility',     description: 'India VIX — lower is better for equities',              rawValue: stored.raw_vix,          zscore: stored.z_vix,         weight: 1/9, interpretation: '' },
-          { key: 'goldRatio',   label: 'Gold Signal',    description: 'Gold vs equity relative strength (1M)',                  rawValue: stored.raw_gold_ratio,   zscore: stored.z_gold_ratio,  weight: 1/9, interpretation: '' },
-          { key: 'usdinr',      label: 'Rupee Strength', description: 'USD/INR 1-month change — strong rupee = growth',         rawValue: stored.raw_usdinr,       zscore: stored.z_usdinr,      weight: 1/9, interpretation: '' },
-          { key: 'fiiFlows',    label: 'FII Activity',   description: '20-day cumulative FII net equity flows (₹ crore)',        rawValue: stored.raw_fii_flows,    zscore: stored.z_fii_flows,   weight: 1/9, interpretation: '' },
-          { key: 'sectorRatio', label: 'Risk Appetite',  description: 'High Beta vs Low Volatility relative strength (1M)',     rawValue: stored.raw_sector_ratio, zscore: stored.z_sector_ratio,weight: 1/9, interpretation: '' },
-        ].map(ind => ({
-          ...ind,
-          rawValue: ind.rawValue != null ? Number(ind.rawValue) : null,
-          zscore:   ind.zscore   != null ? Number(ind.zscore)   : null,
-          interpretation: interpretZ(Number(ind.zscore), ind.label),
-        })),
+        indicators: (() => {
+          const rawInds = [
+            { key: 'trend',       label: 'Trend',         description: 'Nifty 50 vs 200-day moving average',               rawValue: stored.raw_trend,        zscore: stored.z_trend        },
+            { key: 'momentum',    label: 'Momentum',       description: 'Nifty 50 12-month price return',                   rawValue: stored.raw_momentum,     zscore: stored.z_momentum     },
+            { key: 'midcapRatio', label: 'Midcap Ratio',   description: 'Midcap 150 vs Nifty 50 relative strength (1M)',    rawValue: stored.raw_midcap_ratio, zscore: stored.z_midcap_ratio },
+            { key: 'ewRatio',     label: 'Breadth',        description: 'Equal-weight vs cap-weight breadth (1M)',           rawValue: stored.raw_ew_ratio,     zscore: stored.z_ew_ratio     },
+            { key: 'vix',         label: 'Volatility',     description: 'India VIX — lower is better for equities',         rawValue: stored.raw_vix,          zscore: stored.z_vix          },
+            { key: 'goldRatio',   label: 'Gold Signal',    description: 'Gold vs equity relative strength (1M)',             rawValue: stored.raw_gold_ratio,   zscore: stored.z_gold_ratio   },
+            { key: 'usdinr',      label: 'Rupee Strength', description: 'USD/INR 1-month change — strong rupee = growth',   rawValue: stored.raw_usdinr,       zscore: stored.z_usdinr       },
+            { key: 'fiiFlows',    label: 'FII Activity',   description: '20-day cumulative FII net equity flows (₹ crore)', rawValue: stored.raw_fii_flows,    zscore: stored.z_fii_flows    },
+            { key: 'sectorRatio', label: 'Risk Appetite',  description: 'High Beta vs Low Volatility relative strength (1M)',rawValue: stored.raw_sector_ratio, zscore: stored.z_sector_ratio },
+          ]
+          const activeCount = rawInds.filter(i => i.zscore != null).length || 1
+          return rawInds.map(ind => ({
+            ...ind,
+            rawValue: ind.rawValue != null ? Number(ind.rawValue) : null,
+            zscore:   ind.zscore   != null ? Number(ind.zscore)   : null,
+            weight:   ind.zscore   != null ? 1 / activeCount      : 0,
+            interpretation: interpretZ(ind.zscore != null ? Number(ind.zscore) : null, ind.label),
+          }))
+        })(),
         keyDrivers:  [],
         insightLine: '',
       }

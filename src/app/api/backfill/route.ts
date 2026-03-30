@@ -333,7 +333,7 @@ export async function GET(req: NextRequest) {
           const candidates = rawRows.filter(r => r.date <= last!.date)
           if (candidates.length > 0) {
             const anchor = candidates[candidates.length - 1]
-            if (anchor.value > 0) scale = last!.value / anchor.value
+            if (anchor.value > 0) scale = Number(last!.nav_value) / anchor.value
           }
         }
 
