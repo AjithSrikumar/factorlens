@@ -4,6 +4,12 @@
 -- ── maverst_external_data ────────────────────────────────────────────────────
 -- Stores daily external signals: India VIX, USD/INR, FII net flows.
 -- Populated by the maverst-eod cron job.
+-- India VIX: scraped from in.investing.com (primary, covers full history
+--            from inception 2009-03-02) with niftyindices.com as fallback.
+--            Run ?vix-backfill=true on the maverst-eod cron to load full
+--            historical data from inception.
+-- Nifty 50 / Midcap 150 / Gold NAV signals are read from nav_data (same
+-- table as the Index Fund Rankings page, populated by /api/cron/eod).
 
 create table if not exists maverst_external_data (
   date            date          primary key,

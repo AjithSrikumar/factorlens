@@ -4,16 +4,26 @@ export const dynamic = 'force-dynamic'
  * /api/cron/maverst-eod
  *
  * Daily regime computation for MAVERST.
- * Called at 18:30 IST (13:00 UTC) after market close.
+ * Called at 18:30 IST (13:00 UTC) after market close, 30 min after the main
+ * EOD cron that refreshes Nifty 50 / Midcap 150 / Gold nav_data (rankings DB).
  *
  * ?backfill=true      — full historical backfill from 2010 + NAV data for MAVERST codes
  * ?nav-backfill=true  — only backfill NAV data (NMC150, N100EW, N100, NHBETA50, NLV50, MC150M50, GOLD)
+ * ?vix-backfill=true  — backfill full India VIX history from inception (2009-03-02) via investing.com
  * ?date=YYYY-MM-DD    — override the target date (for testing)
+ *
+ * Data sources:
+ *  - Nifty 50 (Trend, Momentum), Midcap 150 (Midcap Ratio), Gold/GOLDBEES (Gold Signal):
+ *    Read directly from nav_data table — same database as the Index Fund Rankings page.
+ *    Populated by /api/cron/eod which runs at 12:30 UTC (18:00 IST).
+ *  - India VIX (Volatility): scraped from in.investing.com (primary) with
+ *    niftyindices.com as fallback; stored in maverst_external_data.
+ *  - USD/INR: Yahoo Finance.  FII flows: NSE India.
  *
  * Steps:
  *  1. [If backfill] Ensure MAVERST NAV funds exist in DB and backfill their NAV data
  *  2. Fetch external data (India VIX, USD/INR, FII) and store in maverst_external_data
- *  3. Load nav_data for all MAVERST indicator codes
+ *  3. Load nav_data for all MAVERST indicator codes (from rankings-page DB)
  *  4. Compute z-score history for all dates (backfill) or just today (daily)
  *  5. Upsert results into maverst_regime_scores
  */
@@ -165,6 +175,243 @@ async function fetchIndiaVIX(fromISO: string, toISO: string): Promise<{ date: st
     }
   }
   return []
+}
+
+/**
+ * Fetch India VIX historical data from in.investing.com.
+ * Primary source for full history from inception (2009-03-02).
+ * Tries two strategies:
+ *   1. investing.com chart JSON API (no auth required)
+ *   2. HistoricalDataAjax with session cookies + CSRF token
+ */
+async function fetchIndiaVIXInvesting(fromISO: string, toISO: string): Promise<{ date: string; value: number }[]> {
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+  function fmtInvestingDate(iso: string): string {
+    const [y, m, d] = iso.split('-')
+    return `${m}/${d}/${y}`
+  }
+
+  function parseInvestingDate(raw: string): string {
+    const IMON: Record<string, string> = {
+      Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+      Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+    }
+    // "Mar 28, 2024"
+    const m1 = raw.trim().match(/^(\w{3})\s+(\d{1,2}),\s+(\d{4})$/)
+    if (m1) return `${m1[3]}-${IMON[m1[1]] ?? '01'}-${m1[2].padStart(2, '0')}`
+    // "28/03/2024"
+    const m2 = raw.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`
+    // ISO-ish "2024-03-28"
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) return raw.trim()
+    return ''
+  }
+
+  // Strategy 1: investing.com chart JSON API
+  try {
+    const url = `https://api.investing.com/api/financialdata/44336/historical/chart/?period=custom&start-date=${fromISO}&end-date=${toISO}&interval=P1D&pointscount=max`
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'application/json',
+        'Referer': 'https://in.investing.com/',
+        'domain-id': 'in',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (res.ok) {
+      const json = await res.json() as {
+        data?: Array<{ rowDateTimestamp?: number; last_close?: number; last_open?: number }>
+      }
+      const rows = (json.data ?? [])
+        .map(row => ({
+          date:  new Date((row.rowDateTimestamp ?? 0) * 1000).toISOString().slice(0, 10),
+          value: row.last_close ?? row.last_open ?? NaN,
+        }))
+        .filter(r => r.date.length === 10 && !isNaN(r.value) && r.value > 0)
+        .sort((a, b) => a.date.localeCompare(b.date))
+      if (rows.length > 5) return rows
+    }
+  } catch { /* fall through to strategy 2 */ }
+
+  // Strategy 2: HistoricalDataAjax with session cookies + CSRF
+  try {
+    // Step 1: Fetch page for cookies + CSRF token
+    const pageRes = await fetch('https://in.investing.com/indices/india-vix-historical-data', {
+      headers: {
+        'User-Agent': UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!pageRes.ok) return []
+
+    const rawCookies = (pageRes.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.() ??
+      pageRes.headers.get('set-cookie')?.split(/,(?=[^;]+=[^;]+)/) ?? []
+    const cookieMap = new Map<string, string>()
+    for (const c of rawCookies) {
+      const kv = c.split(';')[0].trim()
+      const eq = kv.indexOf('=')
+      if (eq > 0) cookieMap.set(kv.slice(0, eq), kv.slice(eq + 1))
+    }
+
+    const pageHtml = await pageRes.text()
+    const csrfMatch = pageHtml.match(/data-ci-csrf-token="([^"]+)"/) ||
+                      pageHtml.match(/name="csrf-token"\s+content="([^"]+)"/) ||
+                      pageHtml.match(/"csrf_token"\s*:\s*"([^"]+)"/)
+    const csrf   = csrfMatch?.[1] ?? ''
+    const pairM  = pageHtml.match(/data-pair-id="(\d+)"/)
+    const pairId = pairM?.[1] ?? '44336'
+    const cookieStr = [...cookieMap.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
+
+    await new Promise(r => setTimeout(r, 600))
+
+    // Step 2: POST historical data request
+    const formBody = new URLSearchParams({
+      curr_id:      pairId,
+      header:       'India VIX Historical Data',
+      st_date:      fmtInvestingDate(fromISO),
+      end_date:     fmtInvestingDate(toISO),
+      interval_sec: 'Daily',
+      sort_col:     'date',
+      sort_ord:     'ASC',
+      action:       'historical_data',
+    })
+
+    const dataRes = await fetch('https://in.investing.com/instruments/HistoricalDataAjax', {
+      method: 'POST',
+      headers: {
+        'Content-Type':     'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-Csrf-Token':     csrf,
+        'Cookie':           cookieStr,
+        'Referer':          'https://in.investing.com/indices/india-vix-historical-data',
+        'User-Agent':       UA,
+        'Accept':           '*/*',
+        'Origin':           'https://in.investing.com',
+        'Accept-Language':  'en-US,en;q=0.9',
+      },
+      body: formBody.toString(),
+      signal: AbortSignal.timeout(25_000),
+    })
+    if (!dataRes.ok) return []
+
+    const html = await dataRes.text()
+
+    // Parse HTML table returned by investing.com
+    const rows: { date: string; value: number }[] = []
+    const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+    let trM
+    while ((trM = trRe.exec(html)) !== null) {
+      const tdArr: string[] = []
+      const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi
+      let tdM
+      while ((tdM = tdRe.exec(trM[1])) !== null) {
+        tdArr.push(tdM[1].replace(/<[^>]+>/g, '').trim())
+      }
+      if (tdArr.length >= 2) {
+        const date  = parseInvestingDate(tdArr[0])
+        const value = parseFloat(tdArr[1].replace(/,/g, ''))
+        if (date.length === 10 && !isNaN(value) && value > 0) rows.push({ date, value })
+      }
+    }
+    return rows.sort((a, b) => a.date.localeCompare(b.date))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Backfill India VIX from inception (2009-03-02) to today.
+ * Chunks into 6-month windows and tries investing.com first, niftyindices.com second.
+ * Returns total rows upserted.
+ */
+async function backfillIndiaVIX(log: string[], today: string): Promise<number> {
+  const INCEPTION = '2009-03-02'
+  const CHUNK_MONTHS = 6
+
+  function addMonths(iso: string, n: number): string {
+    const d = new Date(iso)
+    d.setUTCMonth(d.getUTCMonth() + n)
+    return d.toISOString().slice(0, 10)
+  }
+
+  // Check what we already have in DB
+  const { data: existing } = await supabase
+    .from('maverst_external_data')
+    .select('date')
+    .not('india_vix', 'is', null)
+    .order('date', { ascending: true })
+    .limit(10_000)
+
+  const existingDates = new Set((existing ?? []).map((r: { date: string }) => r.date))
+  log.push(`  VIX backfill: ${existingDates.size} dates already in DB`)
+
+  // Build list of chunks to fetch
+  const chunks: Array<{ from: string; to: string }> = []
+  let cursor = INCEPTION
+  while (cursor < today) {
+    const end = addMonths(cursor, CHUNK_MONTHS)
+    chunks.push({ from: cursor, to: end > today ? today : end })
+    cursor = addDays(end, 1)
+  }
+  log.push(`  VIX backfill: ${chunks.length} chunks to process`)
+
+  let totalUpserted = 0
+
+  for (const chunk of chunks) {
+    // Skip chunk if we have data for every day in the range (approximate check)
+    const chunkDays = Math.round((new Date(chunk.to).getTime() - new Date(chunk.from).getTime()) / (86400 * 1000))
+    const sampleDate = addDays(chunk.from, Math.floor(chunkDays / 2))
+    if (existingDates.has(sampleDate)) {
+      // Likely already have data for this chunk
+      continue
+    }
+
+    log.push(`  Fetching VIX ${chunk.from} → ${chunk.to}…`)
+    let rows: { date: string; value: number }[] = []
+
+    // Try investing.com first
+    rows = await fetchIndiaVIXInvesting(chunk.from, chunk.to)
+    if (rows.length === 0) {
+      // Fallback to niftyindices.com
+      rows = await fetchIndiaVIX(chunk.from, chunk.to)
+    }
+
+    if (rows.length === 0) {
+      log.push(`    WARNING: 0 rows from both sources for ${chunk.from} → ${chunk.to}`)
+      await new Promise(r => setTimeout(r, 500))
+      continue
+    }
+
+    // Only upsert rows not already in DB
+    const newRows = rows
+      .filter(r => !existingDates.has(r.date))
+      .map(r => ({ date: r.date, india_vix: r.value, updated_at: new Date().toISOString() }))
+
+    if (newRows.length > 0) {
+      const { error } = await supabase
+        .from('maverst_external_data')
+        .upsert(newRows, { onConflict: 'date' })
+      if (!error) {
+        totalUpserted += newRows.length
+        for (const r of newRows) existingDates.add(r.date)
+      } else {
+        log.push(`    ERROR upserting VIX chunk: ${error.message}`)
+      }
+    }
+
+    log.push(`    ${rows.length} fetched, ${newRows.length} new rows upserted`)
+    await new Promise(r => setTimeout(r, 400))
+  }
+
+  return totalUpserted
 }
 
 /** Fetch FII net equity flows from NSE India (in ₹ crore). */
@@ -522,6 +769,7 @@ export async function GET(req: NextRequest) {
   const url         = new URL(req.url)
   const backfill    = url.searchParams.get('backfill') === 'true'
   const navBackfill = url.searchParams.get('nav-backfill') === 'true'
+  const vixBackfill = url.searchParams.get('vix-backfill') === 'true'
   const dateOverride = url.searchParams.get('date')
 
   // Auth check
@@ -538,28 +786,55 @@ export async function GET(req: NextRequest) {
     return d.toISOString().slice(0, 10)
   })()
 
-  const log: string[] = [`[maverst-eod] start — today: ${today} | backfill: ${backfill} | nav-backfill: ${navBackfill} | from: ${fromDate}`]
+  const log: string[] = [`[maverst-eod] start — today: ${today} | backfill: ${backfill} | nav-backfill: ${navBackfill} | vix-backfill: ${vixBackfill} | from: ${fromDate}`]
 
   try {
-    // ── 0. [backfill only] Backfill NAV data for MAVERST-specific codes ────────
+    // ── 0a. [vix-backfill only] Load full India VIX history from inception ────
+    if (vixBackfill) {
+      log.push('[step 0a] backfilling India VIX from inception via investing.com…')
+      const upserted = await backfillIndiaVIX(log, today)
+      log.push(`[maverst-eod] VIX backfill complete — ${upserted} total rows upserted`)
+      if (!backfill) {
+        return NextResponse.json({ ok: true, vixBackfillOnly: true, upserted, log })
+      }
+    }
+
+    // ── 0b. [backfill only] Backfill NAV data for MAVERST-specific codes ──────
+    // NOTE: Nifty 50, Midcap 150, and Gold are populated by the main EOD cron
+    // (/api/cron/eod) and stored in nav_data — the same database used by the
+    // Index Fund Rankings page. The maverst reads from that shared table, so
+    // these signals (Momentum, Trend, Midcap Ratio, Gold Signal) stay in sync
+    // with the rankings page automatically. Only auxiliary indices (N100EW,
+    // N100, NHBETA50, NLV50, MC150M50) need a separate backfill here.
     if (backfill || navBackfill) {
-      log.push('[step 0] backfilling MAVERST NAV data…')
+      log.push('[step 0b] backfilling MAVERST NAV data (auxiliary indices)…')
       await backfillMavestNavData(log, today)
       if (navBackfill && !backfill) {
-        // If only nav-backfill requested, stop here
         log.push('[maverst-eod] nav-backfill complete')
         return NextResponse.json({ ok: true, navBackfillOnly: true, log })
       }
     }
 
     // ── 1. Fetch + upsert external data ──────────────────────────────────────
+    // India VIX: try investing.com (primary, has data from 2009-03-02 inception)
+    //            then niftyindices.com as fallback.
+    // USD/INR and FII flows are fetched in parallel.
     log.push('[step 1] fetching external data…')
 
-    const [vixRows, usdinrRows, fiiRows] = await Promise.all([
-      fetchIndiaVIX(fromDate, today),
+    const [investingVixRows, usdinrRows, fiiRows] = await Promise.all([
+      fetchIndiaVIXInvesting(fromDate, today),
       fetchUSDINR(fromDate, today),
       fetchFIIFlows(fromDate, today),
     ])
+
+    // Fall back to niftyindices.com if investing.com returned nothing
+    let vixRows = investingVixRows
+    if (vixRows.length === 0) {
+      log.push('  investing.com VIX returned 0 rows — falling back to niftyindices.com')
+      vixRows = await fetchIndiaVIX(fromDate, today)
+    } else {
+      log.push(`  investing.com VIX: ${vixRows.length} rows`)
+    }
 
     log.push(`  VIX rows: ${vixRows.length}, USD/INR rows: ${usdinrRows.length}, FII rows: ${fiiRows.length}`)
     if (vixRows.length === 0)    log.push('  WARNING: VIX scraper returned 0 rows — using existing DB data')
@@ -588,7 +863,12 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 2. Load nav data + external data from DB ──────────────────────────────
-    log.push('[step 2] loading nav + external data…')
+    // nav_data is the same table used by the Index Fund Rankings page.
+    // Nifty 50, Midcap 150, and Gold (GOLDBEES) are refreshed by /api/cron/eod
+    // (runs at 12:30 UTC, 30 min before this cron). This ensures that
+    // Momentum (N50 12M return), Trend (N50 vs 200-SMA), Midcap Ratio
+    // (NMC150/N50), and Gold Signal are always computed from real-time data.
+    log.push('[step 2] loading nav data from rankings DB + external data…')
 
     const [navData, externalData] = await Promise.all([
       fetchNavData(supabase, fromDate),
@@ -600,12 +880,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No N50 data — ensure EOD cron has run', log }, { status: 503 })
     }
 
-    // Log which MAVERST codes are available
+    // Log which MAVERST codes are available and their latest date
     const availableCodes = [...MAVERST_NAV_CODES].filter(c => (navData.get(c)?.length ?? 0) > 0)
     const missingCodes   = [...MAVERST_NAV_CODES].filter(c => (navData.get(c)?.length ?? 0) === 0)
-    log.push(`  N50 rows: ${n50.length}, external rows: ${externalData.length}`)
+    const latestNavDate  = n50.at(-1)?.date ?? 'unknown'
+    log.push(`  N50 rows: ${n50.length} (latest: ${latestNavDate}), external rows: ${externalData.length}`)
     log.push(`  NAV codes available: ${availableCodes.join(', ')}`)
     if (missingCodes.length > 0) log.push(`  NAV codes MISSING: ${missingCodes.join(', ')} — run with ?backfill=true`)
+
+    // Warn if nav_data is stale (eod cron may not have run today)
+    if (latestNavDate < today) {
+      log.push(`  NOTE: latest nav_data date (${latestNavDate}) is before today (${today}) — signals use last available data`)
+    }
 
     // ── 3. Compute raw indicator series + z-scores ────────────────────────────
     log.push('[step 3] computing indicators + z-scores…')
