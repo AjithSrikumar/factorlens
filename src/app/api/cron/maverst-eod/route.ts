@@ -30,6 +30,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import postgres from 'postgres'
 import {
   fetchNavData,
   fetchExternalData,
@@ -49,6 +50,70 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key'
 )
+
+// ── Auto-migration ────────────────────────────────────────────────────────────
+
+/**
+ * Creates the maverst tables via direct PostgreSQL if they are missing.
+ * Uses SUPABASE_DB_URL for a direct connection that bypasses PostgREST schema cache.
+ * Also sends NOTIFY pgrst, 'reload schema' so new tables are immediately visible.
+ */
+async function ensureMavestTables(log: string[]): Promise<boolean> {
+  const dbUrl = process.env.SUPABASE_DB_URL
+  if (!dbUrl) {
+    log.push('  ensureMavestTables: SUPABASE_DB_URL not set — cannot auto-create tables')
+    return false
+  }
+  const sql = postgres(dbUrl.trim(), { max: 1, ssl: 'require' })
+  try {
+    await sql`
+      create table if not exists maverst_external_data (
+        date          date         primary key,
+        india_vix     numeric(8,4),
+        usdinr        numeric(10,4),
+        fii_net_crore numeric(16,2),
+        created_at    timestamptz  default now(),
+        updated_at    timestamptz  default now()
+      )`
+    await sql`
+      create table if not exists maverst_regime_scores (
+        date             date         primary key,
+        score            numeric(8,4) not null,
+        regime           text         not null check (regime in ('Growth','Neutral','Defensive')),
+        confidence       text         not null check (confidence in ('High','Medium','Low')),
+        alloc_momentum   numeric(5,2) not null,
+        alloc_gold       numeric(5,2) not null,
+        z_trend          numeric(8,4), z_momentum       numeric(8,4), z_midcap_ratio   numeric(8,4),
+        z_ew_ratio       numeric(8,4), z_vix            numeric(8,4), z_gold_ratio     numeric(8,4),
+        z_usdinr         numeric(8,4), z_fii_flows      numeric(8,4), z_sector_ratio   numeric(8,4),
+        raw_trend        numeric(10,6), raw_momentum     numeric(10,6), raw_midcap_ratio numeric(10,6),
+        raw_ew_ratio     numeric(10,6), raw_vix          numeric(8,4),  raw_gold_ratio   numeric(10,6),
+        raw_usdinr       numeric(10,4), raw_fii_flows    numeric(16,2), raw_sector_ratio numeric(10,6),
+        created_at       timestamptz  default now()
+      )`
+    await sql`create index if not exists idx_maverst_regime_date on maverst_regime_scores (date desc)`
+    await sql`alter table maverst_external_data enable row level security`
+    await sql`alter table maverst_regime_scores  enable row level security`
+    await sql`
+      do $$ begin
+        if not exists (select 1 from pg_policies where tablename='maverst_external_data' and policyname='Public read')
+        then execute 'create policy "Public read" on maverst_external_data for select using (true)'; end if;
+      end $$`
+    await sql`
+      do $$ begin
+        if not exists (select 1 from pg_policies where tablename='maverst_regime_scores' and policyname='Public read')
+        then execute 'create policy "Public read" on maverst_regime_scores for select using (true)'; end if;
+      end $$`
+    await sql`select pg_notify('pgrst', 'reload schema')`
+    log.push('  Auto-migration: maverst tables created/verified + PostgREST schema reloaded')
+    return true
+  } catch (e) {
+    log.push(`  Auto-migration ERROR: ${e instanceof Error ? e.message : String(e)}`)
+    return false
+  } finally {
+    await sql.end()
+  }
+}
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -651,14 +716,52 @@ async function backfillMavestNavData(log: string[], today: string): Promise<void
     if (!fundId) { log.push(`  [${code}] not found in DB — skipping`); continue }
 
     if (code === 'N50') {
-      // N50 is normally populated by the main EOD cron.
-      // Only backfill here if the DB has fewer than 500 rows (not enough for SMA200 / 12M momentum).
-      const { count } = await supabase
-        .from('nav_data').select('*', { count: 'exact', head: true })
-        .eq('fund_id', fundId).gte('date', '2010-01-01')
-      if ((count ?? 0) >= 500) continue
-      log.push(`  [N50] insufficient history (${count} rows) — backfilling…`)
-      // Fall through to standard backfill logic below
+      // MAVERST needs N50 continuous history from at least 2012 for:
+      //   • 200-day SMA (trend signal)
+      //   • 12-month price return (momentum signal)
+      // The daily eod cron only adds recent rows. Check if we have early history.
+      const [{ data: oldestRow }, { data: latestRowN50 }] = await Promise.all([
+        supabase.from('nav_data').select('date').eq('fund_id', fundId)
+          .order('date', { ascending: true }).limit(1),
+        supabase.from('nav_data').select('date').eq('fund_id', fundId)
+          .order('date', { ascending: false }).limit(1),
+      ])
+      const oldestDate  = oldestRow?.[0]?.date  as string | undefined
+      const latestDate0 = latestRowN50?.[0]?.date as string | undefined
+
+      if (oldestDate && oldestDate <= '2012-01-01' && latestDate0 && addDays(latestDate0, 5) >= today) {
+        // Has early history AND is current → skip N50
+        log.push(`  [N50] history OK (${oldestDate} → ${latestDate0}) — skipping backfill`)
+        continue
+      }
+
+      if (!oldestDate || oldestDate > '2012-01-01') {
+        // Missing early history — perform a targeted full backfill from 2010-01-01
+        log.push(`  [N50] missing early history (oldest: ${oldestDate ?? 'none'}) — fetching from 2010-01-01…`)
+        const n50Names = ['NIFTY 50', 'NIFTY50', 'Nifty 50', 'Nifty50']
+        let n50Raw: { date: string; value: number }[] = []
+        for (const n of n50Names) {
+          n50Raw = await fetchNiftyIndexNav(n, '2010-01-01', today)
+          if (n50Raw.length > 0) break
+          await new Promise(r => setTimeout(r, 300))
+        }
+        if (n50Raw.length > 0) {
+          // Upsert all rows (including overlap with any existing recent data)
+          let inserted = 0
+          const BATCH = 500
+          for (let i = 0; i < n50Raw.length; i += BATCH) {
+            const chunk = n50Raw.slice(i, i + BATCH).map(r => ({ fund_id: fundId, date: r.date, nav_value: r.value }))
+            const { error } = await supabase.from('nav_data').upsert(chunk, { onConflict: 'fund_id,date' })
+            if (!error) inserted += chunk.length
+          }
+          log.push(`  [N50] full backfill: ${inserted} rows (${n50Raw[0].date} → ${n50Raw.at(-1)?.date})`)
+        } else {
+          log.push(`  [N50] WARNING: full backfill returned 0 rows`)
+        }
+        continue
+      }
+      // oldestDate is early enough but latestDate is stale → fall through to standard update
+      log.push(`  [N50] early history OK (${oldestDate}) but latest (${latestDate0 ?? 'none'}) is stale — will update`)
     }
 
     const { data: latestRow } = await supabase
@@ -698,6 +801,9 @@ async function backfillMavestNavData(log: string[], today: string): Promise<void
         // Title-case variant (e.g. "NIFTY100 EQUAL WEIGHT" → "Nifty100 Equal Weight")
         toTitleCase(indexName),
         toTitleCase(indexName.replace(/^NIFTY(\d)/, 'NIFTY $1')),
+        // Additional variants for equal-weight indices (niftyindices.com uses "Wt" in some APIs)
+        indexName.replace(/EQUAL WEIGHT$/i, 'Equal Wt'),
+        indexName.replace(/EQUAL WEIGHT$/i, 'Equal Weight').replace(/^NIFTY(\d)/, 'NIFTY $1'),
       ].filter((v, i, arr) => arr.indexOf(v) === i)   // dedupe
 
       for (const variant of nameVariants) {
@@ -855,9 +961,16 @@ export async function GET(req: NextRequest) {
         fii_net_crore: v.fii_net_crore ?? null,
         updated_at: new Date().toISOString(),
       }))
-      const { error: extErr } = await supabase
+      let { error: extErr } = await supabase
         .from('maverst_external_data')
         .upsert(extRows, { onConflict: 'date' })
+      if (extErr && (extErr.message.includes('schema cache') || extErr.message.includes('not found'))) {
+        log.push('  maverst tables missing — running auto-migration…')
+        await ensureMavestTables(log)
+        // Small pause for PostgREST schema cache to reload
+        await new Promise(r => setTimeout(r, 2000));
+        ({ error: extErr } = await supabase.from('maverst_external_data').upsert(extRows, { onConflict: 'date' }))
+      }
       if (extErr) log.push(`  WARNING: external upsert error: ${extErr.message}`)
       else        log.push(`  upserted ${extRows.length} external rows`)
     }
@@ -870,8 +983,11 @@ export async function GET(req: NextRequest) {
     // (NMC150/N50), and Gold Signal are always computed from real-time data.
     log.push('[step 2] loading nav data from rankings DB + external data…')
 
+    // For backfill, always load from 2010-01-01 to get full history.
+    // For daily, fromDate is already 2 years back which is sufficient.
+    const navFromDate = backfill ? '2010-01-01' : fromDate
     const [navData, externalData] = await Promise.all([
-      fetchNavData(supabase, fromDate),
+      fetchNavData(supabase, navFromDate),
       fetchExternalData(supabase, fromDate),
     ])
 
@@ -982,11 +1098,21 @@ export async function GET(req: NextRequest) {
 
     const CHUNK = 500
     let inserted = 0
+    let schemaFixed = false
     for (let i = 0; i < toInsert.length; i += CHUNK) {
       const chunk = toInsert.slice(i, i + CHUNK)
-      const { error } = await supabase
+      let { error } = await supabase
         .from('maverst_regime_scores')
         .upsert(chunk, { onConflict: 'date' })
+      if (error && (error.message.includes('schema cache') || error.message.includes('not found')) && !schemaFixed) {
+        log.push('  maverst_regime_scores missing — running auto-migration…')
+        await ensureMavestTables(log)
+        await new Promise(r => setTimeout(r, 2000))
+        schemaFixed = true;
+        ({ error } = await supabase.from('maverst_regime_scores').upsert(chunk, { onConflict: 'date' }))
+        // Reset loop to retry from the beginning
+        if (!error) { inserted += chunk.length; i = -CHUNK; continue }
+      }
       if (error) {
         log.push(`  ERROR upserting chunk ${i}–${i + chunk.length}: ${error.message}`)
       } else {
