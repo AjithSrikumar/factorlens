@@ -62,3 +62,6 @@ drop policy if exists "Public read" on maverst_regime_scores;
 
 create policy "Public read" on maverst_external_data  for select using (true);
 create policy "Public read" on maverst_regime_scores  for select using (true);
+
+-- Reload PostgREST schema cache so the new tables are immediately visible
+notify pgrst, 'reload schema';

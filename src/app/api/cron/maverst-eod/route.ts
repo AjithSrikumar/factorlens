@@ -384,7 +384,32 @@ async function backfillMavestNavData(log: string[], today: string): Promise<void
     } else {
       const indexName = NSE_CODE_MAP[code]?.name
       if (!indexName) { log.push(`  [${code}] no index name in NSE_INDEX_LIST`); continue }
-      rawRows = await fetchNiftyIndexNav(indexName, fromISO, today)
+
+      // Build name variants to try (niftyindices.com API names can differ slightly)
+      const nameVariants = [
+        indexName,
+        // Toggle space between "NIFTY" and the number (e.g. "NIFTY100" ↔ "NIFTY 100")
+        indexName.replace(/^NIFTY(\d)/, 'NIFTY $1'),
+        indexName.replace(/^NIFTY (\d)/, 'NIFTY$1'),
+      ].filter((v, i, arr) => arr.indexOf(v) === i)   // dedupe
+
+      for (const variant of nameVariants) {
+        rawRows = await fetchNiftyIndexNav(variant, fromISO, today)
+        if (rawRows.length > 0) break
+        await new Promise(r => setTimeout(r, 300))
+      }
+
+      // If still empty and doing a full backfill from a very early date, retry
+      // from a safer floor date — niftyindices.com may not have pre-2010 data for
+      // all indices even if the fund inception predates it.
+      if (rawRows.length === 0 && isNew && fromISO < '2010-01-01') {
+        log.push(`  [${code}] retrying from 2010-01-01 (inception ${fromISO} may predate index data)`)
+        for (const variant of nameVariants) {
+          rawRows = await fetchNiftyIndexNav(variant, '2010-01-01', today)
+          if (rawRows.length > 0) break
+          await new Promise(r => setTimeout(r, 300))
+        }
+      }
     }
 
     if (rawRows.length === 0) {
