@@ -30,7 +30,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import postgres from 'postgres'
 import {
   fetchNavData,
   fetchExternalData,
@@ -53,65 +52,67 @@ const supabase = createClient(
 
 // ── Auto-migration ────────────────────────────────────────────────────────────
 
+const MAVERST_DDL = [
+  `create table if not exists maverst_external_data (
+    date          date         primary key,
+    india_vix     numeric(8,4),
+    usdinr        numeric(10,4),
+    fii_net_crore numeric(16,2),
+    created_at    timestamptz  default now(),
+    updated_at    timestamptz  default now()
+  )`,
+  `create table if not exists maverst_regime_scores (
+    date             date         primary key,
+    score            numeric(8,4) not null,
+    regime           text         not null check (regime in ('Growth','Neutral','Defensive')),
+    confidence       text         not null check (confidence in ('High','Medium','Low')),
+    alloc_momentum   numeric(5,2) not null,
+    alloc_gold       numeric(5,2) not null,
+    z_trend          numeric(8,4), z_momentum       numeric(8,4), z_midcap_ratio   numeric(8,4),
+    z_ew_ratio       numeric(8,4), z_vix            numeric(8,4), z_gold_ratio     numeric(8,4),
+    z_usdinr         numeric(8,4), z_fii_flows      numeric(8,4), z_sector_ratio   numeric(8,4),
+    raw_trend        numeric(10,6), raw_momentum     numeric(10,6), raw_midcap_ratio numeric(10,6),
+    raw_ew_ratio     numeric(10,6), raw_vix          numeric(8,4),  raw_gold_ratio   numeric(10,6),
+    raw_usdinr       numeric(10,4), raw_fii_flows    numeric(16,2), raw_sector_ratio numeric(10,6),
+    created_at       timestamptz  default now()
+  )`,
+  `create index if not exists idx_maverst_regime_date on maverst_regime_scores (date desc)`,
+  `alter table maverst_external_data enable row level security`,
+  `alter table maverst_regime_scores  enable row level security`,
+  `do $$ begin if not exists (select 1 from pg_policies where tablename='maverst_external_data' and policyname='Public read') then execute 'create policy "Public read" on maverst_external_data for select using (true)'; end if; end $$`,
+  `do $$ begin if not exists (select 1 from pg_policies where tablename='maverst_regime_scores' and policyname='Public read') then execute 'create policy "Public read" on maverst_regime_scores for select using (true)'; end if; end $$`,
+  `select pg_notify('pgrst', 'reload schema')`,
+]
+
 /**
- * Creates the maverst tables via direct PostgreSQL if they are missing.
- * Uses SUPABASE_DB_URL for a direct connection that bypasses PostgREST schema cache.
- * Also sends NOTIFY pgrst, 'reload schema' so new tables are immediately visible.
+ * Creates the maverst tables via Supabase Management API if they are missing.
  */
 async function ensureMavestTables(log: string[]): Promise<boolean> {
-  const dbUrl = process.env.SUPABASE_DB_URL
-  if (!dbUrl) {
-    log.push('  ensureMavestTables: SUPABASE_DB_URL not set — cannot auto-create tables')
+  const accessToken = process.env.SUPABASE_ACCESS_TOKEN
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!accessToken || !supabaseUrl) {
+    log.push('  ensureMavestTables: SUPABASE_ACCESS_TOKEN or NEXT_PUBLIC_SUPABASE_URL not set — skipping auto-migration')
     return false
   }
-  const sql = postgres(dbUrl.trim(), { max: 1, ssl: 'require' })
+  const ref = new URL(supabaseUrl).hostname.split('.')[0]
   try {
-    await sql`
-      create table if not exists maverst_external_data (
-        date          date         primary key,
-        india_vix     numeric(8,4),
-        usdinr        numeric(10,4),
-        fii_net_crore numeric(16,2),
-        created_at    timestamptz  default now(),
-        updated_at    timestamptz  default now()
-      )`
-    await sql`
-      create table if not exists maverst_regime_scores (
-        date             date         primary key,
-        score            numeric(8,4) not null,
-        regime           text         not null check (regime in ('Growth','Neutral','Defensive')),
-        confidence       text         not null check (confidence in ('High','Medium','Low')),
-        alloc_momentum   numeric(5,2) not null,
-        alloc_gold       numeric(5,2) not null,
-        z_trend          numeric(8,4), z_momentum       numeric(8,4), z_midcap_ratio   numeric(8,4),
-        z_ew_ratio       numeric(8,4), z_vix            numeric(8,4), z_gold_ratio     numeric(8,4),
-        z_usdinr         numeric(8,4), z_fii_flows      numeric(8,4), z_sector_ratio   numeric(8,4),
-        raw_trend        numeric(10,6), raw_momentum     numeric(10,6), raw_midcap_ratio numeric(10,6),
-        raw_ew_ratio     numeric(10,6), raw_vix          numeric(8,4),  raw_gold_ratio   numeric(10,6),
-        raw_usdinr       numeric(10,4), raw_fii_flows    numeric(16,2), raw_sector_ratio numeric(10,6),
-        created_at       timestamptz  default now()
-      )`
-    await sql`create index if not exists idx_maverst_regime_date on maverst_regime_scores (date desc)`
-    await sql`alter table maverst_external_data enable row level security`
-    await sql`alter table maverst_regime_scores  enable row level security`
-    await sql`
-      do $$ begin
-        if not exists (select 1 from pg_policies where tablename='maverst_external_data' and policyname='Public read')
-        then execute 'create policy "Public read" on maverst_external_data for select using (true)'; end if;
-      end $$`
-    await sql`
-      do $$ begin
-        if not exists (select 1 from pg_policies where tablename='maverst_regime_scores' and policyname='Public read')
-        then execute 'create policy "Public read" on maverst_regime_scores for select using (true)'; end if;
-      end $$`
-    await sql`select pg_notify('pgrst', 'reload schema')`
+    for (const query of MAVERST_DDL) {
+      const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        log.push(`  Auto-migration error (${res.status}): ${text.slice(0, 200)}`)
+        return false
+      }
+    }
     log.push('  Auto-migration: maverst tables created/verified + PostgREST schema reloaded')
     return true
   } catch (e) {
     log.push(`  Auto-migration ERROR: ${e instanceof Error ? e.message : String(e)}`)
     return false
-  } finally {
-    await sql.end()
   }
 }
 

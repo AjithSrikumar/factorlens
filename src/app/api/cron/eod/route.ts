@@ -262,6 +262,10 @@ function computeMetricsFromNav(nav: NavPoint[]) {
 
 export const maxDuration = 300
 
+export async function POST(req: NextRequest) {
+  return GET(req)
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const cleanupMode   = url.searchParams.get('cleanup') === 'true'
