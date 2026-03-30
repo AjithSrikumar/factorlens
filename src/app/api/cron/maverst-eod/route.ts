@@ -187,32 +187,78 @@ async function fetchFIIFlows(fromISO: string, toISO: string): Promise<{ date: st
     return parseFloat(String(s).replace(/,/g, ''))
   }
 
+  const NSE_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
   try {
-    // NSE India requires a session cookie — fetch the market-data page first
-    const cookieRes = await fetch('https://www.nseindia.com/market-data/fii-dii-activity', {
+    // NSE India requires a session cookie — fetch the homepage first, then the data page
+    const homeRes = await fetch('https://www.nseindia.com/', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'User-Agent': NSE_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
       },
       signal: AbortSignal.timeout(15_000),
     })
-    if (!cookieRes.ok) return []
+    // Collect cookies from homepage
+    const homeCookies = (homeRes.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.()
+      ?? homeRes.headers.get('set-cookie')?.split(/,(?=[^;]+=[^;]+)/) ?? []
 
-    // Extract Set-Cookie headers
-    const rawCookies = (cookieRes.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.()
+    // Small delay to mimic browser navigation
+    await new Promise(r => setTimeout(r, 1000))
+
+    // Fetch the market-data page to pick up any additional session cookies
+    const cookieRes = await fetch('https://www.nseindia.com/market-data/fii-dii-activity', {
+      headers: {
+        'User-Agent': NSE_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.nseindia.com/',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+      },
+      signal: AbortSignal.timeout(15_000),
+    })
+
+    // Merge all cookies
+    const pageCookies = (cookieRes.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie?.()
       ?? cookieRes.headers.get('set-cookie')?.split(/,(?=[^;]+=[^;]+)/) ?? []
-    const cookies = rawCookies.map((c: string) => c.split(';')[0].trim()).filter(Boolean).join('; ')
+    const allRaw = [...homeCookies, ...pageCookies]
+    const cookieMap = new Map<string, string>()
+    for (const c of allRaw) {
+      const kv = c.split(';')[0].trim()
+      const eq = kv.indexOf('=')
+      if (eq > 0) cookieMap.set(kv.slice(0, eq), kv.slice(eq + 1))
+    }
+    const cookies = [...cookieMap.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
     if (!cookies) return []
+
+    // Small delay before the API call
+    await new Promise(r => setTimeout(r, 800))
 
     // Fetch FII historical data
     const url = `https://www.nseindia.com/api/historicalFiiDii?instrumentType=EQ&category=FII&startDate=${toNSEDate(fromISO)}&endDate=${toNSEDate(toISO)}`
     const dataRes = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': NSE_UA,
         'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Referer': 'https://www.nseindia.com/market-data/fii-dii-activity',
         'X-Requested-With': 'XMLHttpRequest',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
         'Cookie': cookies,
       },
       signal: AbortSignal.timeout(20_000),
@@ -354,10 +400,19 @@ async function backfillMavestNavData(log: string[], today: string): Promise<void
 
   // For each MAVERST NAV code, check latest data and backfill if needed
   for (const code of MAVERST_NAV_CODES) {
-    if (code === 'N50') continue // N50 is handled by the main EOD cron
-
     const fundId = codeToId.get(code)
     if (!fundId) { log.push(`  [${code}] not found in DB — skipping`); continue }
+
+    if (code === 'N50') {
+      // N50 is normally populated by the main EOD cron.
+      // Only backfill here if the DB has fewer than 500 rows (not enough for SMA200 / 12M momentum).
+      const { count } = await supabase
+        .from('nav_data').select('*', { count: 'exact', head: true })
+        .eq('fund_id', fundId).gte('date', '2010-01-01')
+      if ((count ?? 0) >= 500) continue
+      log.push(`  [N50] insufficient history (${count} rows) — backfilling…`)
+      // Fall through to standard backfill logic below
+    }
 
     const { data: latestRow } = await supabase
       .from('nav_data').select('date, nav_value').eq('fund_id', fundId)
@@ -386,11 +441,16 @@ async function backfillMavestNavData(log: string[], today: string): Promise<void
       if (!indexName) { log.push(`  [${code}] no index name in NSE_INDEX_LIST`); continue }
 
       // Build name variants to try (niftyindices.com API names can differ slightly)
+      const toTitleCase = (s: string) =>
+        s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
       const nameVariants = [
         indexName,
         // Toggle space between "NIFTY" and the number (e.g. "NIFTY100" ↔ "NIFTY 100")
         indexName.replace(/^NIFTY(\d)/, 'NIFTY $1'),
         indexName.replace(/^NIFTY (\d)/, 'NIFTY$1'),
+        // Title-case variant (e.g. "NIFTY100 EQUAL WEIGHT" → "Nifty100 Equal Weight")
+        toTitleCase(indexName),
+        toTitleCase(indexName.replace(/^NIFTY(\d)/, 'NIFTY $1')),
       ].filter((v, i, arr) => arr.indexOf(v) === i)   // dedupe
 
       for (const variant of nameVariants) {
