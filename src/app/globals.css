@@ -1,5 +1,7 @@
 /* Google Fonts — loaded at runtime (no build-time network required) */
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap");
+/* Inter for navbar/UI chrome */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -159,6 +161,51 @@
   --sidebar-accent-foreground: oklch(0.96 0.005 264);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(0.62 0.20 264);
+}
+
+/* ─────────────────────────────────────────
+   DESIGN TOKENS — Type scale, spacing, shadows
+───────────────────────────────────────── */
+:root {
+  /* Type scale */
+  --text-display: clamp(52px, 8vw, 96px);
+  --text-h1:      clamp(40px, 5.5vw, 72px);
+  --text-h2:      clamp(28px, 3.5vw, 48px);
+  --text-h3:      clamp(22px, 2.5vw, 32px);
+  --text-lead:    clamp(16px, 1.8vw, 19px);
+  --text-body:    15px;
+  --text-small:   13px;
+  --text-caption: 11px;
+
+  /* Spacing scale (8pt) */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-8: 64px;
+  --space-10: 80px;
+  --space-12: 96px;
+  --space-16: 128px;
+
+  /* Section padding */
+  --section-y: 120px;
+  --section-y-sm: 72px;
+
+  /* Shadow scale */
+  --shadow-xs:  0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+  --shadow-md:  0 8px 24px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.04);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,.10), 0 4px 12px rgba(0,0,0,.05);
+  --shadow-xl:  0 40px 100px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.06);
+  --shadow-product: 0 60px 120px -20px rgba(0,0,0,.22), 0 0 0 1px rgba(0,0,0,.06);
+
+  /* Apple gray system */
+  --apple-bg:    #F5F5F7;
+  --apple-text:  #1D1D1F;
+  --apple-muted: #6E6E73;
+  --apple-line:  rgba(0,0,0,0.08);
 }
 
 /* ─────────────────────────────────────────
@@ -505,3 +552,199 @@ nextjs-portal {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ─────────────────────────────────────────
+   LANDING — APPLE-STYLE ENHANCEMENTS
+───────────────────────────────────────── */
+
+/* Feature section grid — 2 col → 1 col */
+.feature-grid-resp {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+@media (max-width: 900px) {
+  .feature-grid-resp {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+  .feature-text-resp  { order: 1 !important; }
+  .feature-visual-resp { order: 2 !important; display: flex; justify-content: center; }
+}
+
+/* Performance stats grid — 3 → 1 col */
+.perf-grid-resp {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+@media (max-width: 700px) {
+  .perf-grid-resp { grid-template-columns: 1fr; }
+}
+
+/* Apple-style pill label */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: block;
+}
+
+/* Premium product mockup container */
+.product-mockup {
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: var(--shadow-product);
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Mockup browser chrome */
+.mockup-chrome {
+  height: 42px;
+  background: #F2F2F7;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Traffic light dots */
+.traffic-dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Navbar premium styling */
+.nav-link-apple {
+  padding: 6px 13px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  display: block;
+}
+
+/* Why cards hover enhancement */
+.why-card-landing {
+  transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+}
+.why-card-landing:hover {
+  box-shadow: var(--shadow-md) !important;
+  transform: translateY(-2px);
+}
+
+/* Section transitions for scroll reveals */
+.reveal-up {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal-up.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Enhanced card hover */
+.card-hover:hover {
+  box-shadow: var(--shadow-md);
+  border-color: rgba(26,86,219,.15) !important;
+  transform: translateY(-2px);
+}
+
+/* Apple-style feature card */
+.feat-card-apple {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 32px 28px;
+  transition: box-shadow 0.22s, transform 0.22s, border-color 0.22s;
+}
+.feat-card-apple:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  border-color: rgba(26,86,219,.12);
+}
+
+/* Steps connect line (desktop) */
+@media (min-width: 861px) {
+  .steps-grid-landing {
+    position: relative;
+  }
+}
+
+/* ─────────────────────────────────────────
+   NAVBAR — PREMIUM
+───────────────────────────────────────── */
+
+/* Blur nav enhancement */
+.nav-blur {
+  background: rgba(255,255,255,.88) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Active indicator pill */
+.nav-active-pill {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
+  color: #0C0E13 !important;
+}
+
+/* Nav CTA hover */
+.nav-cta:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* ─────────────────────────────────────────
+   DASHBOARD — PREMIUM CARD UPGRADES
+───────────────────────────────────────── */
+
+/* Section heading style */
+.dash-section-heading {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  color: var(--foreground);
+}
+
+/* Info tip hover show */
+.info-wrap-dash:hover .info-tip-dash {
+  opacity: 1 !important;
+}
+
+/* ─────────────────────────────────────────
+   ENHANCED ANIMATIONS
+───────────────────────────────────────── */
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes float-up {
+  0%   { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float-up {
+  animation: float-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stagger delays */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
