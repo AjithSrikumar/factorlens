@@ -9,10 +9,6 @@
       "schedule": "45 12 * * *"
     },
     {
-      "path": "/api/cron/news-scrape",
-      "schedule": "0 4 * * *"
-    },
-    {
       "path": "/api/cron/maverst-eod",
       "schedule": "0 13 * * *"
     }
@@ -26,9 +22,6 @@
     },
     "src/app/api/nav-sync/route.ts": {
       "maxDuration": 300
-    },
-    "src/app/api/cron/news-scrape/route.ts": {
-      "maxDuration": 120
     },
     "src/app/api/cron/maverst-eod/route.ts": {
       "maxDuration": 300

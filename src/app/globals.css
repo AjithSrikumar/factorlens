@@ -1,5 +1,5 @@
 /* Google Fonts */
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital,wght@0,400;1,400&family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital,wght@0,400;1,400&display=swap");
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -49,162 +49,99 @@
 }
 
 /* ─────────────────────────────────────────
-   LIGHT THEME
+   WEALTHSIMPLE DESIGN LANGUAGE — LIGHT THEME
+   "Clean, institutional, data-first"
 ───────────────────────────────────────── */
 :root {
   --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'DM Mono', ui-monospace, monospace;
   --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
 
-  --radius: 0.75rem;
+  --radius: 1rem; /* 16px */
 
-  --background: oklch(0.98 0.002 240);
-  --foreground: oklch(0.10 0.015 255);
+  /* ── Wealthsimple Raw Tokens ── */
+  --navy:    #0C0E13;
+  --navy-80: rgba(12,14,19,.80);
+  --navy-50: rgba(12,14,19,.50);
+  --navy-30: rgba(12,14,19,.30);
+  --navy-12: rgba(12,14,19,.12);
+  --navy-06: rgba(12,14,19,.06);
+  --navy-03: rgba(12,14,19,.03);
+  --white:   #ffffff;
+  --off:     #F5F5F3;
+  --off2:    #EDECEA;
+  --blue:    #1A56DB;
+  --blue-lg: #EBF0FF;
+  --blue-md: rgba(26,86,219,.13);
+  --green:   #0A7C4E;
+  --green-lg:#E6F4EE;
+  --red:     #C5271E;
+  --red-lg:  #FCE8E7;
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.10 0.015 255);
+  /* ── Shadows ── */
+  --sh-xs: 0 1px 2px rgba(0,0,0,.05);
+  --sh-sm: 0 1px 4px rgba(0,0,0,.07),0 0 0 1px rgba(0,0,0,.04);
+  --sh:    0 4px 16px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.04);
+  --sh-lg: 0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.05);
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.10 0.015 255);
+  /* ── Radius scale ── */
+  --r:    16px;
+  --r-lg: 20px;
+  --r-xl: 28px;
 
-  --primary: oklch(0.52 0.22 264);
-  --primary-foreground: oklch(0.99 0 0);
+  /* ── Tailwind theme tokens → Wealthsimple values ── */
+  --background:          #F5F5F3;
+  --foreground:          #0C0E13;
 
-  --secondary: oklch(0.95 0.01 255);
-  --secondary-foreground: oklch(0.25 0.05 255);
+  --card:                #ffffff;
+  --card-foreground:     #0C0E13;
 
-  --muted: oklch(0.95 0.006 255);
-  --muted-foreground: oklch(0.50 0.04 255);
+  --popover:             #ffffff;
+  --popover-foreground:  #0C0E13;
 
-  --accent: oklch(0.93 0.04 200);
-  --accent-foreground: oklch(0.20 0.06 255);
+  --primary:             #0C0E13;
+  --primary-foreground:  #ffffff;
 
-  --destructive: oklch(0.52 0.22 22);
+  --secondary:           #EDECEA;
+  --secondary-foreground:#0C0E13;
 
-  --border: oklch(0.88 0.010 255);
-  --input: oklch(0.92 0.008 255);
-  --ring: oklch(0.52 0.22 264);
+  --muted:               #F0EFED;
+  --muted-foreground:    rgba(12,14,19,.50);
 
-  --chart-1: oklch(0.52 0.22 264);
-  --chart-2: oklch(0.60 0.18 190);
-  --chart-3: oklch(0.68 0.16 150);
-  --chart-4: oklch(0.72 0.18 75);
-  --chart-5: oklch(0.62 0.22 22);
+  --accent:              #EBF0FF;
+  --accent-foreground:   #1A56DB;
 
-  --success: oklch(0.48 0.14 158);
-  --success-foreground: oklch(0.99 0 0);
+  --destructive:         #C5271E;
 
-  --sidebar: oklch(0.965 0.006 255);
-  --sidebar-foreground: oklch(0.12 0.012 255);
-  --sidebar-primary: oklch(0.52 0.22 264);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.93 0.02 255);
-  --sidebar-accent-foreground: oklch(0.25 0.05 255);
-  --sidebar-border: oklch(0.88 0.01 255);
-  --sidebar-ring: oklch(0.52 0.22 264);
-}
+  --border:              rgba(12,14,19,.12);
+  --input:               rgba(12,14,19,.10);
+  --ring:                #1A56DB;
 
-/* ─────────────────────────────────────────
-   DARK THEME — "Midnight Analytics"
-───────────────────────────────────────── */
-.dark {
-  --background: oklch(0.085 0.015 255);
-  --foreground: oklch(0.94 0.006 255);
+  --chart-1: #1A56DB;
+  --chart-2: #0A7C4E;
+  --chart-3: #B45309;
+  --chart-4: #6D28D9;
+  --chart-5: #C5271E;
 
-  --card: oklch(0.12 0.014 255);
-  --card-foreground: oklch(0.94 0.006 255);
+  --success:             #0A7C4E;
+  --success-foreground:  #ffffff;
 
-  --popover: oklch(0.13 0.014 255);
-  --popover-foreground: oklch(0.94 0.006 255);
+  --sidebar:             #F0EFED;
+  --sidebar-foreground:  #0C0E13;
+  --sidebar-primary:     #1A56DB;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent:      #EDECEA;
+  --sidebar-accent-foreground:  #0C0E13;
+  --sidebar-border:      rgba(12,14,19,.12);
+  --sidebar-ring:        #1A56DB;
 
-  --primary: oklch(0.65 0.20 264);
-  --primary-foreground: oklch(0.085 0.015 255);
+  /* ── Spacing scale ── */
+  --space-1: 8px;  --space-2: 16px; --space-3: 24px;
+  --space-4: 32px; --space-5: 40px; --space-6: 48px;
+  --space-8: 64px; --space-10: 80px;
 
-  --secondary: oklch(0.18 0.018 255);
-  --secondary-foreground: oklch(0.94 0.006 255);
-
-  --muted: oklch(0.18 0.016 255);
-  --muted-foreground: oklch(0.55 0.05 255);
-
-  --accent: oklch(0.20 0.055 200);
-  --accent-foreground: oklch(0.94 0.006 255);
-
-  --destructive: oklch(0.65 0.20 22);
-
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.65 0.20 264);
-
-  --chart-1: oklch(0.65 0.20 264);
-  --chart-2: oklch(0.72 0.17 190);
-  --chart-3: oklch(0.76 0.14 150);
-  --chart-4: oklch(0.80 0.16 75);
-  --chart-5: oklch(0.70 0.20 22);
-
-  --success: oklch(0.62 0.16 158);
-  --success-foreground: oklch(0.085 0.015 255);
-
-  --sidebar: oklch(0.105 0.014 255);
-  --sidebar-foreground: oklch(0.94 0.006 255);
-  --sidebar-primary: oklch(0.65 0.20 264);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.18 0.025 255);
-  --sidebar-accent-foreground: oklch(0.94 0.006 255);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.65 0.20 264);
-}
-
-/* ─────────────────────────────────────────
-   DESIGN TOKENS
-───────────────────────────────────────── */
-:root {
-  /* Typography scale */
-  --text-display: clamp(48px, 8vw, 88px);
-  --text-h1:      clamp(36px, 5vw, 64px);
-  --text-h2:      clamp(26px, 3.2vw, 44px);
-  --text-h3:      clamp(20px, 2.2vw, 30px);
-  --text-lead:    clamp(15px, 1.6vw, 18px);
-  --text-body:    15px;
-  --text-small:   13px;
-  --text-caption: 11px;
-
-  /* 8pt spacing scale */
-  --space-1: 8px;
-  --space-2: 16px;
-  --space-3: 24px;
-  --space-4: 32px;
-  --space-5: 40px;
-  --space-6: 48px;
-  --space-8: 64px;
-  --space-10: 80px;
-  --space-12: 96px;
-  --space-16: 128px;
-
-  /* Shadow scale */
-  --shadow-xs: 0 1px 2px rgba(0,0,0,.08);
-  --shadow-sm: 0 2px 8px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
-  --shadow-md: 0 6px 20px rgba(0,0,0,.10), 0 2px 6px rgba(0,0,0,.06);
-  --shadow-lg: 0 16px 48px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.07);
-  --shadow-xl: 0 32px 80px rgba(0,0,0,.14), 0 8px 24px rgba(0,0,0,.08);
-  --shadow-product: 0 48px 100px -20px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.06);
-
-  /* Glow effects */
-  --glow-blue: 0 0 40px rgba(99,130,255,.20), 0 0 80px rgba(99,130,255,.10);
-  --glow-green: 0 0 40px rgba(16,185,129,.20), 0 0 80px rgba(16,185,129,.08);
-
-  /* Raw palette for inline use */
-  --c-bg:       #080B14;
-  --c-surface:  #0E1320;
-  --c-raised:   #131826;
-  --c-border:   rgba(255,255,255,0.08);
-  --c-blue:     #4F80FF;
-  --c-blue-dim: #1E40AF;
-  --c-green:    #10B981;
-  --c-amber:    #F59E0B;
-  --c-red:      #EF4444;
-  --c-text:     #E2E8F0;
-  --c-text-2:   #94A3B8;
-  --c-text-3:   #475569;
+  /* Bottom nav height */
+  --bnav: 68px;
 }
 
 /* ─────────────────────────────────────────
@@ -226,12 +163,6 @@
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-  h1, h2, h3, h4 {
-    font-family: var(--font-sans), system-ui, sans-serif;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    line-height: 1.15;
   }
 }
 
@@ -256,36 +187,24 @@ nextjs-portal { display: none !important; }
 /* ─────────────────────────────────────────
    CARD SYSTEM
 ───────────────────────────────────────── */
-
-/* Base card */
 .fl-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  background: var(--white);
+  border: 1px solid var(--navy-12);
+  border-radius: var(--r-lg);
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
-/* Hoverable card */
 .fl-card-hover {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+  background: var(--white);
+  border: 1px solid var(--navy-12);
+  border-radius: var(--r-lg);
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
   cursor: pointer;
 }
 .fl-card-hover:hover {
-  box-shadow: var(--shadow-md);
-  border-color: rgba(99,130,255,0.20);
-  transform: translateY(-2px);
-}
-
-/* Elevated card (glass effect in dark mode) */
-.fl-card-glass {
-  background: rgba(14,19,32,0.70);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 20px;
+  box-shadow: var(--sh);
+  border-color: var(--navy-30);
+  transform: translateY(-3px);
 }
 
 /* ─────────────────────────────────────────
@@ -294,39 +213,59 @@ nextjs-portal { display: none !important; }
 .fl-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 10px;
+  gap: 4px;
+  padding: 3px 9px;
   border-radius: 100px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: .1px;
 }
+.fl-badge-default  { background: var(--navy-06); color: var(--navy-50); }
+.fl-badge-blue     { background: var(--blue-lg); color: var(--blue); }
+.fl-badge-green    { background: var(--green-lg); color: var(--green); }
+.fl-badge-red      { background: var(--red-lg); color: var(--red); }
+
+/* Wealthsimple badge variants (mirrors v4 HTML) */
+.bd-default    { background: var(--navy-06);  color: var(--navy-50); }
+.bd-blue       { background: var(--blue-lg);  color: var(--blue); }
+.bd-green      { background: var(--green-lg); color: var(--green); }
+.bd-red        { background: var(--red-lg);   color: var(--red); }
+.bd-broad      { background: #EBF0FF;  color: #1A56DB; }
+.bd-momentum   { background: #FFF3E6;  color: #B45309; }
+.bd-multifactor{ background: #F3F0FF;  color: #6D28D9; }
+.bd-quality    { background: var(--green-lg); color: var(--green); }
+.bd-lowvol     { background: #E6F4EE;  color: #0A7C4E; }
+.bd-alpha      { background: #FDE8F4;  color: #9D1769; }
+.bd-value      { background: #FEF5E6;  color: #92400E; }
+.bd-other      { background: var(--navy-06); color: var(--navy-50); }
 
 /* ─────────────────────────────────────────
-   BUTTON SYSTEM
+   BUTTON SYSTEM — Wealthsimple style
 ───────────────────────────────────────── */
 .fl-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 24px;
+  padding: 12px 22px;
   border-radius: 10px;
-  background: #4F80FF;
-  color: #ffffff;
+  background: var(--navy);
+  color: var(--white);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -.1px;
   text-decoration: none;
-  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition: all .2s;
   cursor: pointer;
   border: none;
+  font-family: var(--font-sans);
 }
 .fl-btn-primary:hover {
-  opacity: 0.88;
+  background: #1e2432;
+  box-shadow: var(--sh);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(79,128,255,0.35);
 }
+.fl-btn-primary:active { transform: scale(.98); }
 
 .fl-btn-secondary {
   display: inline-flex;
@@ -335,21 +274,20 @@ nextjs-portal { display: none !important; }
   gap: 8px;
   padding: 12px 22px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.75);
+  background: var(--white);
+  color: var(--navy);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -.1px;
   text-decoration: none;
-  border: 1px solid rgba(255,255,255,0.12);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  border: 1.5px solid var(--navy-12);
+  transition: all .15s;
   cursor: pointer;
-  backdrop-filter: blur(8px);
+  font-family: var(--font-sans);
 }
 .fl-btn-secondary:hover {
-  background: rgba(255,255,255,0.10);
-  color: rgba(255,255,255,0.92);
-  border-color: rgba(255,255,255,0.20);
+  border-color: var(--navy-30);
+  box-shadow: var(--sh-xs);
 }
 
 .fl-btn-outline {
@@ -360,181 +298,145 @@ nextjs-portal { display: none !important; }
   padding: 11px 22px;
   border-radius: 10px;
   background: transparent;
-  color: var(--foreground);
+  color: var(--navy);
   font-size: 14px;
   font-weight: 600;
+  letter-spacing: -.1px;
   text-decoration: none;
-  border: 1.5px solid var(--border);
-  transition: background 0.15s, border-color 0.15s;
+  border: 1.5px solid var(--navy-12);
+  transition: all .15s;
   cursor: pointer;
+  font-family: var(--font-sans);
 }
 .fl-btn-outline:hover {
-  background: var(--secondary);
-  border-color: var(--primary);
+  border-color: var(--navy-30);
+  background: var(--off2);
+}
+
+/* Blue action button */
+.fl-btn-blue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all .18s;
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-sans);
+}
+.fl-btn-blue:hover {
+  background: #1447c0;
+  box-shadow: 0 4px 16px rgba(26,86,219,.28);
+  transform: translateY(-1px);
 }
 
 /* ─────────────────────────────────────────
    SECTION LABEL
 ───────────────────────────────────────── */
 .fl-section-label {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.8px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--muted-foreground);
-  margin-bottom: 12px;
+  color: var(--navy-30);
+  margin-bottom: 11px;
   display: block;
 }
 
+/* Wealthsimple section helpers */
+.sec-lbl { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--navy-30); margin-bottom: 11px; display: block; }
+.sec-h2  { font-family: var(--font-serif); font-size: clamp(26px,3.5vw,40px); font-weight: 400; letter-spacing: -.8px; line-height: 1.15; color: var(--navy); margin-bottom: 13px; }
+.sec-sub { font-size: 16px; color: var(--navy-50); line-height: 1.62; }
+
 /* ─────────────────────────────────────────
-   NAVBAR
+   NAVBAR — Wealthsimple light style
 ───────────────────────────────────────── */
 .nav-glass {
-  background: rgba(8,11,20,0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-}
-.nav-glass-light {
-  background: rgba(250,251,255,0.92);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid rgba(0,0,0,0.07);
+  background: rgba(245,245,243,.93);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--navy-12);
 }
 .nav-link {
-  padding: 6px 12px;
+  padding: 7px 13px;
   border-radius: 8px;
   font-size: 13.5px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: all .15s;
   text-decoration: none;
   white-space: nowrap;
+  color: var(--navy-50);
+}
+.nav-link:hover {
+  color: var(--navy);
+  background: var(--navy-06);
 }
 .nav-link-active {
-  background: rgba(79,128,255,0.12);
-  color: #6B9FFF !important;
+  color: var(--navy) !important;
+  background: var(--white);
+  box-shadow: var(--sh-xs);
 }
 .nav-link-inactive {
-  color: rgba(148,163,184,0.85);
+  color: var(--navy-50);
 }
 .nav-link-inactive:hover {
-  background: rgba(255,255,255,0.06);
-  color: rgba(226,232,240,0.95);
+  color: var(--navy);
+  background: var(--navy-06);
 }
 
-/* Bottom nav active glow */
-.bottom-nav-active {
-  color: #6B9FFF !important;
-}
-.bottom-nav-inactive {
-  color: rgba(148,163,184,0.5);
-}
+/* Bottom nav */
+.bottom-nav-active  { color: var(--blue) !important; }
+.bottom-nav-inactive { color: var(--navy-30); }
 
 /* ─────────────────────────────────────────
    HERO ANIMATIONS
 ───────────────────────────────────────── */
 .hero-pulse-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: #10B981;
+  background: #22D3A0;
   flex-shrink: 0;
-  box-shadow: 0 0 0 0 rgba(16,185,129,.5);
-  animation: hero-pulse 2.4s ease infinite;
+  box-shadow: 0 0 0 0 rgba(34,211,160,.4);
+  animation: hero-pulse 2.2s ease infinite;
   display: inline-block;
 }
 @keyframes hero-pulse {
-  0%   { box-shadow: 0 0 0 0   rgba(16,185,129,.6); }
-  70%  { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
-  100% { box-shadow: 0 0 0 0   rgba(16,185,129,0); }
-}
-
-/* Gradient text */
-.gradient-text-blue {
-  background: linear-gradient(135deg, #93C5FD 0%, #818CF8 50%, #6EE7B7 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.gradient-text-green {
-  background: linear-gradient(120deg, #6EE7B7 0%, #34D399 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Mesh gradient background */
-.mesh-bg {
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(79,128,255,0.14) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(16,185,129,0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(99,102,241,0.06) 0%, transparent 60%);
-}
-
-/* Animated gradient border */
-@keyframes border-glow {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-.border-glow {
-  animation: border-glow 3s ease infinite;
-}
-
-/* Float up animation */
-@keyframes float-up {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.animate-float-up {
-  animation: float-up 0.7s cubic-bezier(0.22,1,0.36,1) both;
-}
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-.delay-300 { animation-delay: 0.3s; }
-.delay-400 { animation-delay: 0.4s; }
-.delay-500 { animation-delay: 0.5s; }
-
-/* Reveal on scroll */
-.reveal-up {
-  opacity: 0;
-  transform: translateY(24px);
-  transition: opacity 0.65s cubic-bezier(0.22,1,0.36,1), transform 0.65s cubic-bezier(0.22,1,0.36,1);
-}
-.reveal-up.is-visible {
-  opacity: 1;
-  transform: translateY(0);
+  0%   { box-shadow: 0 0 0 0   rgba(34,211,160,.5); }
+  70%  { box-shadow: 0 0 0 8px rgba(34,211,160,0); }
+  100% { box-shadow: 0 0 0 0   rgba(34,211,160,0); }
 }
 
 /* ─────────────────────────────────────────
    LANDING PAGE
 ───────────────────────────────────────── */
-
-/* Pull hero flush on mobile */
 @media (max-width: 767px) {
   .landing-hero-offset { margin-top: -52px; }
 }
 
-/* CTA wrap */
 .hero-actions-wrap { flex-direction: column !important; align-items: center !important; }
 @media (min-width: 480px) {
   .hero-actions-wrap { flex-direction: row !important; justify-content: center !important; }
 }
 
-/* Stats grid */
 @media (max-width: 460px) {
   .hero-stats-grid { grid-template-columns: repeat(2,1fr) !important; }
 }
 
-/* Feature bento grid */
 .feat-bento {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 16px;
 }
 @media (max-width: 960px) { .feat-bento { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 480px) { .feat-bento { grid-template-columns: 1fr; gap: 10px; } }
+@media (max-width: 480px) { .feat-bento { grid-template-columns: 1fr; gap: 12px; } }
 
-/* Steps grid */
 .steps-grid-landing {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -543,23 +445,20 @@ nextjs-portal { display: none !important; }
 @media (max-width: 860px) { .steps-grid-landing { grid-template-columns: repeat(2,1fr); } }
 @media (max-width: 480px) { .steps-grid-landing { grid-template-columns: 1fr; gap: 16px; } }
 
-/* Why grid */
 .why-grid-landing {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  gap: 52px;
   align-items: center;
 }
 @media (max-width: 800px) { .why-grid-landing { grid-template-columns: 1fr; gap: 36px; } }
 
-/* Why mini-cards 2×2 */
 .why-cards-landing {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* Divstat banner */
 .div-stats-landing {
   display: grid;
   grid-template-columns: repeat(3,1fr);
@@ -570,39 +469,73 @@ nextjs-portal { display: none !important; }
 }
 @media (max-width: 480px) { .div-stats-landing { grid-template-columns: 1fr; } }
 
-/* Responsive horizontal padding */
 @media (max-width: 767px) {
-  .landing-pw { padding: 0 18px !important; }
-  .div-banner-landing { padding: 44px 22px !important; border-radius: 22px !important; }
+  .landing-pw { padding: 0 16px !important; }
+  .div-banner-landing { padding: 44px 22px !important; border-radius: var(--r-lg) !important; }
   .footer-inner-landing { flex-direction: column !important; text-align: center !important; gap: 20px !important; }
 }
 
 /* ─────────────────────────────────────────
-   DASHBOARD
+   INFO TOOLTIP
+───────────────────────────────────────── */
+.info-wrap { position: relative; display: inline-flex; align-items: center; }
+.info-btn {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--navy-12);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background .15s;
+  font-size: 9px; font-weight: 800; color: var(--navy-50); line-height: 1;
+}
+.info-btn:hover { background: var(--navy-30); color: var(--white); }
+.info-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy); color: rgba(255,255,255,.85);
+  font-size: 12px; line-height: 1.55; padding: 10px 13px;
+  border-radius: 9px; width: 200px; z-index: 400;
+  pointer-events: none; opacity: 0; transition: opacity .18s;
+  box-shadow: var(--sh-lg); text-align: left; font-weight: 400;
+}
+.info-tip::after {
+  content: ''; position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--navy);
+}
+.info-wrap:hover .info-tip,
+.info-wrap:focus-within .info-tip { opacity: 1; }
+
+/* Dashboard info wrap alias */
+.info-wrap-dash { position: relative; display: inline-flex; align-items: center; }
+.info-wrap-dash:hover .info-tip-dash { opacity: 1 !important; }
+.info-tip-dash {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy); color: rgba(255,255,255,.85);
+  font-size: 12px; line-height: 1.55; padding: 10px 13px;
+  border-radius: 9px; width: 200px; z-index: 400;
+  pointer-events: none; opacity: 0; transition: opacity .18s;
+  box-shadow: var(--sh-lg); text-align: left; font-weight: 400;
+}
+
+/* ─────────────────────────────────────────
+   DASHBOARD — Wealthsimple style
 ───────────────────────────────────────── */
 .snap-3-grid { display: grid; grid-template-columns: repeat(3,1fr); }
 @media (max-width: 640px) {
   .snap-3-grid { grid-template-columns: 1fr; }
-  .snap-tile-resp { padding: 18px 16px !important; border-right: none !important; border-bottom: 1px solid var(--border) !important; }
+  .snap-tile-resp { padding: 18px 16px !important; border-right: none !important; border-bottom: 1px solid var(--navy-12) !important; }
   .snap-tile-resp:last-child { border-bottom: none !important; }
 }
 .snap-6-grid { display: grid; grid-template-columns: repeat(6,1fr); }
-@media (max-width: 767px) {
-  .snap-6-grid { grid-template-columns: repeat(3,1fr); }
-}
-@media (max-width: 420px) {
-  .snap-6-grid { grid-template-columns: repeat(2,1fr); }
-}
+@media (max-width: 767px) { .snap-6-grid { grid-template-columns: repeat(3,1fr); } }
+@media (max-width: 420px) { .snap-6-grid { grid-template-columns: repeat(2,1fr); } }
 .side2-resp { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 768px) { .side2-resp { grid-template-columns: 1fr; } }
 @media (max-width: 767px) {
-  .dash-wrap-resp { padding: 0 14px !important; }
+  .dash-wrap-resp { padding: 0 0 48px !important; }
   .ccard-body-resp { padding: 14px !important; }
   .bld-body-resp { padding: 16px 14px !important; }
 }
-
-/* Info tip */
-.info-wrap-dash:hover .info-tip-dash { opacity: 1 !important; }
 
 /* ─────────────────────────────────────────
    RANKINGS
@@ -624,17 +557,14 @@ nextjs-portal { display: none !important; }
   .leader-grid-resp::-webkit-scrollbar { display: none; }
   .leader-grid-resp > * { flex: 0 0 260px; min-width: 260px; }
 }
-@media (max-width: 767px) { .rank-wrap-resp { padding: 0 14px !important; } }
+@media (max-width: 767px) { .rank-wrap-resp { padding: 0 0 48px !important; } }
 @media (max-width: 600px) {
   .rfilt-resp { flex-direction: column !important; }
   .rfilt-search { max-width: none !important; width: 100% !important; }
 }
 .rcats-scroll {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  display: flex; gap: 6px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
 .rcats-scroll::-webkit-scrollbar { display: none; }
 .mrc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -650,56 +580,74 @@ nextjs-portal { display: none !important; }
 @media (max-width: 480px) { .hl-grid { grid-template-columns: 1fr; } }
 
 /* ─────────────────────────────────────────
-   NEWS FEED
-───────────────────────────────────────── */
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse-badge {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: .65; }
-}
-
-/* ─────────────────────────────────────────
-   TABLE STYLES
+   TABLE STYLES — Wealthsimple
 ───────────────────────────────────────── */
 .fl-table-row {
   transition: background 0.12s ease;
   cursor: pointer;
 }
 .fl-table-row:hover {
-  background: rgba(79,128,255,0.04) !important;
+  background: var(--navy-03) !important;
 }
 
 /* ─────────────────────────────────────────
-   CATEGORY COLORS (for pills/badges)
+   CATEGORY COLORS — Wealthsimple badges
 ───────────────────────────────────────── */
-.cat-broad-market   { background: rgba(79,128,255,.12);  color: #93BFFF; }
-.cat-momentum       { background: rgba(245,158,11,.12);  color: #FCD34D; }
-.cat-multi-factor   { background: rgba(139,92,246,.12);  color: #C4B5FD; }
-.cat-quality        { background: rgba(16,185,129,.12);  color: #6EE7B7; }
-.cat-low-vol        { background: rgba(16,185,129,.12);  color: #6EE7B7; }
-.cat-alpha          { background: rgba(236,72,153,.12);  color: #F9A8D4; }
-.cat-value          { background: rgba(251,191,36,.12);  color: #FDE68A; }
-.cat-thematic       { background: rgba(239,68,68,.12);   color: #FCA5A5; }
-.cat-equal-weight   { background: rgba(52,211,153,.12);  color: #6EE7B7; }
-.cat-dividend       { background: rgba(251,191,36,.12);  color: #FDE68A; }
-.cat-high-beta      { background: rgba(239,68,68,.12);   color: #FCA5A5; }
-.cat-global         { background: rgba(148,163,184,.10); color: #94A3B8; }
+.cat-broad-market   { background: #EBF0FF; color: #1A56DB; }
+.cat-momentum       { background: #FFF3E6; color: #B45309; }
+.cat-multi-factor   { background: #F3F0FF; color: #6D28D9; }
+.cat-quality        { background: #E6F4EE; color: #0A7C4E; }
+.cat-low-vol        { background: #E6F4EE; color: #0A7C4E; }
+.cat-alpha          { background: #FDE8F4; color: #9D1769; }
+.cat-value          { background: #FEF5E6; color: #92400E; }
+.cat-thematic       { background: #FCE8E7; color: #C5271E; }
+.cat-equal-weight   { background: #E6F4EE; color: #0A7C4E; }
+.cat-dividend       { background: #FEF5E6; color: #92400E; }
+.cat-high-beta      { background: #FCE8E7; color: #C5271E; }
+.cat-global         { background: var(--navy-06); color: var(--navy-50); }
 
 /* ─────────────────────────────────────────
-   PERFORMANCE COLORS
+   PERFORMANCE COLORS — Wealthsimple
 ───────────────────────────────────────── */
-.perf-positive { color: #34D399; }
-.perf-negative { color: #F87171; }
-.perf-neutral  { color: #94A3B8; }
+.perf-positive { color: var(--green); }
+.perf-negative { color: var(--red); }
+.perf-neutral  { color: var(--navy-50); }
+.pos-t { color: var(--green); }
+.neg-t { color: var(--red); }
+.muted { color: var(--navy-50); }
 
 /* ─────────────────────────────────────────
-   SCROLLBAR THEMING (subtle)
+   ANIMATIONS
+───────────────────────────────────────── */
+.fade-up { animation: fu .38s ease both; }
+@keyframes fu {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-float-up { animation: float-up 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+
+/* ─────────────────────────────────────────
+   SCROLLBAR — Wealthsimple light
 ───────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.35); }
+::-webkit-scrollbar-thumb { background: rgba(12,14,19,0.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(12,14,19,0.22); }
 
-/* Light mode scrollbar */
-.light ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
-.light ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+/* Mobile gap */
+@media (max-width: 767px) {
+  .mobile-gap { height: 12px; background: var(--off); }
+}
+.sep-row { height: 16px; background: var(--off); }
+.hidden { display: none !important; }
+.hidden-mob { display: block; }
+@media (max-width: 767px) { .hidden-mob { display: none; } }
+.mono { font-family: var(--font-mono); }

@@ -1,44 +1,53 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, ChevronRight, TrendingUp, Shield, BarChart2, Database } from "lucide-react"
 
-/* ── Category Color Helpers ──────────────────────────────────────── */
-const CAT = {
-  blue:   { bg: "rgba(79,128,255,0.12)",  border: "rgba(79,128,255,0.20)",  text: "#93BFFF"  },
-  green:  { bg: "rgba(16,185,129,0.12)",  border: "rgba(16,185,129,0.20)",  text: "#6EE7B7"  },
-  amber:  { bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.20)",  text: "#FCD34D"  },
-  purple: { bg: "rgba(139,92,246,0.12)",  border: "rgba(139,92,246,0.20)",  text: "#C4B5FD"  },
-}
+/* ─────────────────────────────────────────
+   DATA
+───────────────────────────────────────── */
+const heroStats = [
+  { v: "20+",   l: "Years of Data" },
+  { v: "28",    l: "NSE Funds"     },
+  { v: "140K+", l: "Data Points"   },
+  { v: "8",     l: "Risk Metrics"  },
+]
 
 const features = [
   {
-    icon: <BarChart2 size={20} />, cat: CAT.blue,
+    iconBg: "var(--blue-lg)",
+    iconStroke: "var(--blue)",
+    iconPath: <><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="13" y="2" width="7" height="7" rx="1"/><rect x="2" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></>,
     title: "Portfolio Builder",
-    desc: "Select up to 10 factor funds, allocate weights, and compute exact historical performance — in real time.",
+    desc: "Select up to 10 funds, assign weights, and see your portfolio's exact historical performance — computed in real time.",
   },
   {
-    icon: <TrendingUp size={20} />, cat: CAT.green,
-    title: "Factor Strategies",
-    desc: "Access momentum, quality, low-vol, alpha and multi-factor strategies backed by NSE index data.",
+    iconBg: "var(--green-lg)",
+    iconStroke: "var(--green)",
+    iconPath: <><polyline points="21 6 12 15 7.5 10.5 1 17"/><polyline points="16 6 21 6 21 11"/></>,
+    title: "Factor Investing",
+    desc: "Access momentum, quality, low-volatility, alpha and multi-factor strategies backed by academic research and NSE data.",
   },
   {
-    icon: <Shield size={20} />, cat: CAT.amber,
+    iconBg: "var(--red-lg)",
+    iconStroke: "var(--red)",
+    iconPath: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
     title: "Risk Analytics",
-    desc: "Sharpe, Sortino, Calmar ratios. Max drawdown, volatility, rolling 3-year returns — all computed live.",
+    desc: "Understand max drawdown, volatility, Sharpe ratio, and rolling 3-year returns before you invest.",
   },
   {
-    icon: <Database size={20} />, cat: CAT.purple,
+    iconBg: "#FEF5E6",
+    iconStroke: "#B45309",
+    iconPath: <><ellipse cx="11" cy="5" rx="9" ry="3"/><path d="M20 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M2 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
     title: "Real NSE Data",
-    desc: "140K+ daily NAV data points from actual NSE index series. 2005 to present. No simulations.",
+    desc: "Every metric is computed from actual NSE index NAV data — not simulations, not estimates. 2005 to present.",
   },
 ]
 
 const steps = [
-  { n: "01", title: "Select Funds",       desc: "Pick from 28 NSE factor and broad-market indices." },
-  { n: "02", title: "Set Weights",        desc: "Adjust sliders — they auto-sum to 100%." },
-  { n: "03", title: "Run Backtest",       desc: "Instant CAGR, Sharpe, Drawdown, and more." },
-  { n: "04", title: "Analyse & Decide",   desc: "Interactive charts vs Nifty 50 benchmark." },
+  { n: "01", t: "Select Funds",        d: "Pick 1–10 funds from 28 NSE factor and broad-market indices." },
+  { n: "02", t: "Set Weights",         d: "Adjust sliders to allocate percentages. Auto-sum to 100%." },
+  { n: "03", t: "Generate Portfolio",  d: "Hit Run Backtest. Get CAGR, Sharpe, Drawdown instantly." },
+  { n: "04", t: "Analyse & Decide",    d: "Study interactive charts. Compare against the Nifty 50 benchmark." },
 ]
 
 const whyPoints = [
@@ -49,63 +58,82 @@ const whyPoints = [
 ]
 
 const whyCards = [
-  { title: "Beat the Market",     desc: "Momentum & Quality indices have outperformed Nifty 50 by 4–8% annually over 20 years." },
-  { title: "Passive. Low Cost.",  desc: "Rule-based — no active manager, no high fees, no stock-picking guesswork." },
-  { title: "Diversify by Factor", desc: "Combining factors reduces drawdown and smooths returns. The data proves it." },
-  { title: "Data-Backed",         desc: "Every allocation backed by 20 years of real NSE price history." },
+  { t: "Beat the Market",      d: "Factor indices like Momentum and Quality have historically outperformed Nifty 50 by 4–8% annually." },
+  { t: "Passive. Low Cost.",   d: "Rule-based index funds — no active manager, no high fees, no stock picking." },
+  { t: "Diversification Works",d: "Combining factors reduces drawdown and smooths returns. Data proves it." },
+  { t: "Data-Backed Decisions",d: "Every allocation backed by 20 years of real NSE price data." },
 ]
 
 const divStats = [
-  { v: "−38%",  l: "Avg drawdown, single factor" },
-  { v: "−24%",  l: "Avg drawdown, blended portfolio" },
-  { v: "+3.2%", l: "Annual alpha vs Nifty 50" },
+  { v: "−38%",  l: "Avg drawdown, single factor"       },
+  { v: "−24%",  l: "Avg drawdown, blended portfolio"   },
+  { v: "+3.2%", l: "Annual outperformance vs Nifty 50" },
 ]
 
-const heroStats = [
-  { v: "20+",   l: "Years Data" },
-  { v: "28",    l: "NSE Funds" },
-  { v: "140K+", l: "Data Points" },
-  { v: "8",     l: "Risk Metrics" },
+const footerLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/rankings",  label: "Rankings"  },
+  { href: "/academy",   label: "Academy"   },
 ]
 
+/* ─────────────────────────────────────────
+   LOGO MARK
+───────────────────────────────────────── */
+function LogoMark() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+      <div style={{
+        width: 30, height: 30, borderRadius: 8,
+        background: "var(--navy)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <svg viewBox="0 0 15 15" fill="none" style={{ width: 15, height: 15 }}>
+          <rect x="1" y="9"  width="3" height="5"  rx=".8" fill="rgba(255,255,255,.45)"/>
+          <rect x="6" y="5"  width="3" height="9"  rx=".8" fill="rgba(255,255,255,.72)"/>
+          <rect x="11" y="1" width="3" height="13" rx=".8" fill="white"/>
+        </svg>
+      </div>
+      <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.3px" }}>
+        <span style={{ color: "var(--blue)" }}>factor</span>
+        <span style={{ color: "var(--navy)" }}>lens</span>
+      </span>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────
+   PAGE
+───────────────────────────────────────── */
 export default function LandingPage() {
   return (
-    <div className="min-h-screen landing-hero-offset">
+    <div style={{ background: "var(--off)" }}>
 
-      {/* ══════════════════════════════════════════════════
-          HERO
-      ══════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════
+          HERO — navy background
+      ══════════════════════════════════════ */}
       <section style={{
-        background: "#080B14",
-        padding: "80px 20px 96px",
+        background: "var(--navy)",
+        padding: "72px 20px 80px",
         position: "relative",
         overflow: "hidden",
       }}>
-        {/* Mesh gradient */}
+        {/* Radial gradient glow */}
         <div style={{
           position: "absolute", inset: 0, pointerEvents: "none",
-          background: `
-            radial-gradient(ellipse 80% 60% at 50% -10%, rgba(79,128,255,.18) 0%, transparent 65%),
-            radial-gradient(ellipse 40% 35% at 80% 80%, rgba(16,185,129,.08) 0%, transparent 55%)
-          `,
+          background: "radial-gradient(ellipse 70% 60% at 50% -15%,rgba(26,86,219,.20) 0%,transparent 65%)",
         }} />
 
-        {/* Grid lines */}
         <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.03,
-          backgroundImage: "linear-gradient(rgba(148,163,184,1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,1) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }} />
-
-        <div style={{ maxWidth: 740, margin: "0 auto", position: "relative", zIndex: 1, textAlign: "center" }}>
-
-          {/* Status badge */}
+          maxWidth: 720, margin: "0 auto",
+          position: "relative", zIndex: 1, textAlign: "center",
+        }}>
+          {/* Status pill */}
           <div style={{
-            display: "inline-flex", alignItems: "center", gap: 7,
-            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
-            borderRadius: 100, padding: "5px 14px", marginBottom: 32,
-            fontSize: 11, fontWeight: 600, letterSpacing: "0.8px", textTransform: "uppercase" as const,
-            color: "rgba(148,163,184,0.65)", backdropFilter: "blur(10px)",
+            display: "inline-flex", alignItems: "center", gap: 8,
+            background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.12)",
+            borderRadius: 100, padding: "5px 14px", marginBottom: 28,
+            fontSize: 11.5, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase",
+            color: "rgba(255,255,255,.5)", backdropFilter: "blur(8px)",
           }}>
             <span className="hero-pulse-dot" />
             NSE Factor Investing · 2005–2026
@@ -113,214 +141,196 @@ export default function LandingPage() {
 
           {/* Headline */}
           <h1 style={{
-            fontFamily: "var(--font-serif), 'Instrument Serif', Georgia, serif",
-            fontSize: "clamp(38px, 6.5vw, 68px)",
-            fontWeight: 400,
-            lineHeight: 1.06,
-            letterSpacing: "-2px",
-            color: "#F1F5F9",
-            marginBottom: 20,
+            fontFamily: "var(--font-serif)",
+            fontSize: "clamp(36px,6vw,62px)",
+            fontWeight: 400, lineHeight: 1.08,
+            letterSpacing: "-1.5px", color: "var(--white)", marginBottom: 16,
           }}>
-            Build smarter<br />
-            portfolios.{" "}
-            <em style={{ fontStyle: "italic" }} className="gradient-text-blue">
-              Backed by data.
-            </em>
+            Build smarter portfolios.<br/>
+            Backed by{" "}
+            <em style={{
+              fontStyle: "italic",
+              background: "linear-gradient(120deg,#93c5fd 0%,#6ee7b7 100%)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
+            }}>data.</em>
           </h1>
 
           {/* Subhead */}
           <p style={{
-            fontSize: "clamp(15px, 2vw, 17.5px)",
-            color: "rgba(148,163,184,0.70)",
-            maxWidth: 440, margin: "0 auto 44px",
-            lineHeight: 1.68,
+            fontSize: "clamp(15px,2.2vw,17px)",
+            color: "rgba(255,255,255,.48)",
+            maxWidth: 400, margin: "0 auto 38px", lineHeight: 1.65,
           }}>
-            Institutional-grade factor portfolio analytics for serious investors.
-            20 years of real NSE backtest data, computed instantly.
+            Data-backed factor investing for serious investors. 20 years of real NSE backtest data, instantly.
           </p>
 
           {/* CTAs */}
           <div style={{
-            display: "flex", flexDirection: "column" as const,
-            alignItems: "center", gap: 12, marginBottom: 72,
+            display: "flex", flexDirection: "column", alignItems: "center",
+            gap: 11, marginBottom: 68,
           }} className="hero-actions-wrap">
-            <Link href="/dashboard" className="fl-btn-primary" style={{ minWidth: 200, padding: "15px 32px", fontSize: 15, borderRadius: 12 }}>
-              Build My Portfolio <ArrowRight size={16} />
+            <Link href="/dashboard" style={{
+              padding: "14px 30px", borderRadius: 12,
+              background: "var(--white)", color: "var(--navy)",
+              fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px",
+              display: "inline-flex", alignItems: "center", gap: 8,
+              textDecoration: "none", transition: "all .2s",
+              minWidth: 190, justifyContent: "center",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 28px rgba(0,0,0,.22)"; (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; (e.currentTarget as HTMLAnchorElement).style.transform = "none"; }}
+            >
+              Build My Portfolio
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </Link>
-            <Link href="/rankings" className="fl-btn-secondary" style={{ minWidth: 200, padding: "15px 26px", fontSize: 15, borderRadius: 12 }}>
-              View Fund Rankings <ChevronRight size={16} />
+            <Link href="/rankings" style={{
+              padding: "14px 22px", borderRadius: 12,
+              background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.14)",
+              color: "rgba(255,255,255,.72)", fontSize: 14.5, fontWeight: 600,
+              display: "inline-flex", alignItems: "center", gap: 8,
+              textDecoration: "none", transition: "all .2s",
+              backdropFilter: "blur(8px)", minWidth: 190, justifyContent: "center",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,.13)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,.07)"; }}
+            >
+              View Fund Rankings
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </Link>
           </div>
 
-          {/* Stats row */}
+          {/* Stats grid */}
           <div style={{
-            display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 20, overflow: "hidden",
-            maxWidth: 520, margin: "0 auto",
+            display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1,
+            background: "rgba(255,255,255,.07)",
+            border: "1px solid rgba(255,255,255,.08)",
+            borderRadius: 18, overflow: "hidden", maxWidth: 500, margin: "0 auto",
           }} className="hero-stats-grid">
             {heroStats.map(s => (
-              <div key={s.l} style={{
-                padding: "22px 12px", background: "rgba(255,255,255,0.02)", textAlign: "center" as const,
-              }}>
-                <div style={{
-                  fontFamily: "var(--font-serif), Georgia, serif",
-                  fontSize: 28, fontWeight: 400, color: "#F1F5F9",
-                  lineHeight: 1.1, letterSpacing: "-0.5px",
-                }}>{s.v}</div>
-                <div style={{ fontSize: 10.5, color: "rgba(148,163,184,0.45)", marginTop: 5, fontWeight: 500 }}>
-                  {s.l}
-                </div>
+              <div key={s.l} style={{ padding: "20px 10px", background: "rgba(255,255,255,.03)", textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--font-serif)", fontSize: 26, fontWeight: 400, color: "var(--white)", lineHeight: 1.1, letterSpacing: "-.4px" }}>{s.v}</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.35)", marginTop: 5, fontWeight: 500 }}>{s.l}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          FEATURES — bento grid
-      ══════════════════════════════════════════════════ */}
-      <section style={{ background: "var(--background)", padding: "80px 0" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <span className="fl-section-label">Platform</span>
-            <h2 style={{
-              fontFamily: "var(--font-serif), Georgia, serif",
-              fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 400,
-              letterSpacing: "-1px", lineHeight: 1.14, marginBottom: 14,
-            }}>
-              Institutional analytics.<br />For every investor.
-            </h2>
-            <p style={{ fontSize: 15.5, color: "var(--muted-foreground)", lineHeight: 1.65, maxWidth: 380, margin: "0 auto" }}>
-              No jargon. No complexity. Just real data.
-            </p>
+      {/* ══════════════════════════════════════
+          FEATURES
+      ══════════════════════════════════════ */}
+      <section style={{ background: "var(--off)", padding: "72px 0" }}>
+        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
+          <div style={{ textAlign: "center", marginBottom: 44 }}>
+            <span className="sec-lbl">Platform</span>
+            <h2 className="sec-h2">Institutional analytics.<br/>For every investor.</h2>
+            <p className="sec-sub" style={{ maxWidth: 400, margin: "0 auto" }}>No jargon. No complexity. Just data.</p>
           </div>
 
           <div className="feat-bento">
             {features.map(f => (
               <div key={f.title} className="fl-card-hover" style={{ padding: "28px 24px" }}>
                 <div style={{
-                  width: 42, height: 42, borderRadius: 12,
-                  background: f.cat.bg, border: `1px solid ${f.cat.border}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: 18, color: f.cat.text,
+                  width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                  background: f.iconBg, display: "flex", alignItems: "center",
+                  justifyContent: "center", marginBottom: 18,
                 }}>
-                  {f.icon}
+                  <svg viewBox="0 0 22 22" fill="none" stroke={f.iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
+                    {f.iconPath}
+                  </svg>
                 </div>
-                <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.2px", marginBottom: 8 }}>
-                  {f.title}
-                </div>
-                <div style={{ fontSize: 13.5, color: "var(--muted-foreground)", lineHeight: 1.65 }}>
-                  {f.desc}
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", marginBottom: 8, color: "var(--navy)" }}>{f.title}</div>
+                <div style={{ fontSize: 13.5, color: "var(--navy-50)", lineHeight: 1.62 }}>{f.desc}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          HOW IT WORKS — 4 steps
-      ══════════════════════════════════════════════════ */}
-      <section style={{ background: "var(--muted)", padding: "80px 0", borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
-          <div style={{ textAlign: "center", marginBottom: 52 }}>
-            <span className="fl-section-label">Process</span>
-            <h2 style={{
-              fontFamily: "var(--font-serif), Georgia, serif",
-              fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 400,
-              letterSpacing: "-1px", lineHeight: 1.14,
-            }}>
-              From idea to insight<br />in under 30 seconds.
-            </h2>
+      {/* ══════════════════════════════════════
+          HOW IT WORKS
+      ══════════════════════════════════════ */}
+      <section style={{ background: "var(--white)", padding: "72px 0" }}>
+        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
+          <div style={{ textAlign: "center", marginBottom: 44 }}>
+            <span className="sec-lbl">Process</span>
+            <h2 className="sec-h2">From idea to insight<br/>in under 30 seconds.</h2>
           </div>
 
           <div className="steps-grid-landing">
-            {steps.map((s, i) => (
-              <div key={s.n} style={{ position: "relative" }}>
-                {/* Connector line */}
-                {i < steps.length - 1 && (
-                  <div className="hidden md:block" style={{
-                    position: "absolute", top: 20, left: "calc(100% - 12px)",
-                    width: "24px", height: 1,
-                    background: "var(--border)",
-                    zIndex: 0,
-                  }} />
-                )}
+            {steps.map(s => (
+              <div key={s.n}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: 10,
-                  background: "var(--foreground)", color: "var(--background)",
-                  fontFamily: "var(--font-mono), monospace",
-                  fontSize: 11.5, fontWeight: 600,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  marginBottom: 16, position: "relative", zIndex: 1,
+                  width: 40, height: 40, borderRadius: 12,
+                  background: "var(--navy)", color: "var(--white)",
+                  fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500,
+                  display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14,
                 }}>
                   {s.n}
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.2px", marginBottom: 8 }}>
-                  {s.title}
-                </div>
-                <div style={{ fontSize: 13.5, color: "var(--muted-foreground)", lineHeight: 1.65 }}>
-                  {s.desc}
-                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", marginBottom: 7, color: "var(--navy)" }}>{s.t}</div>
+                <div style={{ fontSize: 13.5, color: "var(--navy-50)", lineHeight: 1.6 }}>{s.d}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
+      {/* ══════════════════════════════════════
           WHY FACTOR INVESTING
-      ══════════════════════════════════════════════════ */}
-      <section style={{ background: "var(--background)", padding: "80px 0" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
+      ══════════════════════════════════════ */}
+      <section style={{ background: "var(--off)", padding: "72px 0" }}>
+        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
           <div className="why-grid-landing">
-            {/* Left copy */}
+            {/* Left: copy */}
             <div>
-              <span className="fl-section-label">Why Factor Investing?</span>
-              <h2 style={{
-                fontFamily: "var(--font-serif), Georgia, serif",
-                fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 400,
-                letterSpacing: "-1px", lineHeight: 1.14, marginBottom: 14,
-              }}>
-                Rules-based.<br />Research-backed.<br />Proven 20 years.
-              </h2>
-              <p style={{ fontSize: 15, color: "var(--muted-foreground)", lineHeight: 1.72, marginBottom: 24 }}>
-                Factor investing selects stocks based on attributes linked to higher long-term returns —
-                implemented as NSE indices accessible as low-cost index funds.
+              <span className="sec-lbl">Why Factor Investing?</span>
+              <h2 className="sec-h2">Rules-based.<br/>Research-backed.<br/>Proven 20 years.</h2>
+              <p style={{ fontSize: 15, color: "var(--navy-50)", lineHeight: 1.7, marginBottom: 4 }}>
+                Factor investing selects stocks based on attributes associated with higher returns — implemented
+                as NSE indices accessible as low-cost index funds.
               </p>
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column" as const, gap: 11, margin: "0 0 32px" }}>
-                {whyPoints.map(item => (
-                  <li key={item} style={{ display: "flex", alignItems: "center", gap: 11, fontSize: 14 }}>
+
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 11, margin: "22px 0 30px", padding: 0 }}>
+                {whyPoints.map(p => (
+                  <li key={p} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--navy)" }}>
                     <span style={{
                       width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                      background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.25)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--green-lg)", display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
-                      <svg viewBox="0 0 11 11" fill="none" style={{ width: 10, height: 10 }}>
-                        <path d="M2 5.5l2 2 4-4" stroke="#10B981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      <svg viewBox="0 0 11 11" fill="none" style={{ width: 11, height: 11 }}>
+                        <path d="M2 5.5l2 2 4-4" stroke="#0A7C4E" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     </span>
-                    <span style={{ color: "var(--foreground)" }}>{item}</span>
+                    {p}
                   </li>
                 ))}
               </ul>
+
               <Link href="/academy" className="fl-btn-outline" style={{ display: "inline-flex" }}>
-                Learn in Academy <ChevronRight size={15} />
+                Learn in Academy
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </Link>
             </div>
 
-            {/* Right 2×2 cards */}
+            {/* Right: 2×2 cards */}
             <div className="why-cards-landing">
               {whyCards.map(w => (
-                <div key={w.title} className="fl-card" style={{ padding: "20px 18px" }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "#6B9FFF", marginBottom: 8, letterSpacing: "-0.1px" }}>
-                    {w.title}
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", lineHeight: 1.65 }}>
-                    {w.desc}
-                  </div>
+                <div key={w.t} style={{
+                  background: "var(--white)", border: "1px solid var(--navy-12)",
+                  borderRadius: "var(--r)", padding: "20px", transition: "all .18s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--navy-30)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--sh-xs)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--navy-12)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", marginBottom: 7 }}>{w.t}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--navy-50)", lineHeight: 1.6 }}>{w.d}</div>
                 </div>
               ))}
             </div>
@@ -328,122 +338,95 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
-          DIVERSIFICATION BANNER — dark card
-      ══════════════════════════════════════════════════ */}
-      <section style={{ background: "var(--muted)", padding: "60px 0", borderTop: "1px solid var(--border)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
+      {/* ══════════════════════════════════════
+          DIVERSIFICATION BANNER
+      ══════════════════════════════════════ */}
+      <section style={{ background: "var(--white)", padding: "48px 0" }}>
+        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
           <div style={{
-            background: "#080B14", borderRadius: 28, padding: "64px 56px",
-            textAlign: "center", position: "relative", overflow: "hidden",
+            background: "var(--navy)", borderRadius: "var(--r-xl)",
+            padding: "60px 52px", textAlign: "center",
+            position: "relative", overflow: "hidden",
           }} className="div-banner-landing">
-
-            {/* Glow effects */}
+            {/* Glow */}
             <div style={{
               position: "absolute", inset: 0, pointerEvents: "none",
-              background: `
-                radial-gradient(ellipse 60% 70% at 15% 50%, rgba(79,128,255,.12) 0%, transparent 60%),
-                radial-gradient(ellipse 40% 50% at 85% 30%, rgba(16,185,129,.08) 0%, transparent 55%)
-              `,
+              background: "radial-gradient(ellipse 60% 70% at 20% 50%,rgba(26,86,219,.14) 0%,transparent 65%)",
             }} />
-
             <div style={{ position: "relative", zIndex: 1 }}>
-              <span style={{
-                fontSize: 10.5, fontWeight: 700, letterSpacing: "1.8px", textTransform: "uppercase" as const,
-                color: "rgba(148,163,184,0.35)", marginBottom: 12, display: "block",
-              }}>
-                Why Diversification?
-              </span>
+              <span className="sec-lbl" style={{ color: "rgba(255,255,255,.32)" }}>Why Diversification?</span>
               <h2 style={{
-                fontFamily: "var(--font-serif), Georgia, serif",
-                fontSize: "clamp(26px, 3.5vw, 42px)", fontWeight: 400,
-                letterSpacing: "-1px", lineHeight: 1.14,
-                color: "#F1F5F9", maxWidth: 440, margin: "0 auto 14px",
+                fontFamily: "var(--font-serif)",
+                fontSize: "clamp(26px,3.5vw,40px)", fontWeight: 400,
+                letterSpacing: "-.8px", lineHeight: 1.15,
+                color: "var(--white)", maxWidth: 420, margin: "0 auto 13px",
               }}>
                 No single factor wins every year.
               </h2>
               <p style={{
-                fontSize: 15.5, color: "rgba(148,163,184,0.55)",
-                maxWidth: 480, margin: "0 auto", lineHeight: 1.7,
+                fontSize: 16, color: "rgba(255,255,255,.45)",
+                maxWidth: 460, margin: "0 auto", lineHeight: 1.7,
               }}>
                 Blend factors to reduce worst-case drawdown while preserving long-term return potential.
               </p>
 
-              {/* Stats */}
               <div className="div-stats-landing">
                 {divStats.map(s => (
                   <div key={s.l} style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 16, padding: "24px 18px",
+                    background: "rgba(255,255,255,.06)",
+                    border: "1px solid rgba(255,255,255,.09)",
+                    borderRadius: "var(--r)", padding: "22px 16px",
                   }}>
-                    <div style={{
-                      fontFamily: "var(--font-serif), Georgia, serif",
-                      fontSize: 34, fontWeight: 400,
-                      color: "#34D399", letterSpacing: "-0.6px", lineHeight: 1.1,
-                    }}>{s.v}</div>
-                    <div style={{ fontSize: 12, color: "rgba(148,163,184,0.45)", marginTop: 7 }}>{s.l}</div>
+                    <div style={{ fontFamily: "var(--font-serif)", fontSize: 32, fontWeight: 400, color: "#22D3A0", letterSpacing: "-.5px", lineHeight: 1.1 }}>{s.v}</div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.40)", marginTop: 6 }}>{s.l}</div>
                   </div>
                 ))}
               </div>
 
-              <Link href="/dashboard" className="fl-btn-primary" style={{ minWidth: 200, padding: "15px 32px", fontSize: 15, borderRadius: 12 }}>
-                Build My Portfolio <ArrowRight size={16} />
+              <Link href="/dashboard" style={{
+                padding: "15px 30px", borderRadius: 12,
+                background: "var(--white)", color: "var(--navy)",
+                fontSize: 15, fontWeight: 700, letterSpacing: "-.2px",
+                display: "inline-flex", alignItems: "center", gap: 8,
+                textDecoration: "none", position: "relative", zIndex: 1,
+                transition: "all .2s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 28px rgba(0,0,0,.22)"; (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; (e.currentTarget as HTMLAnchorElement).style.transform = "none"; }}
+              >
+                Build My Portfolio
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ══════════════════════════════════════════════════
+      {/* ══════════════════════════════════════
           FOOTER
-      ══════════════════════════════════════════════════ */}
-      <footer style={{
-        borderTop: "1px solid var(--border)",
-        background: "var(--background)",
-        padding: "28px 0",
-      }}>
+      ══════════════════════════════════════ */}
+      <footer style={{ borderTop: "1px solid var(--navy-12)", background: "var(--white)", padding: "26px 0" }}>
         <div style={{
-          maxWidth: 1200, margin: "0 auto", padding: "0 32px",
+          maxWidth: 1160, margin: "0 auto", padding: "0 32px",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 20, flexWrap: "wrap" as const,
+          gap: 16, flexWrap: "wrap",
         }} className="footer-inner-landing">
-          {/* Logo */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 7,
-              background: "rgba(79,128,255,0.12)",
-              border: "1px solid rgba(79,128,255,0.20)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <svg viewBox="0 0 28 28" fill="none" style={{ width: 16, height: 16 }}>
-                <rect x="3" y="17" width="5" height="8" rx="1.5" fill="rgba(79,128,255,0.5)"/>
-                <rect x="11" y="11" width="5" height="14" rx="1.5" fill="rgba(79,128,255,0.75)"/>
-                <rect x="19" y="4" width="5" height="21" rx="1.5" fill="#6B9FFF"/>
-              </svg>
-            </div>
-            <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-0.3px" }}>
-              <span style={{ color: "#6B9FFF" }}>factor</span>
-              <span style={{ color: "var(--muted-foreground)" }}>lens</span>
-            </span>
-          </div>
+          <LogoMark />
 
-          <p style={{ fontSize: 11.5, color: "var(--muted-foreground)", textAlign: "center" as const, flex: 1 }}>
+          <p style={{ fontSize: 11.5, color: "var(--navy-30)", textAlign: "center", flex: 1 }}>
             Data sourced from NSE India. For educational purposes only. Not financial advice.
           </p>
 
           <div style={{ display: "flex", gap: 20, flexShrink: 0 }}>
-            {[
-              { href: "/dashboard", label: "Portfolio" },
-              { href: "/rankings",  label: "Rankings" },
-              { href: "/academy",   label: "Academy" },
-            ].map(l => (
+            {footerLinks.map(l => (
               <Link key={l.href} href={l.href} style={{
-                fontSize: 13, color: "var(--muted-foreground)", textDecoration: "none",
-                transition: "color 0.15s",
+                fontSize: 13, color: "var(--navy-50)", textDecoration: "none", transition: "color .15s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = "var(--foreground)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--muted-foreground)")}>
+              onMouseEnter={e => (e.currentTarget.style.color = "var(--navy)")}
+              onMouseLeave={e => (e.currentTarget.style.color = "var(--navy-50)")}
+              >
                 {l.label}
               </Link>
             ))}

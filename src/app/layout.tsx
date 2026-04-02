@@ -18,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <Navbar />
           {/* pt-[52px] on mobile for top bar; pb-[72px] for bottom nav */}
           <main className="pt-[52px] md:pt-0 pb-[72px] md:pb-0">{children}</main>
