@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FactorLens — Build real wealth. Backed by data, not noise.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   DESIGN TOKENS  (shared across both pages)
+═══════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #ffffff;
+  --bg2:         #f7f6f2;
+  --bg3:         #eeecea;
+  --surface:     #ffffff;
+
+  --text:        #1a1a1a;
+  --text-muted:  #555550;
+  --text-dim:    #888882;
+  --border:      rgba(0,0,0,0.08);
+  --border-mid:  rgba(0,0,0,0.13);
+
+  --accent:        #14b885;
+  --accent-dark:   #0fa070;
+  --accent-light:  #e8faf4;
+  --red:           #e03e3e;
+  --red-light:     #fdf0f0;
+  --amber:         #d97706;
+  --amber-light:   #fef3c7;
+  --blue:          #3b82f6;
+  --blue-light:    #eff6ff;
+
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body:    'Inter', -apple-system, sans-serif;
+
+  --radius-sm:  8px;
+  --radius-md:  14px;
+  --radius-lg:  20px;
+  --radius-xl:  28px;
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.10);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════════════════════
+   SHARED COMPONENTS
+═══════════════════════════════════════════════ */
+
+/* — Page switcher — */
+.page { display: none; }
+.page.active { display: block; }
+
+/* — Nav — */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 52px; height: 64px;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  transition: box-shadow 0.3s;
+}
+nav.scrolled { box-shadow: var(--shadow-md); }
+.nav-logo {
+  display: flex; align-items: center; gap: 9px;
+  text-decoration: none; color: var(--text);
+  font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.nav-logo-icon {
+  width: 30px; height: 30px; border-radius: var(--radius-sm);
+  background: var(--text);
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-logo-icon svg { width: 18px; height: 18px; }
+/* Hamburger */
+.hamburger-btn {
+  background: none; border: 1px solid var(--border-mid);
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4.5px; cursor: pointer; transition: all 0.2s; padding: 0;
+}
+.hamburger-btn:hover { border-color: var(--text); background: var(--bg2); }
+.hamburger-btn span {
+  display: block; width: 16px; height: 1.5px;
+  background: var(--text); border-radius: 2px;
+  transition: all 0.25s;
+}
+.hamburger-btn.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.hamburger-btn.open span:nth-child(2) { opacity: 0; }
+.hamburger-btn.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+/* Drawer */
+.nav-drawer {
+  position: fixed; top: 64px; right: 0; bottom: 0; width: 260px;
+  background: var(--bg); border-left: 1px solid var(--border-mid);
+  z-index: 199; padding: 24px 20px;
+  transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.06);
+}
+.nav-drawer.open { transform: translateX(0); }
+.nav-drawer ul { list-style: none; margin-bottom: 24px; }
+.nav-drawer ul li a {
+  display: block; padding: 11px 14px; border-radius: var(--radius-sm);
+  color: var(--text-muted); font-size: 0.9rem; font-weight: 500;
+  text-decoration: none; cursor: pointer; transition: all 0.15s;
+}
+.nav-drawer ul li a:hover { background: var(--bg2); color: var(--text); }
+.nav-drawer-overlay {
+  display: none; position: fixed; inset: 64px 0 0 0; z-index: 198;
+}
+.nav-drawer-overlay.open { display: block; }
+.nav-actions { display: flex; align-items: center; gap: 10px; }
+.btn-ghost {
+  background: none; border: 1px solid var(--border-mid);
+  color: var(--text-muted); font-family: var(--font-body);
+  font-size: 0.85rem; font-weight: 500; cursor: pointer;
+  padding: 8px 18px; border-radius: 100px; transition: all 0.2s;
+}
+.btn-ghost:hover { border-color: var(--text); color: var(--text); }
+.btn-primary {
+  background: var(--text); color: #fff; border: none; border-radius: 100px;
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; padding: 9px 22px;
+  text-decoration: none; display: inline-block;
+  transition: all 0.2s; letter-spacing: 0.01em;
+}
+.btn-primary:hover { background: #333; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-accent {
+  background: var(--accent); color: #fff; border: none; border-radius: 100px;
+  font-family: var(--font-body); font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; padding: 13px 30px;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+  transition: all 0.2s;
+}
+.btn-accent:hover { background: var(--accent-dark); transform: translateY(-1px); box-shadow: 0 8px 28px rgba(20,184,133,0.3); }
+.btn-outline {
+  background: transparent; color: var(--text);
+  border: 1.5px solid var(--border-mid); border-radius: 100px;
+  font-family: var(--font-body); font-size: 0.95rem; font-weight: 500;
+  cursor: pointer; padding: 12px 30px;
+  text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+  transition: all 0.2s;
+}
+.btn-outline:hover { border-color: var(--text); background: var(--bg2); }
+
+/* — Footer — */
+footer {
+  background: var(--bg); border-top: 1px solid var(--border);
+  padding: 56px 80px 40px;
+}
+.footer-top {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 40px; gap: 60px;
+}
+.footer-brand a {
+  font-size: 1rem; font-weight: 700; color: var(--text);
+  text-decoration: none; display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.footer-brand p { font-size: 0.82rem; color: var(--text-dim); max-width: 260px; line-height: 1.6; }
+.footer-links { display: flex; gap: 48px; }
+.footer-col h4 { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px; }
+.footer-col ul { list-style: none; }
+.footer-col ul li { margin-bottom: 9px; }
+.footer-col ul li a { color: var(--text-muted); font-size: 0.85rem; text-decoration: none; transition: color 0.2s; }
+.footer-col ul li a:hover { color: var(--text); }
+.footer-bottom {
+  border-top: 1px solid var(--border); padding-top: 28px;
+  display: flex; justify-content: space-between; align-items: center; gap: 24px;
+}
+.footer-legal { font-size: 0.75rem; color: var(--text-dim); max-width: 680px; line-height: 1.6; }
+.footer-copy { font-size: 0.75rem; color: var(--text-dim); white-space: nowrap; }
+
+/* ═══════════════════════════════════════════════
+   PAGE 1 — LANDING
+═══════════════════════════════════════════════ */
+.hero {
+  padding: 140px 80px 80px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: var(--bg);
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--accent-light); border: 1px solid rgba(20,184,133,0.22);
+  color: var(--accent-dark); font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 100px; margin-bottom: 32px;
+}
+.hero-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 5.5vw, 4.8rem);
+  line-height: 1.06; letter-spacing: -0.03em; font-weight: 400;
+  max-width: 700px; margin-bottom: 22px;
+}
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero-sub {
+  font-size: 1.05rem; color: var(--text-muted);
+  max-width: 460px; line-height: 1.75; margin-bottom: 40px;
+}
+.hero-ctas { display: flex; gap: 12px; margin-bottom: 72px; flex-wrap: wrap; justify-content: center; }
+
+.stats-strip {
+  display: inline-grid; grid-template-columns: repeat(4,1fr);
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.stat-cell { padding: 22px 36px; text-align: center; border-right: 1px solid var(--border); }
+.stat-cell:last-child { border-right: none; }
+.stat-num {
+  font-family: var(--font-display); font-size: 1.9rem; letter-spacing: -0.03em;
+  color: var(--text); line-height: 1; margin-bottom: 4px;
+}
+.stat-lbl { font-size: 0.68rem; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; }
+
+/* Platform section */
+.plat-bg { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.section { padding: 96px 80px; }
+.section-c { text-align: center; }
+.eyebrow { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px; }
+.sec-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 3.8vw, 3.4rem);
+  line-height: 1.08; letter-spacing: -0.03em; font-weight: 400;
+  color: var(--text); margin-bottom: 14px;
+}
+.sec-sub { font-size: 0.98rem; color: var(--text-muted); line-height: 1.75; max-width: 500px; margin: 0 auto 56px; }
+
+.cards-grid {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 2px;
+  background: var(--border-mid); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.plat-card { background: var(--surface); padding: 34px 26px; transition: background 0.2s; }
+.plat-card:hover { background: var(--bg3); }
+.pc-ico {
+  width: 46px; height: 46px; border-radius: var(--radius-md);
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; margin-bottom: 18px;
+}
+.pc-t { font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 9px; }
+.pc-d { font-size: 0.845rem; color: var(--text-muted); line-height: 1.65; }
+
+/* Steps */
+.steps-grid {
+  display: grid; grid-template-columns: repeat(4,1fr); gap: 40px; margin-top: 60px;
+}
+.step { position: relative; }
+.step-line {
+  position: absolute; top: 17px; left: 36px; right: -20px; height: 1px;
+  background: var(--border-mid);
+}
+.steps-grid .step:last-child .step-line { display: none; }
+.step-n {
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
+  background: var(--text); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+  margin-bottom: 18px; position: relative; z-index: 1;
+}
+.step-t { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 7px; }
+.step-d { font-size: 0.83rem; color: var(--text-muted); line-height: 1.65; }
+
+/* Why factor */
+.why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; }
+.why-h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 3.5vw, 3.2rem);
+  line-height: 1.1; letter-spacing: -0.03em; font-weight: 400;
+  color: var(--text); margin-bottom: 18px;
+}
+.why-p { font-size: 0.93rem; color: var(--text-muted); line-height: 1.8; margin-bottom: 26px; }
+.check-list { list-style: none; margin-bottom: 34px; }
+.check-list li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.88rem; color: var(--text-muted); margin-bottom: 10px;
+}
+.check-list li::before {
+  content: ''; width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-light);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M4 9l3.5 3.5L14 5.5' stroke='%2314b885' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: center; background-size: 13px;
+}
+.btn-text-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.88rem; font-weight: 600; color: var(--text);
+  text-decoration: none; border-bottom: 1.5px solid var(--text);
+  padding-bottom: 2px; transition: opacity 0.2s;
+}
+.btn-text-link:hover { opacity: 0.55; }
+.why-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.why-card {
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); padding: 26px 22px; transition: all 0.22s;
+}
+.why-card:hover { background: var(--bg3); transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.wc-tag { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.wc-t { font-size: 0.9rem; font-weight: 600; color: var(--text); margin-bottom: 7px; line-height: 1.3; }
+.wc-d { font-size: 0.8rem; color: var(--text-muted); line-height: 1.65; }
+
+/* Diversification */
+.div-bg { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.div-stats {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 2px;
+  background: var(--border-mid); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); overflow: hidden; margin-top: 48px;
+}
+.dv-cell { background: var(--surface); padding: 40px 36px; text-align: center; }
+.dv-val {
+  font-family: var(--font-display); font-size: 3rem;
+  letter-spacing: -0.04em; line-height: 1; margin-bottom: 8px;
+}
+.dv-val.neg { color: var(--red); }
+.dv-val.neu { color: var(--text); }
+.dv-val.pos { color: var(--accent); }
+.dv-lbl { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+/* CTA section */
+.cta-section { padding: 96px 80px; text-align: center; }
+.cta-section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 4vw, 3.8rem);
+  letter-spacing: -0.03em; font-weight: 400; margin-bottom: 14px;
+}
+.cta-section p { color: var(--text-muted); font-size: 1rem; max-width: 420px; margin: 0 auto 36px; }
+
+/* FAQ */
+.faq-wrap { max-width: 780px; margin: 0 auto; padding: 72px 80px; }
+.faq-wrap h2 { font-family: var(--font-display); font-size: 2.5rem; letter-spacing: -0.03em; font-weight: 400; margin-bottom: 6px; }
+.faq-sub { color: var(--text-muted); font-size: 0.93rem; margin-bottom: 44px; }
+.faq-item { border-bottom: 1px solid var(--border-mid); }
+.faq-q {
+  width: 100%; background: none; border: none; text-align: left;
+  padding: 20px 0; font-family: var(--font-body);
+  font-size: 0.93rem; font-weight: 500; color: var(--text); cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center; gap: 20px;
+  transition: color 0.15s;
+}
+.faq-q:hover { color: var(--accent); }
+.faq-ico {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 1.5px solid var(--border-mid); background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 0.95rem; color: var(--text-muted);
+  transition: all 0.28s;
+}
+.faq-item.open .faq-ico { background: var(--text); border-color: var(--text); color: #fff; transform: rotate(45deg); }
+.faq-ans {
+  overflow: hidden; max-height: 0;
+  transition: max-height 0.35s ease, padding 0.28s;
+  color: var(--text-muted); font-size: 0.88rem; line-height: 1.8;
+}
+.faq-item.open .faq-ans { max-height: 280px; padding-bottom: 20px; }
+
+/* Animations */
+@keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+.anim-1 { animation: fadeUp 0.6s ease 0.05s both; }
+.anim-2 { animation: fadeUp 0.6s ease 0.12s both; }
+.anim-3 { animation: fadeUp 0.6s ease 0.19s both; }
+.anim-4 { animation: fadeUp 0.6s ease 0.26s both; }
+.anim-5 { animation: fadeUp 0.6s ease 0.33s both; }
+
+/* ═══════════════════════════════════════════════
+   PAGE 2 — RANKINGS
+═══════════════════════════════════════════════ */
+.rankings-page { background: var(--bg); min-height: 100vh; }
+
+/* Rankings page header banner */
+.rk-banner {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 80px 52px 0;
+}
+.rk-banner-inner { max-width: 1360px; margin: 0 auto; }
+.rk-breadcrumb {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.75rem; color: var(--text-dim); margin-bottom: 24px;
+}
+.rk-breadcrumb span { color: var(--text-muted); cursor: pointer; }
+.rk-breadcrumb span:hover { color: var(--text); }
+.rk-breadcrumb .sep { color: var(--border-mid); }
+.rk-breadcrumb .cur { color: var(--text); font-weight: 500; }
+
+.rk-banner-h {
+  font-family: var(--font-display);
+  font-size: 2.2rem; letter-spacing: -0.03em; font-weight: 400;
+  margin-bottom: 6px;
+}
+.rk-banner-sub { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 28px; }
+
+/* Hero metric cards */
+.rk-hero-cards {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 14px;
+  margin-bottom: 0;
+}
+.rk-hero-card {
+  background: var(--surface); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 22px 24px 18px;
+  border-bottom: none;
+  position: relative;
+  transition: border-color 0.2s;
+}
+.rk-hero-card.selected {
+  border-color: var(--accent);
+  border-bottom-color: var(--bg);
+  background: var(--bg);
+  z-index: 2;
+}
+.rk-hero-card.selected::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0; height: 3px;
+  background: var(--accent);
+}
+.rhc-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 100px; margin-bottom: 10px;
+}
+.rhc-badge.momentum { background: var(--accent-light); color: var(--accent-dark); }
+.rhc-badge.quality   { background: var(--blue-light);   color: var(--blue); }
+.rhc-badge.blend     { background: var(--amber-light);  color: var(--amber); }
+.rhc-badge-dot { width: 5px; height: 5px; border-radius: 50%; }
+.rhc-badge.momentum .rhc-badge-dot { background: var(--accent); }
+.rhc-badge.quality   .rhc-badge-dot { background: var(--blue); }
+.rhc-badge.blend     .rhc-badge-dot { background: var(--amber); }
+
+.rhc-name { font-size: 0.78rem; font-weight: 600; color: var(--text); margin-bottom: 14px; line-height: 1.3; max-width: 180px; }
+.rhc-metrics { display: flex; gap: 20px; }
+.rhc-m { }
+.rhc-m-val { font-family: var(--font-display); font-size: 1.4rem; letter-spacing: -0.02em; line-height: 1; }
+.rhc-m-val.pos { color: var(--accent); }
+.rhc-m-val.neg { color: var(--red); }
+.rhc-m-lbl { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+
+/* Rankings toolbar */
+.rk-toolbar {
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  padding: 0 52px;
+  position: sticky; top: 64px; z-index: 100;
+}
+.rk-toolbar-inner {
+  max-width: 1360px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 56px; gap: 20px;
+}
+.rk-filter-tabs { display: flex; align-items: center; gap: 4px; }
+.rk-tab {
+  padding: 6px 14px; border-radius: 100px;
+  font-size: 0.8rem; font-weight: 500;
+  border: 1px solid transparent; color: var(--text-muted);
+  background: none; cursor: pointer; font-family: var(--font-body);
+  transition: all 0.15s; white-space: nowrap;
+}
+.rk-tab:hover { background: var(--bg2); color: var(--text); }
+.rk-tab.active {
+  background: var(--text); color: #fff;
+  border-color: var(--text);
+}
+.rk-toolbar-right { display: flex; align-items: center; gap: 10px; }
+.rk-search {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  border-radius: 100px; padding: 7px 14px;
+  transition: border-color 0.2s;
+}
+.rk-search:focus-within { border-color: var(--accent); }
+.rk-search svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.4; }
+.rk-search input {
+  border: none; background: none; font-family: var(--font-body);
+  font-size: 0.82rem; color: var(--text); outline: none; width: 180px;
+}
+.rk-search input::placeholder { color: var(--text-dim); }
+.rk-sort-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 100px;
+  border: 1px solid var(--border-mid); background: var(--bg2);
+  font-family: var(--font-body); font-size: 0.8rem; font-weight: 500;
+  color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+}
+.rk-sort-btn:hover { border-color: var(--text); color: var(--text); }
+.rk-sort-btn svg { width: 12px; height: 12px; }
+
+/* Fund detail panel (top selected fund) */
+.rk-body { max-width: 1360px; margin: 0 auto; padding: 28px 52px 60px; }
+
+.fund-detail-panel {
+  background: var(--surface); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); margin-bottom: 28px;
+  overflow: hidden;
+}
+.fdp-header {
+  padding: 22px 28px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.fdp-header-left { display: flex; align-items: center; gap: 14px; }
+.fdp-rank-badge {
+  width: 36px; height: 36px; border-radius: var(--radius-sm);
+  background: var(--text); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.fdp-name { font-size: 0.95rem; font-weight: 600; color: var(--text); line-height: 1.3; }
+.fdp-category {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); margin-top: 3px;
+}
+.fdp-metrics {
+  display: flex; gap: 32px; align-items: center;
+}
+.fdp-m { text-align: right; }
+.fdp-m-val { font-family: var(--font-display); font-size: 1.1rem; letter-spacing: -0.02em; }
+.fdp-m-val.pos { color: var(--accent); }
+.fdp-m-val.neg { color: var(--red); }
+.fdp-m-lbl { font-size: 0.64rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+.fdp-score {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg2); border: 1px solid var(--border-mid);
+  border-radius: 100px; padding: 6px 14px;
+  font-size: 0.78rem; font-weight: 600; color: var(--text);
+  white-space: nowrap;
+}
+.fdp-score-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* Charts inside panel */
+.fdp-charts { display: grid; grid-template-columns: 1fr 1fr; }
+.fdp-chart-box {
+  padding: 20px 28px; border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.fdp-chart-box:last-child { border-right: none; }
+.fdp-chart-title { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 14px; }
+.fdp-chart-area { height: 120px; width: 100%; }
+.fdp-chart-area svg { width: 100%; height: 100%; }
+
+/* Rolling returns grid */
+.fdp-rolling { padding: 20px 28px; }
+.fdp-rolling-title { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 14px; }
+.rolling-grid {
+  display: grid; grid-template-columns: repeat(6,1fr); gap: 8px;
+}
+.rolling-cell {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 10px; text-align: center;
+}
+.rolling-cell.positive { background: var(--accent-light); border-color: rgba(20,184,133,0.2); }
+.rolling-cell.negative { background: var(--red-light); border-color: rgba(224,62,62,0.15); }
+.rc-year { font-size: 0.65rem; color: var(--text-dim); font-weight: 600; margin-bottom: 5px; }
+.rc-cagr { font-size: 0.82rem; font-weight: 700; }
+.rc-cagr.pos { color: var(--accent-dark); }
+.rc-cagr.neg { color: var(--red); }
+.rc-dd { font-size: 0.65rem; color: var(--text-dim); margin-top: 3px; }
+
+/* Rankings table */
+.rk-table-wrap {
+  background: var(--surface); border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+.rk-table-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 110px 90px 80px 80px 80px 90px 100px;
+  padding: 12px 20px; background: var(--bg2);
+  border-bottom: 1px solid var(--border-mid);
+}
+.rk-th {
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-dim);
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  transition: color 0.15s; user-select: none;
+}
+.rk-th:hover { color: var(--text); }
+.rk-th.sorted { color: var(--text); }
+.rk-th svg { width: 10px; height: 10px; opacity: 0.5; }
+.rk-th.sorted svg { opacity: 1; }
+
+.rk-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 110px 90px 80px 80px 80px 90px 100px;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--border);
+  align-items: center; cursor: pointer;
+  transition: background 0.15s;
+}
+.rk-row:last-child { border-bottom: none; }
+.rk-row:hover { background: var(--bg2); }
+.rk-row.highlighted { background: var(--accent-light); }
+.rk-row.highlighted:hover { background: #d5f5eb; }
+
+.rk-num {
+  font-size: 0.75rem; font-weight: 600; color: var(--text-dim);
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  background: var(--bg2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.rk-row.highlighted .rk-num { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.rk-fund-info { min-width: 0; }
+.rk-fund-name { font-size: 0.82rem; font-weight: 600; color: var(--text); line-height: 1.3; }
+.rk-fund-meta { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.rk-fund-type {
+  font-size: 0.62rem; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 1px 7px; border-radius: 100px;
+}
+.rk-fund-type.momentum { background: var(--accent-light); color: var(--accent-dark); }
+.rk-fund-type.quality   { background: var(--blue-light);   color: var(--blue); }
+.rk-fund-type.value     { background: var(--amber-light);  color: var(--amber); }
+.rk-fund-type.lowvol    { background: #f3f0ff;             color: #7c3aed; }
+.rk-fund-type.broad     { background: var(--bg2);          color: var(--text-muted); border: 1px solid var(--border-mid); }
+.rk-fund-amc { font-size: 0.68rem; color: var(--text-dim); }
+
+.rk-cell { font-size: 0.82rem; color: var(--text); font-weight: 500; }
+.rk-cell.pos { color: var(--accent-dark); font-weight: 600; }
+.rk-cell.neg { color: var(--red); font-weight: 600; }
+.rk-cell.muted { color: var(--text-muted); font-weight: 400; }
+
+.score-bar-wrap { display: flex; align-items: center; gap: 8px; }
+.score-bar-bg {
+  flex: 1; height: 5px; border-radius: 3px; background: var(--bg3); overflow: hidden;
+}
+.score-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.5s ease; }
+.score-val { font-size: 0.75rem; font-weight: 700; color: var(--text); min-width: 28px; text-align: right; }
+
+.add-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; font-weight: 600; color: var(--accent);
+  background: var(--accent-light); border: 1px solid rgba(20,184,133,0.2);
+  border-radius: 100px; padding: 4px 10px; cursor: pointer;
+  font-family: var(--font-body); transition: all 0.15s;
+}
+.add-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.add-btn.added { background: var(--text); color: #fff; border-color: var(--text); }
+
+/* Pagination */
+.rk-pagination {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 0 0; gap: 12px;
+}
+.pg-info { font-size: 0.8rem; color: var(--text-dim); }
+.pg-btns { display: flex; gap: 6px; }
+.pg-btn {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-mid); background: var(--bg2);
+  font-family: var(--font-body); font-size: 0.8rem; font-weight: 500;
+  color: var(--text-muted); cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.pg-btn:hover { border-color: var(--text); color: var(--text); background: var(--bg3); }
+.pg-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+.pg-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .rk-table-header,
+  .rk-row { grid-template-columns: 40px 1fr 90px 80px 80px 80px 100px; }
+  .rk-table-header .rk-th:nth-child(5),
+  .rk-row .rk-cell:nth-child(5) { display: none; }
+}
+@media (max-width: 900px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .hero { padding: 110px 20px 60px; }
+  .section { padding: 72px 20px; }
+  .cards-grid { grid-template-columns: 1fr 1fr; }
+  .steps-grid { grid-template-columns: 1fr 1fr; gap: 28px; }
+  .why-grid { grid-template-columns: 1fr; gap: 40px; }
+  .div-stats { grid-template-columns: 1fr; }
+  .cta-section { padding: 72px 20px; }
+  .faq-wrap { padding: 60px 20px; }
+  footer { padding: 48px 20px 32px; }
+  .footer-top { flex-direction: column; }
+  .footer-links { flex-wrap: wrap; gap: 32px; }
+  .footer-bottom { flex-direction: column; gap: 12px; }
+  .rk-banner { padding: 80px 20px 0; }
+  .rk-body { padding: 20px 20px 40px; }
+  .rk-toolbar { padding: 0 20px; }
+  .rk-hero-cards { grid-template-columns: 1fr; }
+  .fdp-charts { grid-template-columns: 1fr; }
+  .rolling-grid { grid-template-columns: repeat(3,1fr); }
+  .rk-table-header { display: none; }
+  .rk-row { grid-template-columns: 36px 1fr 80px 90px; gap: 8px; }
+}
+@media (max-width: 600px) {
+  .stats-strip { grid-template-columns: 1fr 1fr; }
+  .why-cards { grid-template-columns: 1fr; }
+  .stat-cell { padding: 18px 20px; }
+  .rk-hero-cards { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SHARED NAV
+══════════════════════════════════════ -->
+<nav id="main-nav">
+  <a class="nav-logo" onclick="showPage('landing')">
+    <div class="nav-logo-icon">
+      <svg viewBox="0 0 18 18" fill="none"><rect x="2" y="10" width="3" height="6" rx="1" fill="white"/><rect x="7.5" y="6" width="3" height="10" rx="1" fill="white"/><rect x="13" y="2" width="3" height="14" rx="1" fill="white"/></svg>
+    </div>
+    factorlens
+  </a>
+  <div class="nav-actions">
+    <a href="#" class="btn-primary">Build Portfolio</a>
+    <button class="hamburger-btn" id="hamburger-btn" onclick="toggleDrawer()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- Drawer overlay -->
+<div class="nav-drawer-overlay" id="nav-overlay" onclick="closeDrawer()"></div>
+
+<!-- Side drawer -->
+<div class="nav-drawer" id="nav-drawer">
+  <ul>
+    <li><a onclick="showPage('landing');closeDrawer()">Dashboard</a></li>
+    <li><a href="#" onclick="closeDrawer()">Regime</a></li>
+    <li><a href="#" onclick="closeDrawer()">Funds</a></li>
+    <li><a onclick="showPage('rankings');closeDrawer()">Rankings</a></li>
+    <li><a href="#" onclick="closeDrawer()">News</a></li>
+    <li><a href="#" onclick="closeDrawer()">AMC</a></li>
+    <li><a href="#" onclick="closeDrawer()">Academy</a></li>
+  </ul>
+  <button class="btn-ghost" style="width:100%;text-align:center">Log in</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 1 — LANDING
+══════════════════════════════════════ -->
+<div id="page-landing" class="page active">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge anim-1">
+      <span class="hero-dot"></span>
+      Quant-driven investing · Real NSE &amp; BSE data
+    </div>
+    <h1 class="anim-2">Build real wealth.<br>Backed by <em>data,</em> not noise.</h1>
+    <p class="hero-sub anim-3">Factor investing for serious long-term investors — disciplined, low-cost, and built on 20 years of real market data.</p>
+    <div class="hero-ctas anim-4">
+      <a href="#" class="btn-accent">Build My Portfolio →</a>
+      <a onclick="showPage('rankings')" class="btn-outline" style="cursor:pointer">View Fund Rankings ›</a>
+    </div>
+    <p class="anim-4" style="font-size:0.78rem;color:var(--text-dim);margin-bottom:28px;margin-top:-12px">No lock-ins. No custody. Full control.</p>
+    <div class="stats-strip anim-5">
+      <div class="stat-cell"><div class="stat-num">20+</div><div class="stat-lbl">Years of Data</div></div>
+      <div class="stat-cell"><div class="stat-num">2,500+</div><div class="stat-lbl">Funds Analysed</div></div>
+      <div class="stat-cell"><div class="stat-num">Quant</div><div class="stat-lbl">Driven Portfolios</div></div>
+      <div class="stat-cell"><div class="stat-num">NSE &amp; BSE</div><div class="stat-lbl">Real Market Data</div></div>
+    </div>
+  </div>
+
+  <!-- Platform -->
+  <div class="plat-bg">
+    <div class="section section-c">
+      <p class="eyebrow">The Problem</p>
+      <h2 class="sec-h2">Investing today<br>is broken.</h2>
+      <p class="sec-sub">Too many funds. Too much noise. Too little discipline. FactorLens fixes this.</p>
+      <div class="cards-grid">
+        <div class="plat-card">
+          <div class="pc-ico" style="background:var(--bg3)">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M11 7v5l3 2" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="pc-t">Too Many Funds</div>
+          <div class="pc-d">2,500+ schemes, no clear signal. Most investors never find what actually works.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico" style="background:var(--bg3)">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 16l4-4 3 3 4-5 3 2" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="4" width="18" height="14" rx="2" stroke="var(--text-muted)" stroke-width="1.5"/></svg>
+          </div>
+          <div class="pc-t">Messy Portfolios</div>
+          <div class="pc-d">20+ funds, no allocation, no strategy. Accumulation without architecture.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico" style="background:var(--bg3)">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3v4M11 15v4M4.22 4.22l2.83 2.83M14.95 14.95l2.83 2.83M3 11h4M15 11h4M4.22 17.78l2.83-2.83M14.95 7.05l2.83-2.83" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="pc-t">Emotional Decisions</div>
+          <div class="pc-d">Buying on news, selling on fear. Emotion consistently erodes long-term performance.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico" style="background:var(--accent-light)">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 12l4 4 8-8" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="pc-t">Meet FactorLens</div>
+          <div class="pc-d">A disciplined, data-driven partner for long-term wealth creation — built around process, not opinion.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Value Prop -->
+  <div style="border-top:1px solid var(--border)">
+    <div class="section section-c">
+      <p class="eyebrow">A smarter portfolio</p>
+      <h2 class="sec-h2">Built for your risk.<br>Designed for your future.</h2>
+      <p class="sec-sub">Diversified across factors, asset classes, and market cycles. Built using low-cost index funds and ETFs. Continuously monitored and rebalanced. All powered by quantitative models — not opinions.</p>
+    </div>
+  </div>
+
+  <!-- Platform -->
+  <div class="plat-bg">
+    <div class="section section-c">
+      <p class="eyebrow">Platform</p>
+      <h2 class="sec-h2">Institutional-grade investing.<br>Made simple.</h2>
+      <p class="sec-sub">The same tools professional fund managers use — now in your hands, without the jargon or complexity.</p>
+      <div class="cards-grid">
+        <div class="plat-card">
+          <div class="pc-ico"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="2" y="14" width="4" height="6" rx="1" stroke="var(--text-muted)" stroke-width="1.5"/><rect x="9" y="9" width="4" height="11" rx="1" stroke="var(--text-muted)" stroke-width="1.5"/><rect x="16" y="4" width="4" height="16" rx="1" stroke="var(--text-muted)" stroke-width="1.5"/></svg></div>
+          <div class="pc-t">Portfolio Builder</div>
+          <div class="pc-d">Create your portfolio in minutes — based on your goals and risk profile. Select funds, assign weights, see results instantly.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 17l5-6 4 3 5-7 3 3" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="pc-t">Factor Investing Engine</div>
+          <div class="pc-d">Access momentum, value, quality, and multi-factor strategies backed by decades of research and real market data.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3a8 8 0 100 16A8 8 0 0011 3z" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M11 7v4l3 2" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <div class="pc-t">Risk Analytics</div>
+          <div class="pc-d">See drawdowns, Sharpe ratios, and rolling returns before you invest — so there are no surprises later.</div>
+        </div>
+        <div class="plat-card">
+          <div class="pc-ico"><svg width="22" height="22" viewBox="0 0 22 22" fill="none"><ellipse cx="11" cy="11" rx="9" ry="5" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M2 11c0 2.76 4.03 5 9 5s9-2.24 9-5" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M2 7.5C2 10.26 6.03 12.5 11 12.5S20 10.26 20 7.5" stroke="var(--text-muted)" stroke-width="1.5"/></svg></div>
+          <div class="pc-t">Real Market Data</div>
+          <div class="pc-d">Built on actual NSE &amp; BSE data — not simulations or assumptions. 2005 to present, updated continuously.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Process -->
+  <div class="section section-c">
+    <p class="eyebrow">Process</p>
+    <h2 class="sec-h2">From confusion to clarity<br>in under 30 seconds.</h2>
+    <p class="sec-sub">No finance degree required. Four steps between you and a data-backed portfolio.</p>
+    <div class="steps-grid">
+      <div class="step"><div class="step-line"></div><div class="step-n">01</div><div class="step-t">Select Funds</div><div class="step-d">Choose from curated index funds and ETFs covering every major factor style.</div></div>
+      <div class="step"><div class="step-line"></div><div class="step-n">02</div><div class="step-t">Set Your Allocation</div><div class="step-d">Aligned to your risk profile and goals. They auto-sum to 100% — the maths is always clean.</div></div>
+      <div class="step"><div class="step-line"></div><div class="step-n">03</div><div class="step-t">Generate Portfolio</div><div class="step-d">Instant backtests, risk metrics, and expected behaviour — computed in real time.</div></div>
+      <div class="step"><div class="step-line"></div><div class="step-n">04</div><div class="step-t">Invest with Confidence</div><div class="step-d">Use your existing broker account. No custody, no lock-ins, full transparency.</div></div>
+    </div>
+  </div>
+
+  <!-- Why factor -->
+  <div style="border-top:1px solid var(--border)">
+    <div class="section">
+      <p class="eyebrow">Core differentiation</p>
+      <div class="why-grid">
+        <div class="why-left">
+          <h2 class="why-h2">Rules-based.<br>Research-backed.<br>Built to outperform.</h2>
+          <p class="why-p">FactorLens portfolios are designed to increase returns, reduce drawdowns, and improve consistency. Factor-based investing is proven to outperform over long periods — implemented systematically, at low cost.</p>
+          <ul class="check-list">
+            <li>Factor-based investing proven over long periods</li>
+            <li>Diversification across styles — no single factor wins every year</li>
+            <li>Data-backed decisions tested on years of market history</li>
+            <li>No active fund bias, no stock picking, no manager risk</li>
+          </ul>
+          <a href="#" class="btn-text-link">Learn in Academy →</a>
+        </div>
+        <div class="why-cards">
+          <div class="why-card"><div class="wc-tag">Increase returns</div><div class="wc-t">+6.2% Portfolio vs NIFTY at −1.5% in FY26</div><div class="wc-d">Factor indices like Momentum and Quality have a consistent long-term edge over broad-market benchmarks — verified on real market data.</div></div>
+          <div class="why-card"><div class="wc-tag">Reduce drawdowns</div><div class="wc-t">Blending factors cuts worst-case losses</div><div class="wc-d">No single factor wins every year. Combining them reduces drawdown while preserving upside — improving risk-adjusted returns.</div></div>
+          <div class="why-card"><div class="wc-tag">Improve consistency</div><div class="wc-t">Smoother return profiles over market cycles</div><div class="wc-d">Because wealth isn't built by chasing returns — it's built by staying invested intelligently through every cycle.</div></div>
+          <div class="why-card"><div class="wc-tag">Data-backed decisions</div><div class="wc-t">Every allocation tested on real NSE history</div><div class="wc-d">Every insight on FactorLens is backed by actual NSE NAV data from 2005 — not simulations, not assumptions.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diversification -->
+  <div class="div-bg">
+    <div class="section section-c">
+      <p class="eyebrow">Risk &amp; return philosophy</p>
+      <h2 class="sec-h2">Maximize return.<br>Minimize risk.</h2>
+      <p class="sec-sub">Our portfolio construction system is designed to reduce volatility and drawdowns, deliver smoother return profiles, and stay aligned with long-term compounding — because wealth is built by staying invested intelligently.</p>
+      <div class="div-stats">
+        <div class="dv-cell"><div class="dv-val neg">−38%</div><div class="dv-lbl">Avg drawdown, single factor</div></div>
+        <div class="dv-cell"><div class="dv-val neu">−24%</div><div class="dv-lbl">Avg drawdown, blended portfolio</div></div>
+        <div class="dv-cell"><div class="dv-val pos">+3.2%</div><div class="dv-lbl">Annual outperformance vs Nifty 50</div></div>
+      </div>
+
+      <!-- Safety & Control strip -->
+      <div style="margin-top:48px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--radius-lg);padding:36px 40px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:40px;flex-wrap:wrap">
+        <div>
+          <div class="eyebrow" style="margin-bottom:10px">Safety &amp; Control</div>
+          <div style="font-family:var(--font-display);font-size:1.5rem;letter-spacing:-0.02em;margin-bottom:8px">Your money stays yours.</div>
+          <p style="font-size:0.85rem;color:var(--text-muted);line-height:1.7;max-width:320px">Invest via your own broker. No custody, no lock-ins, full transparency at every step.</p>
+        </div>
+        <div>
+          <div style="font-size:0.65rem;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--text-dim);margin-bottom:16px">Supported Platforms</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px">
+            <!-- Groww -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#00D09C"/><path d="M7 12.5C7 10 9 8 11.5 8H14a3 3 0 010 6h-1.5" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M10 14.5l2.5 2.5-2.5 2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Groww</span>
+            </div>
+            <!-- Zerodha -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#387ED1"/><path d="M6 17l5-10 5 10H6z" fill="white"/></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Zerodha</span>
+            </div>
+            <!-- Upstox -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#6C63FF"/><path d="M7 16V9l5 7 5-7v7" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Upstox</span>
+            </div>
+            <!-- ICICI Direct -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#F15B25"/><text x="5" y="16" font-size="9" font-weight="700" fill="white" font-family="sans-serif">ICICI</text></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">ICICI Direct</span>
+            </div>
+            <!-- Angel One -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#E60000"/><path d="M12 5l2.5 5H18l-4 3 1.5 5L12 15l-3.5 3 1.5-5-4-3h3.5L12 5z" fill="white"/></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Angel One</span>
+            </div>
+            <!-- Paytm Money -->
+            <div style="background:var(--bg2);border:1px solid var(--border-mid);border-radius:var(--radius-md);padding:10px 14px;display:flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#00B9F1"/><rect x="6" y="9" width="5" height="6" rx="1" fill="white"/><rect x="13" y="9" width="5" height="6" rx="1" fill="white"/></svg>
+              <span style="font-size:0.78rem;font-weight:600;color:var(--text)">Paytm Money</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <p class="eyebrow" style="margin-bottom:14px">Disciplined investing, done right</p>
+    <h2 style="font-size:clamp(2rem,3.5vw,3rem);margin-bottom:12px">Blend factors.<br>Stay invested.</h2>
+    <p style="max-width:360px">No single strategy wins every year. That's why diversification matters — build a portfolio designed to last.</p>
+    <a href="#" class="btn-accent" style="font-size:0.95rem;padding:12px 30px">Build My Portfolio →</a>
+  </div>
+
+  <!-- FAQ -->
+  <div style="background:var(--bg2);border-top:1px solid var(--border)">
+    <div class="faq-wrap">
+      <h2>Common questions,<br>straight answers.</h2>
+      <p class="faq-sub">If you value discipline over speculation, data over opinions, and process over emotion — read on.</p>
+      <div class="faq-list">
+        <div class="faq-item"><button class="faq-q">What is FactorLens? <span class="faq-ico">+</span></button><div class="faq-ans">FactorLens is a data-driven wealth platform that helps you invest in ready-made, diversified portfolios of mutual funds and ETFs, built using quantitative models. No guesswork — just disciplined, research-backed investing.</div></div>
+        <div class="faq-item"><button class="faq-q">How much do I need to start? <span class="faq-ico">+</span></button><div class="faq-ans">You can start with just ₹5,000. There is no upper limit. FactorLens is designed for long-term wealth creation at any starting point.</div></div>
+        <div class="faq-item"><button class="faq-q">Is my money safe? <span class="faq-ico">+</span></button><div class="faq-ans">Yes. Your investments remain in your own brokerage account. We never hold your funds — not even for a moment. FactorLens is a research and analytics platform, not a custodian.</div></div>
+        <div class="faq-item"><button class="faq-q">Are returns guaranteed? <span class="faq-ico">+</span></button><div class="faq-ans">No. Markets carry risk, and no strategy guarantees future returns. Our goal is to maximize returns while controlling risk, using disciplined, data-backed strategies tested on real NSE data. Please consult a SEBI-registered advisor before investing.</div></div>
+        <div class="faq-item"><button class="faq-q">Can I stop anytime? <span class="faq-ico">+</span></button><div class="faq-ans">Yes. There are no lock-ins. You can pause or withdraw anytime through your broker. FactorLens imposes no restrictions on your own money.</div></div>
+        <div class="faq-item"><button class="faq-q">Who is FactorLens built for? <span class="faq-ico">+</span></button><div class="faq-ans">Serious long-term investors who value discipline over speculation, data over opinions, and process over emotion. If that's you, FactorLens is built for you.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#"><div class="nav-logo-icon" style="width:26px;height:26px"><svg viewBox="0 0 18 18" fill="none"><rect x="2" y="10" width="3" height="6" rx="1" fill="white"/><rect x="7.5" y="6" width="3" height="10" rx="1" fill="white"/><rect x="13" y="2" width="3" height="14" rx="1" fill="white"/></svg></div>factorlens</a>
+        <p>Investing doesn't need to be complicated.<br>It just needs to be done right.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col"><h4>Platform</h4><ul><li><a href="#">Dashboard</a></li><li><a href="#">Portfolio Builder</a></li><li><a href="#">Fund Rankings</a></li><li><a href="#">Regime Tracker</a></li></ul></div>
+        <div class="footer-col"><h4>Learn</h4><ul><li><a href="#">Academy</a></li><li><a href="#">Factor Primer</a></li><li><a href="#">Methodology</a></li><li><a href="#">News</a></li></ul></div>
+        <div class="footer-col"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="footer-legal">Data sourced from NSE India. All content is for educational and informational purposes only and does not constitute financial advice. Past performance does not guarantee future results. Please consult a SEBI-registered investment advisor before making investment decisions.</p>
+      <p class="footer-copy">© 2026 FactorLens</p>
+    </div>
+  </footer>
+
+</div><!-- /page-landing -->
+
+
+<!-- ══════════════════════════════════════
+     PAGE 2 — RANKINGS
+══════════════════════════════════════ -->
+<div id="page-rankings" class="page rankings-page">
+
+  <!-- Banner / page header -->
+  <div class="rk-banner">
+    <div class="rk-banner-inner">
+      <div class="rk-breadcrumb">
+        <span onclick="showPage('landing')">Home</span>
+        <span class="sep">›</span>
+        <span class="cur">Fund Rankings</span>
+      </div>
+      <h1 class="rk-banner-h">NSE Fund Rankings</h1>
+      <p class="rk-banner-sub">28 index funds ranked by composite factor score — 20 years of real NAV data, updated daily.</p>
+
+      <!-- Top 3 hero fund cards -->
+      <div class="rk-hero-cards">
+        <div class="rk-hero-card selected">
+          <div class="rhc-badge momentum"><span class="rhc-badge-dot"></span>Momentum</div>
+          <div class="rhc-name">Nifty 200 Momentum 30 Index Fund — Direct Plan</div>
+          <div class="rhc-metrics">
+            <div class="rhc-m"><div class="rhc-m-val pos">24.3%</div><div class="rhc-m-lbl">CAGR (10Y)</div></div>
+            <div class="rhc-m"><div class="rhc-m-val pos">1.42</div><div class="rhc-m-lbl">Sharpe</div></div>
+            <div class="rhc-m"><div class="rhc-m-val neg">−34%</div><div class="rhc-m-lbl">Max DD</div></div>
+          </div>
+        </div>
+        <div class="rk-hero-card">
+          <div class="rhc-badge quality"><span class="rhc-badge-dot"></span>Quality</div>
+          <div class="rhc-name">Nifty 200 Quality 30 Index Fund — Direct Plan · Multi-Factor</div>
+          <div class="rhc-metrics">
+            <div class="rhc-m"><div class="rhc-m-val pos">19.8%</div><div class="rhc-m-lbl">CAGR (10Y)</div></div>
+            <div class="rhc-m"><div class="rhc-m-val pos">1.31</div><div class="rhc-m-lbl">Sharpe</div></div>
+            <div class="rhc-m"><div class="rhc-m-val neg">−28%</div><div class="rhc-m-lbl">Max DD</div></div>
+          </div>
+        </div>
+        <div class="rk-hero-card">
+          <div class="rhc-badge blend"><span class="rhc-badge-dot"></span>Multi-Factor</div>
+          <div class="rhc-name">Nifty Alpha Low Volatility 30 Index Fund — Direct Plan</div>
+          <div class="rhc-metrics">
+            <div class="rhc-m"><div class="rhc-m-val pos">21.5%</div><div class="rhc-m-lbl">CAGR (10Y)</div></div>
+            <div class="rhc-m"><div class="rhc-m-val pos">1.38</div><div class="rhc-m-lbl">Sharpe</div></div>
+            <div class="rhc-m"><div class="rhc-m-val neg">−30%</div><div class="rhc-m-lbl">Max DD</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="rk-toolbar">
+    <div class="rk-toolbar-inner">
+      <div class="rk-filter-tabs">
+        <button class="rk-tab active" onclick="filterTable('all',this)">All Funds</button>
+        <button class="rk-tab" onclick="filterTable('momentum',this)">Momentum</button>
+        <button class="rk-tab" onclick="filterTable('quality',this)">Quality</button>
+        <button class="rk-tab" onclick="filterTable('lowvol',this)">Low Volatility</button>
+        <button class="rk-tab" onclick="filterTable('value',this)">Value</button>
+        <button class="rk-tab" onclick="filterTable('broad',this)">Broad Market</button>
+      </div>
+      <div class="rk-toolbar-right">
+        <div class="rk-search">
+          <svg viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="Search fund name…" id="rk-search-input" oninput="filterSearch(this.value)">
+        </div>
+        <button class="rk-sort-btn" onclick="cycleSort()">
+          <svg viewBox="0 0 12 12" fill="none"><path d="M1 3h10M3 6h6M5 9h2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          Sort: <span id="sort-label">Score</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="rk-body">
+
+    <!-- Selected fund detail panel -->
+    <div class="fund-detail-panel" id="fund-detail-panel">
+      <div class="fdp-header">
+        <div class="fdp-header-left">
+          <div class="fdp-rank-badge">#1</div>
+          <div>
+            <div class="fdp-name">Nifty 200 Momentum 30 Index Fund</div>
+            <div class="fdp-category">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span>
+              Momentum · Mirae Asset AMC
+            </div>
+          </div>
+        </div>
+        <div class="fdp-metrics">
+          <div class="fdp-m"><div class="fdp-m-val pos">24.3%</div><div class="fdp-m-lbl">CAGR 10Y</div></div>
+          <div class="fdp-m"><div class="fdp-m-val pos">18.9%</div><div class="fdp-m-lbl">CAGR 5Y</div></div>
+          <div class="fdp-m"><div class="fdp-m-val pos">1.42</div><div class="fdp-m-lbl">Sharpe</div></div>
+          <div class="fdp-m"><div class="fdp-m-val neg">−34.1%</div><div class="fdp-m-lbl">Max DD</div></div>
+          <div class="fdp-m"><div class="fdp-m-val pos">14.2%</div><div class="fdp-m-lbl">Volatility</div></div>
+          <div class="fdp-score"><div class="fdp-score-dot"></div>Score 91 / 100</div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="fdp-charts">
+        <div class="fdp-chart-box">
+          <div class="fdp-chart-title">Cumulative NAV · vs Nifty 50</div>
+          <div class="fdp-chart-area">
+            <svg viewBox="0 0 500 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#14b885" stop-opacity="0.18"/>
+                  <stop offset="100%" stop-color="#14b885" stop-opacity="0"/>
+                </linearGradient>
+                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.1"/>
+                  <stop offset="100%" stop-color="#3b82f6" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- Nifty 50 -->
+              <path fill="url(#g2)" d="M0 110 Q50 105 100 95 Q150 88 200 80 Q250 72 300 65 Q350 58 400 48 Q450 40 500 30 L500 120 L0 120Z"/>
+              <path fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3" d="M0 110 Q50 105 100 95 Q150 88 200 80 Q250 72 300 65 Q350 58 400 48 Q450 40 500 30"/>
+              <!-- Fund -->
+              <path fill="url(#g1)" d="M0 112 Q50 108 100 100 Q150 90 200 75 Q250 60 300 48 Q350 34 400 22 Q450 10 500 4 L500 120 L0 120Z"/>
+              <path fill="none" stroke="#14b885" stroke-width="2" d="M0 112 Q50 108 100 100 Q150 90 200 75 Q250 60 300 48 Q350 34 400 22 Q450 10 500 4"/>
+              <circle cx="500" cy="4" r="4" fill="#14b885"/>
+              <!-- Legend -->
+              <line x1="20" y1="14" x2="44" y2="14" stroke="#14b885" stroke-width="2"/>
+              <text x="48" y="18" font-size="9" fill="#555550" font-family="Inter">Momentum 30</text>
+              <line x1="130" y1="14" x2="154" y2="14" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <text x="158" y="18" font-size="9" fill="#555550" font-family="Inter">Nifty 50</text>
+            </svg>
+          </div>
+        </div>
+        <div class="fdp-chart-box">
+          <div class="fdp-chart-title">Drawdown Profile</div>
+          <div class="fdp-chart-area">
+            <svg viewBox="0 0 500 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="g3" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#e03e3e" stop-opacity="0"/>
+                  <stop offset="100%" stop-color="#e03e3e" stop-opacity="0.15"/>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="10" x2="500" y2="10" stroke="var(--border)" stroke-width="1"/>
+              <path fill="url(#g3)" d="M0 10 Q30 10 50 14 Q80 20 100 40 Q120 55 140 48 Q160 40 180 18 Q200 10 230 10 Q260 16 290 50 Q310 72 330 80 Q350 72 370 48 Q400 25 430 14 Q460 10 500 10 L500 120 L0 120Z"/>
+              <path fill="none" stroke="#e03e3e" stroke-width="1.5" d="M0 10 Q30 10 50 14 Q80 20 100 40 Q120 55 140 48 Q160 40 180 18 Q200 10 230 10 Q260 16 290 50 Q310 72 330 80 Q350 72 370 48 Q400 25 430 14 Q460 10 500 10"/>
+              <line x1="290" y1="10" x2="290" y2="80" stroke="#e03e3e" stroke-width="1" stroke-dasharray="3 2" opacity="0.5"/>
+              <text x="292" y="50" font-size="9" fill="#e03e3e" font-family="Inter">−34.1%</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rolling returns -->
+      <div class="fdp-rolling">
+        <div class="fdp-rolling-title">Rolling 3-Year CAGR by Entry Year · vs Nifty 50</div>
+        <div class="rolling-grid">
+          <div class="rolling-cell positive"><div class="rc-year">FY19</div><div class="rc-cagr pos">+22.4%</div><div class="rc-dd">DD −18%</div></div>
+          <div class="rolling-cell positive"><div class="rc-year">FY20</div><div class="rc-cagr pos">+14.7%</div><div class="rc-dd">DD −34%</div></div>
+          <div class="rolling-cell negative"><div class="rc-year">FY21</div><div class="rc-cagr neg">−3.2%</div><div class="rc-dd">DD −40%</div></div>
+          <div class="rolling-cell positive"><div class="rc-year">FY22</div><div class="rc-cagr pos">+31.6%</div><div class="rc-dd">DD −14%</div></div>
+          <div class="rolling-cell positive"><div class="rc-year">FY23</div><div class="rc-cagr pos">+18.1%</div><div class="rc-dd">DD −22%</div></div>
+          <div class="rolling-cell positive"><div class="rc-year">FY24</div><div class="rc-cagr pos">+28.3%</div><div class="rc-dd">DD −11%</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rankings Table -->
+    <div class="rk-table-wrap">
+      <div class="rk-table-header">
+        <div class="rk-th">#</div>
+        <div class="rk-th sorted" onclick="sortBy('name')">Fund <svg viewBox="0 0 10 10"><path d="M5 2v6M2 5l3-3 3 3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></div>
+        <div class="rk-th" onclick="sortBy('amc')">AMC</div>
+        <div class="rk-th" onclick="sortBy('cagr10')">CAGR 10Y <svg viewBox="0 0 10 10"><path d="M5 2v6M2 5l3-3 3 3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></div>
+        <div class="rk-th" onclick="sortBy('cagr5')">CAGR 5Y</div>
+        <div class="rk-th" onclick="sortBy('sharpe')">Sharpe</div>
+        <div class="rk-th" onclick="sortBy('dd')">Max DD</div>
+        <div class="rk-th sorted" onclick="sortBy('score')">Score <svg viewBox="0 0 10 10"><path d="M5 8V2M2 5l3 3 3-3" stroke="currentColor" stroke-width="1.2" fill="none"/></svg></div>
+        <div class="rk-th">Action</div>
+      </div>
+      <div id="rk-table-body"></div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="rk-pagination">
+      <div class="pg-info" id="pg-info">Showing 1–20 of 28 funds</div>
+      <div class="pg-btns">
+        <button class="pg-btn" id="pg-prev" onclick="changePage(-1)" disabled>‹</button>
+        <button class="pg-btn active" onclick="goPage(1)">1</button>
+        <button class="pg-btn" onclick="goPage(2)">2</button>
+        <button class="pg-btn" id="pg-next" onclick="changePage(1)">›</button>
+      </div>
+    </div>
+
+  </div><!-- /rk-body -->
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a onclick="showPage('landing')" style="cursor:pointer"><div class="nav-logo-icon" style="width:26px;height:26px"><svg viewBox="0 0 18 18" fill="none"><rect x="2" y="10" width="3" height="6" rx="1" fill="white"/><rect x="7.5" y="6" width="3" height="10" rx="1" fill="white"/><rect x="13" y="2" width="3" height="14" rx="1" fill="white"/></svg></div>factorlens</a>
+        <p>Data sourced from NSE India. For educational purposes only. Not financial advice.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col"><h4>Platform</h4><ul><li><a href="#">Dashboard</a></li><li><a href="#">Portfolio Builder</a></li><li><a href="#">Fund Rankings</a></li><li><a href="#">Regime Tracker</a></li></ul></div>
+        <div class="footer-col"><h4>Learn</h4><ul><li><a href="#">Academy</a></li><li><a href="#">Factor Primer</a></li><li><a href="#">Methodology</a></li></ul></div>
+        <div class="footer-col"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li></ul></div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="footer-legal">Data sourced from NSE India. All content is for educational and informational purposes only and does not constitute financial advice. Past performance does not guarantee future results. Please consult a SEBI-registered investment advisor before making investment decisions.</p>
+      <p class="footer-copy">© 2026 FactorLens</p>
+    </div>
+  </footer>
+
+</div><!-- /page-rankings -->
+
+
+<script>
+/* ── HAMBURGER MENU ── */
+function toggleDrawer() {
+  const btn = document.getElementById('hamburger-btn');
+  const drawer = document.getElementById('nav-drawer');
+  const overlay = document.getElementById('nav-overlay');
+  btn.classList.toggle('open');
+  drawer.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+function closeDrawer() {
+  document.getElementById('hamburger-btn').classList.remove('open');
+  document.getElementById('nav-drawer').classList.remove('open');
+  document.getElementById('nav-overlay').classList.remove('open');
+}
+
+/* ── PAGE SWITCHING ── */
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  closeDrawer();
+}
+
+/* ── NAV SCROLL ── */
+const mainNav = document.getElementById('main-nav');
+window.addEventListener('scroll', () => mainNav.classList.toggle('scrolled', window.scrollY > 10));
+
+/* ── FAQ ACCORDION ── */
+document.querySelectorAll('.faq-q').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  });
+});
+
+/* ── FUND DATA ── */
+const funds = [
+  { name:'Nifty 200 Momentum 30 Index Fund',          amc:'Mirae Asset', type:'momentum', cagr10:24.3, cagr5:18.9, sharpe:1.42, dd:-34.1, score:91 },
+  { name:'Nifty Alpha Low Volatility 30 Index Fund',   amc:'UTI AMC',     type:'lowvol',   cagr10:21.5, cagr5:17.2, sharpe:1.38, dd:-30.0, score:88 },
+  { name:'Nifty 200 Quality 30 Index Fund',            amc:'DSP AMC',     type:'quality',  cagr10:19.8, cagr5:16.4, sharpe:1.31, dd:-28.0, score:85 },
+  { name:'Nifty500 Momentum 50 Index Fund',            amc:'Nippon India', type:'momentum', cagr10:22.1, cagr5:17.8, sharpe:1.35, dd:-36.5, score:84 },
+  { name:'Nifty Midcap 150 Momentum 50 Index Fund',   amc:'Motilal Oswal',type:'momentum', cagr10:23.8, cagr5:19.4, sharpe:1.29, dd:-38.2, score:82 },
+  { name:'Nifty Alpha 50 Index Fund',                  amc:'ICICI Pru',   type:'quality',  cagr10:20.3, cagr5:16.8, sharpe:1.26, dd:-32.0, score:80 },
+  { name:'Nifty100 Low Volatility 30 Index Fund',      amc:'ICICI Pru',   type:'lowvol',   cagr10:16.2, cagr5:13.8, sharpe:1.44, dd:-22.5, score:79 },
+  { name:'Nifty Quality Low Volatility 30 Index Fund', amc:'Axis AMC',    type:'blend',    cagr10:17.8, cagr5:14.6, sharpe:1.40, dd:-24.0, score:78 },
+  { name:'Nifty500 Quality 50 Index Fund',             amc:'Kotak Mahindra',type:'quality',cagr10:18.4, cagr5:15.1, sharpe:1.22, dd:-27.5, score:76 },
+  { name:'Nifty50 Value 20 Index Fund',                amc:'SBI AMC',     type:'value',    cagr10:15.6, cagr5:13.2, sharpe:1.18, dd:-29.0, score:74 },
+  { name:'Nifty500 Multicap Momentum Quality 50',      amc:'Nippon India', type:'blend',   cagr10:19.2, cagr5:16.0, sharpe:1.28, dd:-31.0, score:73 },
+  { name:'Nifty Midsmall India Leadership 50',         amc:'HDFC AMC',    type:'broad',    cagr10:18.9, cagr5:15.7, sharpe:1.15, dd:-35.0, score:71 },
+  { name:'Nifty Low Volatility 50 Index Fund',         amc:'UTI AMC',     type:'lowvol',   cagr10:14.8, cagr5:12.5, sharpe:1.36, dd:-20.0, score:70 },
+  { name:'Nifty100 Equal Weight Index Fund',           amc:'Nippon India', type:'broad',   cagr10:15.3, cagr5:12.9, sharpe:1.12, dd:-33.0, score:68 },
+  { name:'Nifty Next 50 Index Fund',                   amc:'UTI AMC',     type:'broad',    cagr10:16.7, cagr5:13.5, sharpe:1.10, dd:-37.0, score:67 },
+  { name:'Nifty Midcap 150 Index Fund',                amc:'Motilal Oswal',type:'broad',   cagr10:17.4, cagr5:14.8, sharpe:1.08, dd:-40.0, score:65 },
+  { name:'Nifty Smallcap 250 Index Fund',              amc:'ICICI Pru',   type:'broad',    cagr10:18.2, cagr5:15.3, sharpe:1.04, dd:-45.0, score:63 },
+  { name:'Nifty500 Value 50 Index Fund',               amc:'Bandhan AMC', type:'value',    cagr10:14.1, cagr5:11.8, sharpe:1.09, dd:-31.5, score:62 },
+  { name:'Nifty Microcap 250 Index Fund',              amc:'Aditya Birla', type:'broad',   cagr10:19.5, cagr5:16.2, sharpe:0.98, dd:-50.0, score:60 },
+  { name:'Nifty 200 Alpha 30 Index Fund',              amc:'Edelweiss',   type:'quality',  cagr10:21.0, cagr5:17.0, sharpe:1.20, dd:-34.5, score:58 },
+  { name:'Nifty50 Index Fund',                         amc:'SBI AMC',     type:'broad',    cagr10:13.5, cagr5:11.8, sharpe:1.05, dd:-28.0, score:55 },
+  { name:'Nifty100 Index Fund',                        amc:'Axis AMC',    type:'broad',    cagr10:13.8, cagr5:12.0, sharpe:1.06, dd:-28.5, score:53 },
+  { name:'Nifty500 Index Fund',                        amc:'Motilal Oswal',type:'broad',   cagr10:14.2, cagr5:12.4, sharpe:1.07, dd:-30.0, score:51 },
+  { name:'Nifty Total Market Index Fund',              amc:'Mirae Asset', type:'broad',    cagr10:13.9, cagr5:12.1, sharpe:1.05, dd:-31.0, score:50 },
+  { name:'Nifty200 Momentum 30 Fund of Fund',          amc:'Zerodha AMC', type:'momentum', cagr10:23.1, cagr5:18.2, sharpe:1.30, dd:-35.0, score:48 },
+  { name:'Nifty India Defence Index Fund',             amc:'Mirae Asset', type:'broad',    cagr10:null, cagr5:31.2, sharpe:1.15, dd:-28.0, score:46 },
+  { name:'Nifty Top 10 Equal Weight Fund',             amc:'Aditya Birla', type:'broad',   cagr10:12.8, cagr5:10.5, sharpe:0.98, dd:-27.0, score:43 },
+  { name:'Nifty India Consumption Index Fund',         amc:'Nippon India', type:'broad',   cagr10:13.0, cagr5:11.2, sharpe:0.95, dd:-30.5, score:40 },
+];
+
+const typeLabels = { momentum:'Momentum', quality:'Quality', lowvol:'Low Vol', value:'Value', broad:'Broad', blend:'Multi-Factor' };
+const PAGE_SIZE = 20;
+let currentFilter = 'all';
+let currentSearch = '';
+let currentSort = 'score';
+let sortDir = -1; // -1 = desc
+let currentPage = 1;
+let portfolio = new Set();
+const sortCycle = ['score','cagr10','cagr5','sharpe','dd'];
+let sortIdx = 0;
+
+function getFiltered() {
+  return funds.filter(f => {
+    const matchFilter = currentFilter === 'all' || f.type === currentFilter || (currentFilter === 'blend' && f.type === 'blend');
+    const matchSearch = !currentSearch || f.name.toLowerCase().includes(currentSearch.toLowerCase()) || f.amc.toLowerCase().includes(currentSearch.toLowerCase());
+    return matchFilter && matchSearch;
+  }).sort((a,b) => {
+    const av = a[currentSort] ?? -999;
+    const bv = b[currentSort] ?? -999;
+    return (bv - av) * sortDir * -1;
+  });
+}
+
+function fmt(v, suffix='%') { return v === null ? '—' : (v > 0 ? '+' : '') + v.toFixed(1) + suffix; }
+function fmtNoSign(v, suffix='') { return v === null ? '—' : v.toFixed(2) + suffix; }
+
+function renderTable() {
+  const data = getFiltered();
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = data.slice(start, start + PAGE_SIZE);
+  const total = data.length;
+  document.getElementById('pg-info').textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE, total)} of ${total} funds`;
+
+  const body = document.getElementById('rk-table-body');
+  body.innerHTML = slice.map((f, i) => {
+    const rank = start + i + 1;
+    const inPort = portfolio.has(f.name);
+    const c10class = f.cagr10 > 0 ? 'pos' : 'neg';
+    const c5class  = f.cagr5  > 0 ? 'pos' : 'neg';
+    const ddclass  = 'neg';
+    const scorePct = (f.score / 100 * 100).toFixed(0);
+    const highlight = rank === 1 ? 'highlighted' : '';
+    return `
+    <div class="rk-row ${highlight}" onclick="selectFund(${funds.indexOf(f)})">
+      <div class="rk-num">${rank}</div>
+      <div class="rk-fund-info">
+        <div class="rk-fund-name">${f.name}</div>
+        <div class="rk-fund-meta">
+          <span class="rk-fund-type ${f.type}">${typeLabels[f.type]}</span>
+          <span class="rk-fund-amc">${f.amc}</span>
+        </div>
+      </div>
+      <div class="rk-cell muted">${f.amc}</div>
+      <div class="rk-cell ${c10class}">${f.cagr10 !== null ? f.cagr10.toFixed(1)+'%' : '—'}</div>
+      <div class="rk-cell ${c5class}">${f.cagr5.toFixed(1)}%</div>
+      <div class="rk-cell pos">${f.sharpe.toFixed(2)}</div>
+      <div class="rk-cell ${ddclass}">${f.dd.toFixed(1)}%</div>
+      <div class="rk-cell">
+        <div class="score-bar-wrap">
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:${scorePct}%"></div></div>
+          <div class="score-val">${f.score}</div>
+        </div>
+      </div>
+      <div><button class="add-btn ${inPort?'added':''}" onclick="togglePort(event,'${f.name.replace(/'/g,"\\'")}')">
+        ${inPort ? '✓ Added' : '+ Add'}
+      </button></div>
+    </div>`;
+  }).join('');
+
+  // Pagination buttons
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  document.getElementById('pg-prev').disabled = currentPage <= 1;
+  document.getElementById('pg-next').disabled = currentPage >= totalPages;
+}
+
+function filterTable(type, btn) {
+  currentFilter = type;
+  currentPage = 1;
+  document.querySelectorAll('.rk-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+function filterSearch(val) {
+  currentSearch = val;
+  currentPage = 1;
+  renderTable();
+}
+function cycleSort() {
+  sortIdx = (sortIdx + 1) % sortCycle.length;
+  currentSort = sortCycle[sortIdx];
+  const labels = { score:'Score', cagr10:'CAGR 10Y', cagr5:'CAGR 5Y', sharpe:'Sharpe', dd:'Max DD' };
+  document.getElementById('sort-label').textContent = labels[currentSort];
+  renderTable();
+}
+function changePage(dir) {
+  currentPage += dir;
+  renderTable();
+  document.querySelector('.rk-toolbar').scrollIntoView({ behavior: 'smooth' });
+}
+function goPage(p) {
+  currentPage = p;
+  renderTable();
+}
+function togglePort(e, name) {
+  e.stopPropagation();
+  if (portfolio.has(name)) portfolio.delete(name);
+  else portfolio.add(name);
+  renderTable();
+}
+function selectFund(idx) {
+  // Update the detail panel header (simplified)
+  const f = funds[idx];
+  const panel = document.getElementById('fund-detail-panel');
+  panel.querySelector('.fdp-name').textContent = f.name;
+  panel.querySelector('.fdp-category').innerHTML = `<span style="width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block"></span> ${typeLabels[f.type]} · ${f.amc}`;
+  const vals = panel.querySelectorAll('.fdp-m-val');
+  vals[0].textContent = f.cagr10 !== null ? f.cagr10.toFixed(1)+'%' : '—';
+  vals[1].textContent = f.cagr5.toFixed(1)+'%';
+  vals[2].textContent = f.sharpe.toFixed(2);
+  vals[3].textContent = f.dd.toFixed(1)+'%';
+  panel.querySelector('.fdp-rank-badge').textContent = '#'+(funds.findIndex(x=>x===f)+1);
+  panel.querySelector('.fdp-score').innerHTML = `<div class="fdp-score-dot"></div>Score ${f.score} / 100`;
+  panel.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// Initial render
+renderTable();
+</script>
+</body>
+</html>
