@@ -5,60 +5,68 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 const navLinks = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Portfolio" },
+  { href: "/rankings",  label: "Rankings" },
+  { href: "/funds",     label: "Funds" },
+  { href: "/news",      label: "News" },
   { href: "/maverst",   label: "Regime" },
-  { href: "/funds", label: "Funds" },
-  { href: "/rankings", label: "Rankings" },
-  { href: "/news", label: "News" },
-  { href: "/amc", label: "AMC" },
-  { href: "/academy", label: "Academy" },
+  { href: "/amc",       label: "AMC" },
+  { href: "/academy",   label: "Academy" },
 ]
 
-/* ── Inline SVG icons matching v4 exactly ── */
+const LogoMark = ({ size = 28 }: { size?: number }) => (
+  <svg viewBox="0 0 28 28" fill="none" style={{ width: size, height: size }}>
+    <rect x="3" y="17" width="5" height="8" rx="1.5" fill="rgba(79,128,255,0.4)"/>
+    <rect x="11" y="11" width="5" height="14" rx="1.5" fill="rgba(79,128,255,0.7)"/>
+    <rect x="19" y="4" width="5" height="21" rx="1.5" fill="#6B9FFF"/>
+  </svg>
+)
+
 const IconHome = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+    <polyline points="9 22 9 12 15 12 15 22"/>
   </svg>
 )
-const IconDash = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
-    <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
-  </svg>
-)
-const IconFunds = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-  </svg>
-)
-const IconRank = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-  </svg>
-)
-const IconLearn = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-  </svg>
-)
-const IconAmc = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" /><line x1="12" y1="12" x2="12" y2="16" /><line x1="10" y1="14" x2="14" y2="14" />
+const IconPortfolio = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
   </svg>
 )
 const IconNews = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-    <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2zm0 0a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2" />
-    <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z" />
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a2 2 0 01-2 2z"/>
+    <path d="M4 22a2 2 0 01-2-2v-9c0-1.1.9-2 2-2h2"/>
+    <path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/>
+  </svg>
+)
+const IconRankings = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+  </svg>
+)
+const IconFunds = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+    strokeLinecap="round" strokeLinejoin="round" style={{ width: 20, height: 20 }}>
+    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+    <path d="M2 17l10 5 10-5"/>
+    <path d="M2 12l10 5 10-5"/>
   </svg>
 )
 
-const bottomNavLinks = [
-  { href: "/", label: "Home", Icon: IconHome, exact: true },
-  { href: "/dashboard", label: "Portfolio", Icon: IconDash },
-  { href: "/news", label: "News", Icon: IconNews },
-  { href: "/rankings", label: "Rankings", Icon: IconRank },
-  { href: "/funds", label: "Funds", Icon: IconFunds },
+const bottomLinks = [
+  { href: "/",          label: "Home",      Icon: IconHome,      exact: true },
+  { href: "/dashboard", label: "Portfolio", Icon: IconPortfolio },
+  { href: "/news",      label: "News",      Icon: IconNews },
+  { href: "/rankings",  label: "Rankings",  Icon: IconRankings },
+  { href: "/funds",     label: "Funds",     Icon: IconFunds },
 ]
 
 export function Navbar() {
@@ -66,137 +74,131 @@ export function Navbar() {
 
   return (
     <>
-      {/* ── Desktop Top Nav — hidden on mobile ── */}
-      <nav style={{
+      {/* ── Desktop Nav ────────────────────────────────────── */}
+      <nav className="hidden md:flex nav-glass" style={{
         position: "sticky", top: 0, zIndex: 300,
-        height: 60,
-        background: "rgba(245,245,243,.93)",
-        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        borderBottom: "1px solid rgba(12,14,19,.12)",
+        height: 58,
         alignItems: "center",
-      }} className="hidden md:flex">
+      }}>
         <div style={{
-          maxWidth: 1160, width: "100%", margin: "0 auto",
-          padding: "0 32px", display: "flex", alignItems: "center",
+          maxWidth: 1200, width: "100%", margin: "0 auto",
+          padding: "0 32px", display: "flex", alignItems: "center", gap: 8,
         }}>
           {/* Logo */}
           <Link href="/" style={{
-            display: "flex", alignItems: "center", gap: 9,
-            marginRight: 28, textDecoration: "none", flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 8,
+            marginRight: 20, textDecoration: "none", flexShrink: 0,
           }}>
             <div style={{
-              width: 30, height: 30, borderRadius: 8, background: "#0C0E13",
+              width: 30, height: 30, borderRadius: 8,
+              background: "rgba(79,128,255,0.12)",
+              border: "1px solid rgba(79,128,255,0.20)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <svg viewBox="0 0 15 15" fill="none" style={{ width: 15, height: 15 }}>
-                <rect x="1" y="9" width="3" height="5" rx=".8" fill="rgba(255,255,255,.45)" />
-                <rect x="6" y="5" width="3" height="9" rx=".8" fill="rgba(255,255,255,.72)" />
-                <rect x="11" y="1" width="3" height="13" rx=".8" fill="white" />
-              </svg>
+              <LogoMark size={18} />
             </div>
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.3px" }}>
-              <span style={{ color: "#1A56DB" }}>factor</span>
-              <span style={{ color: "rgba(12,14,19,.5)" }}>lens</span>
+            <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.4px" }}>
+              <span style={{ color: "#6B9FFF" }}>factor</span>
+              <span style={{ color: "rgba(148,163,184,0.7)" }}>lens</span>
             </span>
           </Link>
 
           {/* Nav links */}
-          <div style={{ display: "flex", gap: 2, flex: 1 }}>
-            {navLinks.map((link) => {
-              const isActive = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href)
+          <div style={{ display: "flex", gap: 2, flex: 1, alignItems: "center" }}>
+            {navLinks.map(({ href, label }) => {
+              const active = href === "/" ? pathname === "/" : pathname.startsWith(href)
               return (
                 <Link
-                  key={link.href}
-                  href={link.href}
-                  style={{
-                    padding: "7px 13px", borderRadius: 8, fontSize: 13.5, fontWeight: 500,
-                    color: isActive ? "#0C0E13" : "rgba(12,14,19,.5)",
-                    background: isActive ? "#ffffff" : "transparent",
-                    boxShadow: isActive ? "0 1px 2px rgba(0,0,0,.05)" : "none",
-                    transition: "all .15s", textDecoration: "none", display: "block",
-                  }}
-                  className={cn(!isActive && "hover:!text-[#0C0E13] hover:!bg-[rgba(12,14,19,.06)]")}
+                  key={href}
+                  href={href}
+                  className={cn("nav-link", active ? "nav-link-active" : "nav-link-inactive")}
                 >
-                  {link.label}
+                  {label}
                 </Link>
               )
             })}
           </div>
 
-          {/* Build Portfolio CTA */}
-          <Link
-            href="/dashboard"
-            style={{
-              marginLeft: "auto", padding: "8px 18px", borderRadius: 9,
-              background: "#0C0E13", color: "#ffffff",
-              fontSize: 13, fontWeight: 600, letterSpacing: "-.1px",
-              transition: "all .2s", flexShrink: 0, textDecoration: "none",
-              display: "inline-block",
-            }}
-            className="hover:opacity-85 hover:-translate-y-px hover:shadow-md"
-          >
+          {/* CTA */}
+          <Link href="/dashboard" className="fl-btn-primary" style={{ padding: "8px 18px", fontSize: 13 }}>
             Build Portfolio
           </Link>
         </div>
       </nav>
 
-      {/* ── Mobile Top Bar — logo only, no page links ── */}
-      <div style={{
+      {/* ── Mobile Top Bar ─────────────────────────────────── */}
+      <div className="flex md:hidden nav-glass" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
-        height: 52,
-        background: "rgba(245,245,243,.95)",
-        backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-        borderBottom: "1px solid rgba(12,14,19,.10)",
-        alignItems: "center", padding: "0 18px",
-      }} className="flex md:hidden">
+        height: 52, alignItems: "center", padding: "0 18px",
+        justifyContent: "space-between",
+      }}>
         <Link href="/" style={{
-          display: "flex", alignItems: "center", gap: 9,
-          textDecoration: "none", flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 8, textDecoration: "none",
         }}>
           <div style={{
-            width: 28, height: 28, borderRadius: 8, background: "#0C0E13",
+            width: 28, height: 28, borderRadius: 7,
+            background: "rgba(79,128,255,0.12)",
+            border: "1px solid rgba(79,128,255,0.20)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <svg viewBox="0 0 15 15" fill="none" style={{ width: 14, height: 14 }}>
-              <rect x="1" y="9" width="3" height="5" rx=".8" fill="rgba(255,255,255,.45)" />
-              <rect x="6" y="5" width="3" height="9" rx=".8" fill="rgba(255,255,255,.72)" />
-              <rect x="11" y="1" width="3" height="13" rx=".8" fill="white" />
-            </svg>
+            <LogoMark size={16} />
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.3px" }}>
-            <span style={{ color: "#1A56DB" }}>factor</span>
-            <span style={{ color: "rgba(12,14,19,.5)" }}>lens</span>
+          <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-0.4px" }}>
+            <span style={{ color: "#6B9FFF" }}>factor</span>
+            <span style={{ color: "rgba(148,163,184,0.7)" }}>lens</span>
           </span>
+        </Link>
+
+        {/* Mobile CTA */}
+        <Link href="/dashboard" style={{
+          padding: "6px 14px", borderRadius: 8,
+          background: "rgba(79,128,255,0.12)",
+          border: "1px solid rgba(79,128,255,0.25)",
+          color: "#6B9FFF", fontSize: 12.5, fontWeight: 600,
+          textDecoration: "none", display: "inline-flex", alignItems: "center",
+        }}>
+          Build
         </Link>
       </div>
 
-      {/* ── Mobile Bottom Nav ── */}
-      <div style={{
+      {/* ── Mobile Bottom Nav ──────────────────────────────── */}
+      <div className="flex md:hidden" style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300,
-        height: 68,
-        background: "rgba(255,255,255,.97)",
-        backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-        borderTop: "1px solid rgba(12,14,19,.12)",
-      }} className="md:hidden flex flex-col justify-stretch">
-        <div style={{ display: "flex", alignItems: "stretch", height: "100%", padding: "0 8px" }}>
-          {bottomNavLinks.map(({ href, label, Icon, exact }) => {
-            const isActive = exact ? pathname === href : pathname.startsWith(href)
+        height: 64,
+        background: "rgba(8,11,20,0.95)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
+      }}>
+        <div style={{
+          display: "flex", alignItems: "stretch", width: "100%", padding: "0 4px",
+        }}>
+          {bottomLinks.map(({ href, label, Icon, exact }) => {
+            const active = exact ? pathname === href : pathname.startsWith(href)
             return (
               <Link
                 key={href}
                 href={href}
                 style={{
-                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-                  justifyContent: "center", gap: 4, padding: "6px 4px",
-                  borderRadius: 12, textDecoration: "none",
-                  color: isActive ? "#1A56DB" : "rgba(12,14,19,.3)",
-                  transition: "color .15s",
+                  flex: 1, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center",
+                  gap: 3, padding: "6px 2px", borderRadius: 10,
+                  textDecoration: "none",
+                  color: active ? "#6B9FFF" : "rgba(148,163,184,0.45)",
+                  transition: "color 0.15s",
+                  position: "relative",
                 }}
               >
-                <div style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon />
-                </div>
-                <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: ".1px" }}>
+                {active && (
+                  <div style={{
+                    position: "absolute", top: 0, left: "50%",
+                    transform: "translateX(-50%)",
+                    width: 28, height: 2, borderRadius: 2,
+                    background: "#6B9FFF",
+                  }} />
+                )}
+                <Icon />
+                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.2px" }}>
                   {label}
                 </span>
               </Link>

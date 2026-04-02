@@ -24,18 +24,18 @@ const CATEGORIES: Array<{
 function SkeletonCard() {
   return (
     <div style={{
-      height: '100%', background: '#FAFAFA',
+      height: '100%', background: 'var(--card)',
       display: 'flex', flexDirection: 'column' as const,
     }}>
-      <div style={{ height: 200, background: 'rgba(12,14,19,.06)' }} />
+      <div style={{ height: 200, background: 'rgba(255,255,255,.05)' }} />
       <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column' as const, gap: 12 }}>
-        <div style={{ height: 12, width: '30%', background: 'rgba(12,14,19,.06)', borderRadius: 6 }} />
-        <div style={{ height: 26, width: '90%', background: 'rgba(12,14,19,.08)', borderRadius: 6 }} />
-        <div style={{ height: 22, width: '75%', background: 'rgba(12,14,19,.08)', borderRadius: 6 }} />
-        <div style={{ height: 12, background: 'rgba(12,14,19,.05)', borderRadius: 6 }} />
-        <div style={{ height: 12, background: 'rgba(12,14,19,.05)', borderRadius: 6 }} />
-        <div style={{ height: 12, width: '60%', background: 'rgba(12,14,19,.05)', borderRadius: 6 }} />
-        <div style={{ marginTop: 8, height: 70, background: 'rgba(12,14,19,.04)', borderRadius: 8 }} />
+        <div style={{ height: 12, width: '30%', background: 'rgba(255,255,255,.06)', borderRadius: 6 }} />
+        <div style={{ height: 26, width: '90%', background: 'rgba(255,255,255,.08)', borderRadius: 6 }} />
+        <div style={{ height: 22, width: '75%', background: 'rgba(255,255,255,.07)', borderRadius: 6 }} />
+        <div style={{ height: 12, background: 'rgba(255,255,255,.05)', borderRadius: 6 }} />
+        <div style={{ height: 12, background: 'rgba(255,255,255,.05)', borderRadius: 6 }} />
+        <div style={{ height: 12, width: '60%', background: 'rgba(255,255,255,.05)', borderRadius: 6 }} />
+        <div style={{ marginTop: 8, height: 70, background: 'rgba(255,255,255,.04)', borderRadius: 8 }} />
       </div>
     </div>
   )
@@ -51,13 +51,14 @@ function EmptyState({ onRefresh, loading }: { onRefresh: () => void; loading: bo
       textAlign: 'center' as const,
     }}>
       <div style={{
-        width: 56, height: 56, borderRadius: 16, background: 'rgba(12,14,19,.06)',
+        width: 56, height: 56, borderRadius: 16,
+        background: 'rgba(79,128,255,.12)', border: '1px solid rgba(79,128,255,.20)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4,
       }}>
-        <TrendingUp style={{ width: 24, height: 24, color: 'rgba(12,14,19,.3)' }} />
+        <TrendingUp style={{ width: 24, height: 24, color: '#6B9FFF' }} />
       </div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: '#0C0E13' }}>No stories yet</div>
-      <div style={{ fontSize: 13.5, color: 'rgba(12,14,19,.5)', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--foreground)' }}>No stories yet</div>
+      <div style={{ fontSize: 13.5, color: 'var(--muted-foreground)', lineHeight: 1.5 }}>
         The news feed will populate once the scraper runs. Check back in a few minutes.
       </div>
       <button
@@ -66,7 +67,7 @@ function EmptyState({ onRefresh, loading }: { onRefresh: () => void; loading: bo
         style={{
           marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7,
           padding: '10px 20px', borderRadius: 10,
-          background: '#0C0E13', color: '#fff',
+          background: '#4F80FF', color: '#fff',
           fontSize: 13, fontWeight: 600, cursor: 'pointer',
           border: 'none', fontFamily: 'inherit',
           opacity: loading ? 0.5 : 1,
@@ -94,7 +95,7 @@ function LastUpdated({ ts }: { ts: Date | null }) {
   const label = diff < 1 ? 'just now' : diff === 1 ? '1 min ago' : `${diff} min ago`
 
   return (
-    <span style={{ fontSize: 11, color: 'rgba(12,14,19,.4)' }}>
+    <span style={{ fontSize: 11, color: 'var(--muted-foreground)', opacity: 0.6 }}>
       Updated {label}
     </span>
   )
@@ -239,14 +240,15 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
   const hasMarketMoving = articles.some(a => a.is_market_moving)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', background: '#F5F5F3' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' as const, height: '100%', background: 'var(--background)' }}>
 
       {/* ── Top bar: category filters + status ── */}
       <div style={{
         flexShrink: 0,
-        borderBottom: '1px solid rgba(12,14,19,.10)',
-        background: 'rgba(245,245,243,.97)',
-        backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid var(--border)',
+        background: 'rgba(8,11,20,0.92)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         padding: '10px 16px',
         display: 'flex', flexDirection: 'column' as const, gap: 10,
       }}>
@@ -254,7 +256,7 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
-              fontSize: 15, fontWeight: 800, letterSpacing: '-.3px', color: '#0C0E13',
+              fontSize: 15, fontWeight: 800, letterSpacing: '-.3px', color: 'var(--foreground)',
             }}>
               Market Intelligence
             </div>
@@ -262,9 +264,12 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 padding: '2px 8px', borderRadius: 100,
-                background: '#DC2626', color: '#fff',
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.25)',
+                color: '#F87171',
                 fontSize: 9, fontWeight: 800, letterSpacing: '.8px',
                 textTransform: 'uppercase' as const,
+                animation: 'pulse-badge 2s ease infinite',
               }}>
                 <Zap style={{ width: 8, height: 8 }} />
                 Breaking
@@ -279,9 +284,10 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
               style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 30, height: 30, borderRadius: 8,
-                background: 'rgba(12,14,19,.06)',
-                border: 'none', cursor: 'pointer',
-                color: 'rgba(12,14,19,.5)',
+                background: 'rgba(255,255,255,.07)',
+                border: '1px solid rgba(255,255,255,.10)',
+                cursor: 'pointer',
+                color: 'var(--muted-foreground)',
                 transition: 'background .15s',
               }}
               title="Refresh news"
@@ -305,13 +311,14 @@ export function NewsFeed({ initialArticles }: NewsFeedProps) {
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5,
                   padding: '5px 12px', borderRadius: 100,
-                  background: active ? cat.color : 'rgba(12,14,19,.06)',
-                  color:      active ? '#fff'    : 'rgba(12,14,19,.55)',
+                  background: active ? cat.color : 'rgba(255,255,255,.07)',
+                  color:      active ? '#fff'    : 'rgba(148,163,184,0.7)',
+                  border: active ? 'none' : '1px solid rgba(255,255,255,.10)',
                   fontSize: 11.5, fontWeight: 700, letterSpacing: '.2px',
-                  border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' as const,
+                  cursor: 'pointer', whiteSpace: 'nowrap' as const,
                   transition: 'all .15s', flexShrink: 0,
                   fontFamily: 'inherit',
-                  boxShadow: active ? `0 2px 8px ${cat.color}40` : 'none',
+                  boxShadow: active ? `0 2px 10px ${cat.color}45` : 'none',
                 }}
               >
                 <cat.Icon style={{ width: 11, height: 11 }} />

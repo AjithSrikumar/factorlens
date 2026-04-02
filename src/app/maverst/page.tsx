@@ -86,10 +86,10 @@ function ScoreBar({ score }: { score: number }) {
   const color = score > 0.33 ? REGIME_COLOR.Growth : score < -0.33 ? REGIME_COLOR.Defensive : REGIME_COLOR.Neutral
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(12,14,19,.4)', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted-foreground)', marginBottom: 4 }}>
         <span>Defensive</span><span>Neutral</span><span>Growth</span>
       </div>
-      <div style={{ height: 8, borderRadius: 99, background: 'rgba(12,14,19,.08)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ height: 8, borderRadius: 99, background: 'var(--border)', position: 'relative', overflow: 'hidden' }}>
         {/* Zone fills */}
         <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: '44%', background: 'rgba(220,38,38,.15)', borderRadius: '99px 0 0 99px' }} />
         <div style={{ position: 'absolute', left: '44%', top: 0, height: '100%', width: '12%', background: 'rgba(217,119,6,.15)' }} />
@@ -113,7 +113,7 @@ function ScoreBar({ score }: { score: number }) {
 // ── Z-score pill ──────────────────────────────────────────────────────────────
 
 function ZPill({ z }: { z: number | null }) {
-  if (z === null) return <span style={{ fontSize: 11, color: 'rgba(12,14,19,.3)' }}>—</span>
+  if (z === null) return <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>—</span>
   const color = z > 0.3 ? '#16a34a' : z < -0.3 ? '#dc2626' : '#d97706'
   return (
     <span style={{
@@ -128,11 +128,11 @@ function ZPill({ z }: { z: number | null }) {
 // ── Indicator mini bar ────────────────────────────────────────────────────────
 
 function ZBar({ z }: { z: number | null }) {
-  if (z === null) return <div style={{ height: 4, borderRadius: 99, background: 'rgba(12,14,19,.08)' }} />
+  if (z === null) return <div style={{ height: 4, borderRadius: 99, background: 'var(--border)' }} />
   const pct  = Math.min(100, Math.abs(z) / 3 * 100)
   const color = z > 0.3 ? '#16a34a' : z < -0.3 ? '#dc2626' : '#d97706'
   return (
-    <div style={{ height: 4, borderRadius: 99, background: 'rgba(12,14,19,.08)', overflow: 'hidden' }}>
+    <div style={{ height: 4, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
       <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width .4s ease' }} />
     </div>
   )
@@ -170,7 +170,7 @@ export default function MAVERSTPage() {
   if (loading) {
     return (
       <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: 'rgba(12,14,19,.4)', fontSize: 14 }}>
+        <div style={{ textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 14 }}>
           Computing regime signals…
         </div>
       </div>
@@ -182,8 +182,8 @@ export default function MAVERSTPage() {
       <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', padding: 32 }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#0C0E13', marginBottom: 8 }}>Regime Engine Initialising</div>
-          <div style={{ fontSize: 13, color: 'rgba(12,14,19,.5)', maxWidth: 360 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--foreground)', marginBottom: 8 }}>Regime Engine Initialising</div>
+          <div style={{ fontSize: 13, color: 'var(--muted-foreground)', maxWidth: 360 }}>
             Run the EOD cron to compute today&apos;s regime signal, or ensure the Supabase schema is set up.
           </div>
         </div>
@@ -199,13 +199,13 @@ export default function MAVERSTPage() {
 
       {/* ── Page header ── */}
       <div style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', color: 'rgba(12,14,19,.35)', textTransform: 'uppercase', marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', color: 'var(--muted-foreground)', textTransform: 'uppercase', marginBottom: 6 }}>
           MAVERST · Market Regime Engine
         </div>
-        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.5px', color: '#0C0E13', margin: 0 }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.5px', color: 'var(--foreground)', margin: 0 }}>
           Daily Market Signal
         </h1>
-        <div style={{ fontSize: 12.5, color: 'rgba(12,14,19,.4)', marginTop: 4 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 4 }}>
           Updated {fmtDate(latest.date)} · 9 indicators · equal weighted
         </div>
       </div>
@@ -216,7 +216,7 @@ export default function MAVERSTPage() {
 
       {/* ── Hero Card ── */}
       <div style={{
-        background: 'white', border: `1.5px solid ${regimeColor}40`,
+        background: 'var(--card)', border: `1.5px solid ${regimeColor}40`,
         borderRadius: 16, padding: '28px 28px 24px',
         boxShadow: `0 4px 24px ${regimeColor}12`,
         marginBottom: 20,
@@ -244,7 +244,7 @@ export default function MAVERSTPage() {
 
           {/* Details */}
           <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ fontSize: 14, color: 'rgba(12,14,19,.6)', lineHeight: 1.5, marginBottom: 14 }}>
+            <div style={{ fontSize: 14, color: 'var(--muted-foreground)', lineHeight: 1.5, marginBottom: 14 }}>
               {insightLine}
             </div>
             <ScoreBar score={score} />
@@ -253,9 +253,9 @@ export default function MAVERSTPage() {
           {/* Allocation */}
           <div style={{
             minWidth: 140, padding: '14px 16px', borderRadius: 12,
-            background: 'rgba(12,14,19,.03)', border: '1px solid rgba(12,14,19,.07)',
+            background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)',
           }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'rgba(12,14,19,.4)', marginBottom: 10 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted-foreground)', marginBottom: 10 }}>
               Allocation
             </div>
             <AllocationBar momentum={allocation.midcapMomentum} gold={allocation.gold} />
@@ -265,21 +265,21 @@ export default function MAVERSTPage() {
 
       {/* ── Key Drivers ── */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', marginBottom: 10 }}>
           Key Drivers
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
           {keyDrivers.map(driver => (
             <div key={driver.key} style={{
-              background: 'white', border: '1px solid rgba(12,14,19,.08)',
+              background: 'var(--card)', border: '1px solid rgba(12,14,19,.08)',
               borderRadius: 12, padding: '14px 16px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13' }}>{driver.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)' }}>{driver.label}</span>
                 <ZPill z={driver.zscore} />
               </div>
               <ZBar z={driver.zscore} />
-              <div style={{ fontSize: 11.5, color: 'rgba(12,14,19,.5)', marginTop: 6 }}>
+              <div style={{ fontSize: 11.5, color: 'var(--muted-foreground)', marginTop: 6 }}>
                 {driver.description}
               </div>
             </div>
@@ -290,7 +290,7 @@ export default function MAVERSTPage() {
       {/* ── Regime Timeline ── */}
       {history.length > 0 && (
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13', marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', marginBottom: 10 }}>
             Regime History
           </div>
           <RegimeTimeline history={history} />
@@ -311,7 +311,7 @@ export default function MAVERSTPage() {
             display: 'flex', alignItems: 'center', gap: 8,
             background: 'none', border: '1px solid rgba(12,14,19,.12)',
             borderRadius: 10, padding: '10px 18px', cursor: 'pointer',
-            fontSize: 13.5, fontWeight: 600, color: '#0C0E13',
+            fontSize: 13.5, fontWeight: 600, color: 'var(--foreground)',
             transition: 'all .15s',
           }}
         >
@@ -331,7 +331,7 @@ export default function MAVERSTPage() {
             {/* Full backtest */}
             {backtest && <FullBacktest backtest={backtest} />}
             {!backtest && btLoaded && (
-              <div style={{ padding: 24, textAlign: 'center', color: 'rgba(12,14,19,.4)', fontSize: 13 }}>
+              <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted-foreground)', fontSize: 13 }}>
                 Backtest data not available — run the MAVERST EOD cron with ?backfill=true first.
               </div>
             )}
@@ -349,19 +349,19 @@ function AllocationBar({ momentum, gold }: { momentum: number; gold: number }) {
   return (
     <div>
       <div style={{ height: 8, borderRadius: 99, overflow: 'hidden', display: 'flex', marginBottom: 8 }}>
-        <div style={{ width: `${momentum}%`, background: '#1A56DB', transition: 'width .4s ease' }} />
+        <div style={{ width: `${momentum}%`, background: '#6B9FFF', transition: 'width .4s ease' }} />
         <div style={{ flex: 1, background: '#f59e0b' }} />
       </div>
       <div style={{ fontSize: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-          <div style={{ width: 8, height: 8, borderRadius: 2, background: '#1A56DB', flexShrink: 0 }} />
-          <span style={{ color: 'rgba(12,14,19,.6)' }}>Midcap Momentum</span>
-          <span style={{ marginLeft: 'auto', fontWeight: 700, color: '#0C0E13' }}>{momentum}%</span>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: '#6B9FFF', flexShrink: 0 }} />
+          <span style={{ color: 'var(--muted-foreground)' }}>Midcap Momentum</span>
+          <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--foreground)' }}>{momentum}%</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b', flexShrink: 0 }} />
-          <span style={{ color: 'rgba(12,14,19,.6)' }}>Gold ETF</span>
-          <span style={{ marginLeft: 'auto', fontWeight: 700, color: '#0C0E13' }}>{gold}%</span>
+          <span style={{ color: 'var(--muted-foreground)' }}>Gold ETF</span>
+          <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--foreground)' }}>{gold}%</span>
         </div>
       </div>
     </div>
@@ -377,7 +377,7 @@ function RegimeTimeline({ history }: { history: HistoryRow[] }) {
 
   return (
     <div style={{
-      background: 'white', border: '1px solid rgba(12,14,19,.08)',
+      background: 'var(--card)', border: '1px solid rgba(12,14,19,.08)',
       borderRadius: 12, padding: '16px 16px 12px',
     }}>
       {/* Color bar */}
@@ -390,7 +390,7 @@ function RegimeTimeline({ history }: { history: HistoryRow[] }) {
         ))}
       </div>
       {/* X-axis labels */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'rgba(12,14,19,.35)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--muted-foreground)' }}>
         <span>{slice[0]?.date?.slice(0, 7)}</span>
         <span>{slice[Math.floor(slice.length / 2)]?.date?.slice(0, 7)}</span>
         <span>{slice.at(-1)?.date?.slice(0, 7)}</span>
@@ -400,7 +400,7 @@ function RegimeTimeline({ history }: { history: HistoryRow[] }) {
         {(['Growth', 'Neutral', 'Defensive'] as RegimeType[]).map(r => (
           <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: REGIME_COLOR[r] }} />
-            <span style={{ fontSize: 11, color: 'rgba(12,14,19,.5)' }}>{r}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{r}</span>
           </div>
         ))}
       </div>
@@ -422,8 +422,8 @@ function BacktestSnapshot() {
   }, [])
 
   if (loading) return (
-    <div style={{ background: 'white', border: '1px solid rgba(12,14,19,.08)', borderRadius: 12, padding: '24px', marginBottom: 20, minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <span style={{ fontSize: 13, color: 'rgba(12,14,19,.35)' }}>Loading backtest…</span>
+    <div style={{ background: 'var(--card)', border: '1px solid rgba(12,14,19,.08)', borderRadius: 12, padding: '24px', marginBottom: 20, minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ fontSize: 13, color: 'var(--muted-foreground)' }}>Loading backtest…</span>
     </div>
   )
 
@@ -435,23 +435,23 @@ function BacktestSnapshot() {
 
   return (
     <div style={{
-      background: 'white', border: '1px solid rgba(12,14,19,.08)',
+      background: 'var(--card)', border: '1px solid rgba(12,14,19,.08)',
       borderRadius: 12, padding: '20px 20px 16px', marginBottom: 20,
     }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13', marginBottom: 4 }}>
-        Strategy vs Nifty 50 <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(12,14,19,.4)' }}>since {data.startDate?.slice(0, 7)}</span>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', marginBottom: 4 }}>
+        Strategy vs Nifty 50 <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--muted-foreground)' }}>since {data.startDate?.slice(0, 7)}</span>
       </div>
 
       {/* Key stat pills */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {[
-          { label: 'Strategy CAGR',  value: fmtPct(data.strategyCagr),  color: '#1A56DB' },
-          { label: 'Benchmark CAGR', value: fmtPct(data.benchmarkCagr), color: 'rgba(12,14,19,.4)' },
+          { label: 'Strategy CAGR',  value: fmtPct(data.strategyCagr),  color: '#6B9FFF' },
+          { label: 'Benchmark CAGR', value: fmtPct(data.benchmarkCagr), color: 'var(--muted-foreground)' },
           { label: 'Worst Loss Cut', value: `${ddRed.toFixed(0)}%`, color: '#16a34a' },
         ].map(s => (
           <div key={s.label} style={{
             padding: '6px 12px', borderRadius: 8,
-            background: 'rgba(12,14,19,.04)', border: '1px solid rgba(12,14,19,.07)',
+            background: 'rgba(12,14,19,.04)', border: '1px solid rgba(255,255,255,.07)',
           }}>
             <span style={{ fontSize: 11, color: 'rgba(12,14,19,.45)' }}>{s.label} </span>
             <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.value}</span>
@@ -461,18 +461,18 @@ function BacktestSnapshot() {
 
       <ResponsiveContainer width="100%" height={180}>
         <LineChart data={curve} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,14,19,.06)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
           <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={d => d.slice(0, 7)}
             interval={Math.floor(curve.length / 5)} />
           <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}`} />
           <Tooltip
             formatter={(v: number, name: string) => [`${v.toFixed(1)}`, name]}
             labelFormatter={d => fmtDate(d)}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(12,14,19,.1)' }}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,.08)' }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line dataKey="strategy"  name="MAVERST Strategy" stroke="#1A56DB" dot={false} strokeWidth={2} />
-          <Line dataKey="benchmark" name="Nifty 50"          stroke="rgba(12,14,19,.3)" dot={false} strokeWidth={1.5} strokeDasharray="4 3" />
+          <Line dataKey="benchmark" name="Nifty 50"          stroke="rgba(148,163,184,.5)" dot={false} strokeWidth={1.5} strokeDasharray="4 3" />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -487,19 +487,19 @@ function IndicatorTable({ indicators, score }: { indicators: Indicator[]; score:
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#0C0E13', marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)', marginBottom: 12 }}>
         Indicator Contribution
-        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(12,14,19,.4)', marginLeft: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted-foreground)', marginLeft: 8 }}>
           MAVERST score: {score.toFixed(2)} · {available.length} of 9 indicators active
         </span>
       </div>
-      <div style={{ background: 'white', border: '1px solid rgba(12,14,19,.08)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--card)', border: '1px solid rgba(12,14,19,.08)', borderRadius: 12, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ background: 'rgba(12,14,19,.03)', borderBottom: '1px solid rgba(12,14,19,.08)' }}>
+            <tr style={{ background: 'rgba(255,255,255,.03)', borderBottom: '1px solid rgba(12,14,19,.08)' }}>
               {['Indicator', 'Weight', 'Z-Score', 'Contribution', 'Signal'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700,
-                  letterSpacing: '.05em', textTransform: 'uppercase', color: 'rgba(12,14,19,.4)' }}>{h}</th>
+                  letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--muted-foreground)' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -507,19 +507,19 @@ function IndicatorTable({ indicators, score }: { indicators: Indicator[]; score:
             {indicators.map((ind, i) => {
               const contrib = ind.zscore !== null ? ind.zscore / (available.length || 1) : null
               return (
-                <tr key={ind.key} style={{ borderBottom: i < indicators.length - 1 ? '1px solid rgba(12,14,19,.06)' : 'none' }}>
+                <tr key={ind.key} style={{ borderBottom: i < indicators.length - 1 ? '1px solid rgba(255,255,255,.06)' : 'none' }}>
                   <td style={{ padding: '10px 14px' }}>
-                    <div style={{ fontWeight: 600, color: '#0C0E13' }}>{ind.label}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(12,14,19,.4)', marginTop: 2 }}>{ind.description}</div>
+                    <div style={{ fontWeight: 600, color: 'var(--foreground)' }}>{ind.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted-foreground)', marginTop: 2 }}>{ind.description}</div>
                   </td>
-                  <td style={{ padding: '10px 14px', color: 'rgba(12,14,19,.6)' }}>{ind.zscore !== null ? `${weight}%` : '—'}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--muted-foreground)' }}>{ind.zscore !== null ? `${weight}%` : '—'}</td>
                   <td style={{ padding: '10px 14px' }}><ZPill z={ind.zscore} /></td>
                   <td style={{ padding: '10px 14px' }}>
                     {contrib !== null
                       ? <span style={{ fontWeight: 700, color: contrib > 0 ? '#16a34a' : contrib < 0 ? '#dc2626' : '#d97706' }}>
                           {contrib > 0 ? '+' : ''}{contrib.toFixed(3)}
                         </span>
-                      : <span style={{ color: 'rgba(12,14,19,.3)' }}>—</span>}
+                      : <span style={{ color: 'var(--muted-foreground)' }}>—</span>}
                   </td>
                   <td style={{ padding: '10px 14px' }}>
                     <SentimentBadge sentiment={ind.sentiment} />
@@ -541,7 +541,7 @@ function SentimentBadge({ sentiment }: { sentiment: string }) {
     'neutral':          { bg: '#d9780610', color: '#b45309' },
     'bearish':          { bg: '#dc262610', color: '#dc2626' },
     'strongly bearish': { bg: '#dc262618', color: '#b91c1c' },
-    'unavailable':      { bg: 'rgba(12,14,19,.06)', color: 'rgba(12,14,19,.3)' },
+    'unavailable':      { bg: 'rgba(255,255,255,.06)', color: 'var(--muted-foreground)' },
   }
   const c = cfg[sentiment] ?? cfg['unavailable']
   return (
@@ -564,9 +564,9 @@ function AllocationLogic({ score, regime, allocation }: {
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#0C0E13', marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)', marginBottom: 12 }}>
         Allocation Logic
-        <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(12,14,19,.4)', marginLeft: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted-foreground)', marginLeft: 8 }}>
           Score {score.toFixed(2)} → {regime} → {allocation.midcapMomentum}% Momentum / {allocation.gold}% Gold
         </span>
       </div>
@@ -575,14 +575,14 @@ function AllocationLogic({ score, regime, allocation }: {
           <div key={r.regime} style={{
             padding: '14px 16px', borderRadius: 12,
             background: r.active ? REGIME_BG[r.regime as RegimeType] : 'rgba(12,14,19,.02)',
-            border: `1.5px solid ${r.active ? REGIME_COLOR[r.regime as RegimeType] + '40' : 'rgba(12,14,19,.07)'}`,
+            border: `1.5px solid ${r.active ? REGIME_COLOR[r.regime as RegimeType] + '40' : 'var(--border)'}`,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontWeight: 700, color: REGIME_COLOR[r.regime as RegimeType], fontSize: 13 }}>{r.regime}</span>
-              <span style={{ fontSize: 11, color: 'rgba(12,14,19,.4)' }}>Score {r.threshold}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>Score {r.threshold}</span>
             </div>
             <div style={{ fontSize: 12.5 }}>
-              <div style={{ color: '#1A56DB', fontWeight: 600 }}>{r.momentum}% Midcap Momentum</div>
+              <div style={{ color: '#6B9FFF', fontWeight: 600 }}>{r.momentum}% Midcap Momentum</div>
               <div style={{ color: '#d97706', fontWeight: 600 }}>{r.gold}% Gold</div>
             </div>
             {r.active && (
@@ -614,8 +614,8 @@ function FullBacktest({ backtest }: { backtest: BacktestResult }) {
 
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#0C0E13', marginBottom: 12 }}>
-        Full Backtest <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(12,14,19,.4)' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)', marginBottom: 12 }}>
+        Full Backtest <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted-foreground)' }}>
           {backtest.startDate?.slice(0, 7)} – {backtest.endDate?.slice(0, 7)}
         </span>
       </div>
@@ -625,11 +625,11 @@ function FullBacktest({ backtest }: { backtest: BacktestResult }) {
         {metrics.map(m => (
           <div key={m.label} style={{
             padding: '12px 14px', borderRadius: 10,
-            background: m.highlight ? 'rgba(26,86,219,.05)' : 'rgba(12,14,19,.03)',
-            border: `1px solid ${m.highlight ? 'rgba(26,86,219,.12)' : 'rgba(12,14,19,.07)'}`,
+            background: m.highlight ? 'rgba(26,86,219,.05)' : 'rgba(255,255,255,.03)',
+            border: `1px solid ${m.highlight ? 'rgba(26,86,219,.12)' : 'var(--border)'}`,
           }}>
             <div style={{ fontSize: 11, color: 'rgba(12,14,19,.45)', marginBottom: 4 }}>{m.label}</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: m.highlight ? '#1A56DB' : '#0C0E13' }}>{m.value}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: m.highlight ? '#6B9FFF' : 'var(--foreground)' }}>{m.value}</div>
           </div>
         ))}
       </div>
@@ -637,19 +637,19 @@ function FullBacktest({ backtest }: { backtest: BacktestResult }) {
       {/* Equity curve */}
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={curve} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(12,14,19,.06)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,.06)" />
           <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={d => d.slice(0, 7)}
             interval={Math.floor(curve.length / 8)} />
           <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}`} />
           <Tooltip
             formatter={(v: number, name: string) => [`${v.toFixed(1)}`, name]}
             labelFormatter={d => fmtDate(d)}
-            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(12,14,19,.1)' }}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid rgba(255,255,255,.08)' }}
           />
           <ReferenceLine y={100} stroke="rgba(12,14,19,.15)" strokeDasharray="4 2" />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line dataKey="strategy"  name="MAVERST Strategy" stroke="#1A56DB" dot={false} strokeWidth={2.5} />
-          <Line dataKey="benchmark" name="Nifty 50"          stroke="rgba(12,14,19,.35)" dot={false} strokeWidth={1.5} strokeDasharray="4 3" />
+          <Line dataKey="benchmark" name="Nifty 50"          stroke="rgba(148,163,184,.5)" dot={false} strokeWidth={1.5} strokeDasharray="4 3" />
         </LineChart>
       </ResponsiveContainer>
     </div>

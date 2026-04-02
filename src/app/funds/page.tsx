@@ -179,7 +179,7 @@ function SkeletonRow() {
         <td key={i} style={{ padding: "14px 16px" }}>
           <div style={{
             height: 12, width: w, borderRadius: 6,
-            background: "rgba(12,14,19,.07)",
+            background: "rgba(255,255,255,.07)",
             animation: "mf-pulse 1.4s ease infinite",
           }} />
         </td>
@@ -276,7 +276,7 @@ function FundsPageInner() {
   const withReturns = funds.filter(f => f.return_1y !== null).length
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)" }}>
       <style>{`
         @keyframes mf-pulse {
           0%, 100% { opacity: 1; }
@@ -294,10 +294,10 @@ function FundsPageInner() {
 
         {/* ── Header ── */}
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0C0E13", margin: "0 0 4px", letterSpacing: "-.02em" }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: "-.02em" }}>
             Mutual Funds
           </h1>
-          <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: "0 0 8px" }}>
+          <p style={{ color: "var(--muted-foreground)", fontSize: 13.5, margin: "0 0 8px" }}>
             {loading
               ? "Loading fund data…"
               : `${funds.length} funds · ${withReturns} with return history`
@@ -321,7 +321,7 @@ function FundsPageInner() {
             background: "rgba(197,39,30,.05)", border: "1px solid rgba(197,39,30,.2)",
             borderRadius: 12, padding: "14px 18px", marginBottom: 20,
           }}>
-            <p style={{ color: "#C5271E", fontSize: 13.5, margin: 0 }}>{error}</p>
+            <p style={{ color: "#F87171", fontSize: 13.5, margin: 0 }}>{error}</p>
           </div>
         )}
 
@@ -333,8 +333,8 @@ function FundsPageInner() {
                   position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
                   width: 15, height: 15, pointerEvents: "none",
                 }}>
-                  <circle cx="7.5" cy="7.5" r="5.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" />
-                  <path d="M12 12l3.5 3.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="7.5" cy="7.5" r="5.5" stroke="rgba(148,163,184,.5)" strokeWidth="1.5" />
+                  <path d="M12 12l3.5 3.5" stroke="rgba(148,163,184,.5)" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
                 <input
                   type="text"
@@ -344,9 +344,9 @@ function FundsPageInner() {
                   style={{
                     width: "100%", paddingLeft: 36, paddingRight: 14,
                     paddingTop: 10, paddingBottom: 10,
-                    border: "1px solid rgba(12,14,19,.12)",
-                    borderRadius: 10, background: "#ffffff",
-                    fontSize: 13.5, color: "#0C0E13", outline: "none",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10, background: "var(--card)",
+                    fontSize: 13.5, color: "var(--foreground)", outline: "none",
                     boxSizing: "border-box",
                   }}
                 />
@@ -360,9 +360,9 @@ function FundsPageInner() {
                       onClick={() => setCategoryFilter(c)}
                       className="mf-cat-pill"
                       style={{
-                        background: categoryFilter === c ? "#0C0E13" : "#ffffff",
-                        color: categoryFilter === c ? "#ffffff" : "rgba(12,14,19,.6)",
-                        borderColor: categoryFilter === c ? "#0C0E13" : "rgba(12,14,19,.15)",
+                        background: categoryFilter === c ? "#4F80FF" : "rgba(255,255,255,.06)",
+                        color: categoryFilter === c ? "#ffffff" : "var(--muted-foreground)",
+                        borderColor: categoryFilter === c ? "#4F80FF" : "rgba(255,255,255,.12)",
                       }}
                     >
                       {c}
@@ -375,23 +375,23 @@ function FundsPageInner() {
             {/* Results count */}
             {!loading && funds.length > 0 && (
               <div style={{ marginBottom: 12 }}>
-                <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.4)" }}>
+                <span style={{ fontSize: 12.5, color: "rgba(148,163,184,.7)" }}>
                   {filtered.length} of {funds.length} funds
-                  {categoryFilter !== "All" && <> in <strong style={{ color: "#0C0E13" }}>{categoryFilter}</strong></>}
+                  {categoryFilter !== "All" && <> in <strong style={{ color: "var(--foreground)" }}>{categoryFilter}</strong></>}
                 </span>
               </div>
             )}
 
             {/* ── Desktop Table ── */}
             <div className="md:block hidden" style={{
-              background: "#ffffff",
-              border: "1px solid rgba(12,14,19,.1)",
+              background: "var(--card)",
+              border: "1px solid rgba(255,255,255,.08)",
               borderRadius: 16, overflow: "hidden",
             }}>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                   <thead>
-                    <tr style={{ background: "#F5F5F3", borderBottom: "1px solid rgba(12,14,19,.1)" }}>
+                    <tr style={{ background: "var(--background)", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
                       {([
                         { key: "scheme_name"     as SortKey, label: "Fund Name",  align: "left"  },
                         { key: "scheme_category" as SortKey, label: "Category",   align: "left"  },
@@ -408,7 +408,7 @@ function FundsPageInner() {
                             padding: "11px 16px",
                             textAlign: col.align as "left" | "right",
                             fontSize: 10.5, fontWeight: 700,
-                            color: "rgba(12,14,19,.4)", letterSpacing: ".7px",
+                            color: "rgba(148,163,184,.7)", letterSpacing: ".7px",
                             textTransform: "uppercase",
                             cursor: "pointer", transition: "color .15s",
                             whiteSpace: "nowrap",
@@ -433,20 +433,20 @@ function FundsPageInner() {
                           onClick={() => window.location.href = `/funds/${fund.scheme_code}`}
                           style={{
                             cursor: "pointer",
-                            borderBottom: "1px solid rgba(12,14,19,.06)",
+                            borderBottom: "1px solid rgba(255,255,255,.06)",
                             transition: "background .12s",
                           }}
                         >
                           <td style={{ padding: "13px 16px" }}>
                             <div style={{
-                              fontWeight: 600, fontSize: 13.5, color: "#0C0E13",
+                              fontWeight: 600, fontSize: 13.5, color: "var(--foreground)",
                               lineHeight: 1.35, maxWidth: 380,
                             }}>
                               {fund.scheme_name}
                             </div>
                             <div style={{
                               marginTop: 2, fontSize: 11.5,
-                              color: "rgba(12,14,19,.4)",
+                              color: "rgba(148,163,184,.7)",
                               display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap",
                             }}>
                               {amcLogoUrl(fund.fund_house)
@@ -461,7 +461,7 @@ function FundsPageInner() {
                                   ? <span style={{
                                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                                       width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                                      background: "rgba(26,86,219,.12)", color: "#1A56DB",
+                                      background: "rgba(26,86,219,.12)", color: "#6B9FFF",
                                       fontSize: 9, fontWeight: 700, lineHeight: 1,
                                     }}>
                                       {fund.fund_house.charAt(0).toUpperCase()}
@@ -486,7 +486,7 @@ function FundsPageInner() {
                                       display: "inline-flex", alignItems: "center", gap: 3,
                                       padding: "1px 6px", borderRadius: 4,
                                       background: "rgba(26,86,219,.08)",
-                                      color: "#1A56DB", fontSize: 10, fontWeight: 600,
+                                      color: "#6B9FFF", fontSize: 10, fontWeight: 600,
                                       textDecoration: "none", whiteSpace: "nowrap",
                                     }}
                                   >
@@ -502,7 +502,7 @@ function FundsPageInner() {
                           <td style={{ padding: "13px 16px" }}>
                             <span style={{
                               display: "inline-block", padding: "3px 8px",
-                              borderRadius: 6, background: "rgba(12,14,19,.06)",
+                              borderRadius: 6, background: "rgba(255,255,255,.06)",
                               fontSize: 11, fontWeight: 600,
                               color: "rgba(12,14,19,.55)",
                             }}>
@@ -511,13 +511,13 @@ function FundsPageInner() {
                           </td>
                           <td style={{ padding: "13px 16px", textAlign: "right" }}>
                             {fund.nav != null
-                              ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "#0C0E13" }}>
+                              ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>
                                   ₹{fund.nav.toFixed(1)}
                                 </span>
-                              : <span style={{ color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</span>
+                              : <span style={{ color: "rgba(255,255,255,.12)", fontSize: 12 }}>—</span>
                             }
                             {fund.nav_date && (
-                              <div style={{ fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 1 }}>
+                              <div style={{ fontSize: 10, color: "var(--muted-foreground)", marginTop: 1 }}>
                                 {fund.nav_date}
                               </div>
                             )}
@@ -540,7 +540,7 @@ function FundsPageInner() {
 
               {!loading && filtered.length === 0 && funds.length > 0 && (
                 <div style={{ padding: "48px 24px", textAlign: "center" }}>
-                  <p style={{ color: "rgba(12,14,19,.4)", fontSize: 14 }}>No funds match your search.</p>
+                  <p style={{ color: "rgba(148,163,184,.7)", fontSize: 14 }}>No funds match your search.</p>
                 </div>
               )}
             </div>
@@ -551,7 +551,7 @@ function FundsPageInner() {
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} style={{
                       height: 110, borderRadius: 14,
-                      background: "rgba(12,14,19,.06)",
+                      background: "rgba(255,255,255,.06)",
                       animation: "mf-pulse 1.4s ease infinite",
                     }} />
                   ))
@@ -561,8 +561,8 @@ function FundsPageInner() {
                       href={`/funds/${fund.scheme_code}`}
                       style={{
                         display: "block", textDecoration: "none",
-                        background: "#ffffff",
-                        border: "1px solid rgba(12,14,19,.1)",
+                        background: "var(--card)",
+                        border: "1px solid rgba(255,255,255,.08)",
                         borderRadius: 14, padding: "14px 16px",
                       }}
                     >
@@ -570,7 +570,7 @@ function FundsPageInner() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{
                             margin: 0, fontWeight: 600, fontSize: 13.5,
-                            color: "#0C0E13", lineHeight: 1.35,
+                            color: "var(--foreground)", lineHeight: 1.35,
                             overflow: "hidden", textOverflow: "ellipsis",
                             display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                           }}>
@@ -589,7 +589,7 @@ function FundsPageInner() {
                                 ? <span style={{
                                     display: "inline-flex", alignItems: "center", justifyContent: "center",
                                     width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                                    background: "rgba(26,86,219,.12)", color: "#1A56DB",
+                                    background: "rgba(26,86,219,.12)", color: "#6B9FFF",
                                     fontSize: 8, fontWeight: 700, lineHeight: 1,
                                   }}>
                                     {fund.fund_house.charAt(0).toUpperCase()}
@@ -599,7 +599,7 @@ function FundsPageInner() {
                             <Link
                               href={`/amc/${amcSlug(fund.fund_house)}`}
                               onClick={e => e.stopPropagation()}
-                              style={{ fontSize: 11.5, color: "rgba(12,14,19,.4)", textDecoration: "none" }}
+                              style={{ fontSize: 11.5, color: "rgba(148,163,184,.7)", textDecoration: "none" }}
                             >
                               {fund.fund_house}
                             </Link>
@@ -607,13 +607,13 @@ function FundsPageInner() {
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                           {fund.nav != null
-                            ? <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "#0C0E13" }}>
+                            ? <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--foreground)" }}>
                                 ₹{fund.nav.toFixed(1)}
                               </p>
-                            : <p style={{ margin: 0, color: "rgba(12,14,19,.2)", fontSize: 12 }}>—</p>
+                            : <p style={{ margin: 0, color: "rgba(255,255,255,.12)", fontSize: 12 }}>—</p>
                           }
                           {fund.nav_date && (
-                            <p style={{ margin: "2px 0 0", fontSize: 10, color: "rgba(12,14,19,.3)" }}>
+                            <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--muted-foreground)" }}>
                               {fund.nav_date}
                             </p>
                           )}
@@ -623,8 +623,8 @@ function FundsPageInner() {
                       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                         <span style={{
                           display: "inline-block", padding: "2px 7px",
-                          borderRadius: 5, background: "rgba(12,14,19,.06)",
-                          fontSize: 10.5, fontWeight: 600, color: "rgba(12,14,19,.5)",
+                          borderRadius: 5, background: "rgba(255,255,255,.06)",
+                          fontSize: 10.5, fontWeight: 600, color: "var(--muted-foreground)",
                         }}>
                           {catLabel(fund.scheme_name, fund.scheme_category)}
                         </span>
@@ -639,7 +639,7 @@ function FundsPageInner() {
                                 display: "inline-flex", alignItems: "center", gap: 3,
                                 padding: "2px 7px", borderRadius: 5,
                                 background: "rgba(26,86,219,.08)",
-                                color: "#1A56DB", fontSize: 10, fontWeight: 600,
+                                color: "#6B9FFF", fontSize: 10, fontWeight: 600,
                                 textDecoration: "none",
                               }}
                             >
@@ -656,10 +656,10 @@ function FundsPageInner() {
                           { label: "5Y CAGR", value: fund.return_5y },
                         ].map(({ label, value }) => (
                           <div key={label} style={{
-                            background: "#F5F5F3", borderRadius: 8,
+                            background: "var(--background)", borderRadius: 8,
                             padding: "6px 8px", textAlign: "center",
                           }}>
-                            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>
+                            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>
                               {label}
                             </p>
                             <ReturnBadge value={value} />
@@ -672,7 +672,7 @@ function FundsPageInner() {
 
               {!loading && filtered.length === 0 && funds.length > 0 && (
                 <div style={{ padding: "48px 0", textAlign: "center" }}>
-                  <p style={{ color: "rgba(12,14,19,.4)", fontSize: 14 }}>No funds match your search.</p>
+                  <p style={{ color: "rgba(148,163,184,.7)", fontSize: 14 }}>No funds match your search.</p>
                 </div>
               )}
             </div>
@@ -684,8 +684,8 @@ function FundsPageInner() {
                 border: "1px dashed rgba(12,14,19,.15)",
                 padding: "12px 16px", background: "rgba(12,14,19,.02)",
               }}>
-                <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "rgba(12,14,19,.35)", textTransform: "uppercase", letterSpacing: ".7px" }}>Disclosure</p>
-                <p style={{ margin: 0, fontSize: 11.5, color: "rgba(12,14,19,.45)", lineHeight: 1.65 }}>
+                <p style={{ margin: "0 0 3px", fontSize: 10, fontWeight: 700, color: "var(--muted-foreground)", textTransform: "uppercase", letterSpacing: ".7px" }}>Disclosure</p>
+                <p style={{ margin: 0, fontSize: 11.5, color: "var(--muted-foreground)", lineHeight: 1.65 }}>
                   NAV data sourced from AMFI via mfapi.in (updated 6× daily). Returns are point-to-point (1Y) or CAGR (3Y / 5Y) computed from historical NAV.
                   Past performance is not indicative of future results.
                 </p>
@@ -699,8 +699,8 @@ function FundsPageInner() {
 export default function FundsPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: "100vh", background: "#F5F5F3", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(12,14,19,.1)", borderTopColor: "#1A56DB", animation: "spin 0.8s linear infinite" }} />
+      <div style={{ minHeight: "100vh", background: "var(--background)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(255,255,255,.08)", borderTopColor: "#1A56DB", animation: "spin 0.8s linear infinite" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     }>

@@ -56,20 +56,20 @@ export default function AmcListPage() {
   }, [amcEntries, search])
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)" }}>
       <style>{`
         @keyframes amc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-        .amc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(12,14,19,.1) !important; }
+        .amc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(255,255,255,.08) !important; }
       `}</style>
 
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 20px 80px" }}>
 
         {/* Header */}
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: "#0C0E13", margin: "0 0 4px", letterSpacing: "-.02em" }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: "-.02em" }}>
             Asset Management Companies
           </h1>
-          <p style={{ color: "rgba(12,14,19,.45)", fontSize: 13.5, margin: 0 }}>
+          <p style={{ color: "var(--muted-foreground)", fontSize: 13.5, margin: 0 }}>
             {loading ? "Loading…" : `${amcEntries.length} AMCs · ${funds.length} total funds`}
           </p>
         </div>
@@ -80,8 +80,8 @@ export default function AmcListPage() {
             position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
             width: 15, height: 15, pointerEvents: "none",
           }}>
-            <circle cx="7.5" cy="7.5" r="5.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" />
-            <path d="M12 12l3.5 3.5" stroke="rgba(12,14,19,.35)" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="7.5" cy="7.5" r="5.5" stroke="rgba(148,163,184,.5)" strokeWidth="1.5" />
+            <path d="M12 12l3.5 3.5" stroke="rgba(148,163,184,.5)" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           <input
             type="text"
@@ -91,9 +91,9 @@ export default function AmcListPage() {
             style={{
               width: "100%", paddingLeft: 36, paddingRight: 14,
               paddingTop: 10, paddingBottom: 10,
-              border: "1px solid rgba(12,14,19,.12)",
-              borderRadius: 10, background: "#ffffff",
-              fontSize: 13.5, color: "#0C0E13", outline: "none",
+              border: "1px solid var(--border)",
+              borderRadius: 10, background: "var(--card)",
+              fontSize: 13.5, color: "var(--foreground)", outline: "none",
               boxSizing: "border-box",
             }}
           />
@@ -109,7 +109,7 @@ export default function AmcListPage() {
             {Array.from({ length: 18 }).map((_, i) => (
               <div key={i} style={{
                 height: 96, borderRadius: 14,
-                background: "rgba(12,14,19,.06)",
+                background: "rgba(255,255,255,.06)",
                 animation: "amc-pulse 1.4s ease infinite",
               }} />
             ))}
@@ -130,12 +130,12 @@ export default function AmcListPage() {
                   style={{
                     display: "flex", flexDirection: "column",
                     alignItems: "center", textAlign: "center",
-                    background: "#ffffff",
-                    border: "1px solid rgba(12,14,19,.1)",
+                    background: "var(--card)",
+                    border: "1px solid rgba(255,255,255,.08)",
                     borderRadius: 14, padding: "20px 16px",
                     textDecoration: "none",
                     transition: "all .2s",
-                    boxShadow: "0 1px 4px rgba(12,14,19,.05)",
+                    boxShadow: "0 1px 4px rgba(255,255,255,.05)",
                   }}
                 >
                   {/* Logo */}
@@ -148,13 +148,13 @@ export default function AmcListPage() {
                       />
                     : <div style={{
                         width: 44, height: 44, borderRadius: 10,
-                        background: "rgba(12,14,19,.07)",
+                        background: "rgba(255,255,255,.07)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         marginBottom: 10,
                       }}>
                         <svg viewBox="0 0 20 20" fill="none" style={{ width: 20, height: 20 }}>
-                          <rect x="2" y="2" width="16" height="16" rx="3" stroke="rgba(12,14,19,.3)" strokeWidth="1.5" />
-                          <path d="M5 10h10M5 7h7M5 13h5" stroke="rgba(12,14,19,.3)" strokeWidth="1.3" strokeLinecap="round" />
+                          <rect x="2" y="2" width="16" height="16" rx="3" stroke="rgba(148,163,184,.5)" strokeWidth="1.5" />
+                          <path d="M5 10h10M5 7h7M5 13h5" stroke="rgba(148,163,184,.5)" strokeWidth="1.3" strokeLinecap="round" />
                         </svg>
                       </div>
                   }
@@ -162,7 +162,7 @@ export default function AmcListPage() {
                   {/* Name */}
                   <span style={{
                     fontSize: 12.5, fontWeight: 700,
-                    color: "#0C0E13", lineHeight: 1.3,
+                    color: "var(--foreground)", lineHeight: 1.3,
                     marginBottom: 6,
                   }}>
                     {amc.displayName}
@@ -171,8 +171,8 @@ export default function AmcListPage() {
                   {/* Fund count badge */}
                   <span style={{
                     fontSize: 10.5, fontWeight: 600,
-                    color: "rgba(12,14,19,.4)",
-                    background: "rgba(12,14,19,.06)",
+                    color: "rgba(148,163,184,.7)",
+                    background: "rgba(255,255,255,.06)",
                     padding: "2px 8px", borderRadius: 99,
                   }}>
                     {amc.count} fund{amc.count !== 1 ? "s" : ""}
@@ -185,7 +185,7 @@ export default function AmcListPage() {
 
         {!loading && filtered.length === 0 && (
           <div style={{ padding: "48px 0", textAlign: "center" }}>
-            <p style={{ color: "rgba(12,14,19,.4)", fontSize: 14 }}>No AMCs match your search.</p>
+            <p style={{ color: "rgba(148,163,184,.7)", fontSize: 14 }}>No AMCs match your search.</p>
           </div>
         )}
       </div>

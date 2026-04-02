@@ -74,18 +74,20 @@ function InfoTip({ text }: { text: string }) {
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }} className="info-wrap-dash">
       <span style={{
-        width: 16, height: 16, borderRadius: "50%", background: "rgba(12,14,19,.12)",
+        width: 15, height: 15, borderRadius: "50%",
+        background: "rgba(148,163,184,0.15)", border: "1px solid rgba(148,163,184,0.2)",
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        cursor: "pointer", fontSize: 9, fontWeight: 800, color: "rgba(12,14,19,.5)",
+        cursor: "pointer", fontSize: 9, fontWeight: 800, color: "var(--muted-foreground)",
         lineHeight: 1,
       }}>i</span>
       <span style={{
         position: "absolute", bottom: "calc(100% + 8px)", left: "50%",
         transform: "translateX(-50%)",
-        background: "#0C0E13", color: "rgba(255,255,255,.85)",
+        background: "#0E1320", color: "rgba(226,232,240,.90)",
+        border: "1px solid rgba(255,255,255,0.08)",
         fontSize: 12, lineHeight: 1.55, padding: "10px 13px", borderRadius: 9,
         width: 200, zIndex: 400, pointerEvents: "none" as const,
-        boxShadow: "0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.05)",
+        boxShadow: "0 16px 40px rgba(0,0,0,.30)",
         textAlign: "left" as const, fontWeight: 400,
         opacity: 0, transition: "opacity .18s",
       }} className="info-tip-dash">
@@ -93,7 +95,7 @@ function InfoTip({ text }: { text: string }) {
         <span style={{
           content: "", position: "absolute", top: "100%", left: "50%",
           transform: "translateX(-50%)", border: "5px solid transparent",
-          borderTopColor: "#0C0E13",
+          borderTopColor: "#0E1320",
           display: "block", width: 0, height: 0,
         }} />
       </span>
@@ -122,36 +124,36 @@ function PortfolioSnapshot({
 
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-      borderRadius: 20, overflow: "hidden", marginBottom: 20,
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 20, overflow: "hidden", marginBottom: 16,
     }}>
       {/* Header */}
       <div style={{
-        padding: "22px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+        padding: "22px 28px 16px", borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap" as const, gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px" }}>Portfolio Snapshot</div>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px", color: "var(--foreground)" }}>Portfolio Snapshot</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const, marginTop: 6 }}>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "#EBF0FF", color: "#1A56DB",
+              background: "rgba(79,128,255,0.12)", color: "#6B9FFF",
             }}>
               {allocations.length} asset{allocations.length !== 1 ? "s" : ""}
             </span>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)",
+              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
             }}>
               {startYear} – {endYear}
             </span>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)",
+              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
             }}>
               vs NIFTY 50
             </span>
@@ -160,7 +162,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* Big 3 tiles — 10Y CAGR | Sharpe | Max Drawdown */}
-      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid var(--border)" }}
         className="snap-3-grid">
         {[
           {
@@ -195,7 +197,7 @@ function PortfolioSnapshot({
               key={tile.label}
               style={{
                 padding: "24px 28px",
-                borderRight: i < 2 ? "1px solid rgba(12,14,19,.12)" : "none",
+                borderRight: i < 2 ? "1px solid var(--border)" : "none",
                 position: "relative",
               }}
               className="snap-tile-resp"
@@ -203,7 +205,7 @@ function PortfolioSnapshot({
               <div style={{
                 display: "flex", alignItems: "center", gap: 6,
                 fontSize: 10.5, fontWeight: 700, letterSpacing: ".9px",
-                textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 10,
+                textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 10, opacity: 0.7,
               }}>
                 {tile.label} <InfoTip text={tile.info} />
               </div>
@@ -211,14 +213,14 @@ function PortfolioSnapshot({
                 fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
                 fontSize: "clamp(28px, 3.5vw, 36px)", fontWeight: 400, lineHeight: 1.0,
                 letterSpacing: "-1px",
-                color: tile.cls === "pos" ? "#0A7C4E" : tile.cls === "neg" ? "#C5271E" : "#0C0E13",
+                color: tile.cls === "pos" ? "#34D399" : tile.cls === "neg" ? "#F87171" : "var(--foreground)",
               }}>
                 {tile.value}
               </div>
               {tile.benchV && (
                 <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" as const }}>
-                  <span style={{ fontSize: 12, color: "rgba(12,14,19,.3)" }}>vs Nifty 50</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "rgba(12,14,19,.7)" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted-foreground)", opacity: 0.7 }}>vs Nifty 50</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)" }}>
                     {tile.benchV}
                   </span>
                   {tile.delta != null && (
@@ -227,8 +229,8 @@ function PortfolioSnapshot({
                       padding: "2px 8px", borderRadius: 100,
                       fontSize: 11, fontWeight: 700,
                       fontFamily: "var(--font-mono)",
-                      background: isPos ? "#E6F4EE" : "#FCE8E7",
-                      color: isPos ? "#0A7C4E" : "#C5271E",
+                      background: isPos ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+                      color: isPos ? "#34D399" : "#F87171",
                     }}>
                       {tile.deltaRaw
                         ? `${tile.delta > 0 ? "+" : ""}${tile.delta.toFixed(2)}`
@@ -243,7 +245,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* 6 mini metrics */}
-      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid var(--border)" }}
         className="snap-6-grid">
         {[
           { label: "Since-Inception CAGR", info: "Compound Annual Growth Rate since the portfolio's earliest common start date.", value: pct(metrics.cagr), benchV: benchmark ? pct(benchmark.cagr) : null, pos: true },
@@ -257,7 +259,7 @@ function PortfolioSnapshot({
             key={m.label}
             style={{
               padding: "16px 20px",
-              borderRight: i < 5 ? "1px solid rgba(12,14,19,.12)" : "none",
+              borderRight: i < 5 ? "1px solid var(--border)" : "none",
               textAlign: "center",
             }}
             className="snap-mini-resp"
@@ -265,19 +267,19 @@ function PortfolioSnapshot({
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
               fontSize: 10, fontWeight: 700, letterSpacing: ".8px",
-              textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 7,
+              textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 7, opacity: 0.7,
             }}>
               {m.label} {m.info && <InfoTip text={m.info} />}
             </div>
             <div style={{
               fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
               fontSize: 20, fontWeight: 400, letterSpacing: "-.3px", lineHeight: 1.1,
-              color: m.pos ? "#0A7C4E" : "#0C0E13",
+              color: m.pos ? "#34D399" : "var(--foreground)",
             }}>
               {m.value}
             </div>
             {m.benchV && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 3 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted-foreground)", marginTop: 3, opacity: 0.6 }}>
                 N50 {m.benchV}
               </div>
             )}
@@ -291,14 +293,14 @@ function PortfolioSnapshot({
           padding: "13px 28px", display: "flex", alignItems: "center",
           justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const,
         }}>
-          <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)" }}>
+          <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>
             Annualised outperformance vs Nifty 50
           </span>
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
             padding: "4px 12px", borderRadius: 100,
-            background: outperf >= 0 ? "#E6F4EE" : "#FCE8E7",
-            color: outperf >= 0 ? "#0A7C4E" : "#C5271E",
+            background: outperf >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+            color: outperf >= 0 ? "#34D399" : "#F87171",
           }}>
             {outperf >= 0 ? "+" : ""}{outperf.toFixed(2)}%
           </span>
@@ -326,18 +328,18 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
 
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+      background: "var(--card)", border: "1px solid var(--border)",
       borderRadius: 20, padding: "68px 36px", textAlign: "center",
     }}>
       <div style={{
         width: 44, height: 44, borderRadius: "50%",
-        border: "3px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13",
+        border: "3px solid var(--border)", borderTopColor: "#6B9FFF",
         animation: "spin .75s linear infinite", margin: "0 auto 18px",
       }} />
-      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, color: "var(--foreground)" }}>
         {isDefault ? "Loading model portfolio…" : "Running 20 years of historical backtest…"}
       </div>
-      <div style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)", marginBottom: 24 }}>
+      <div style={{ fontSize: 13.5, color: "var(--muted-foreground)", marginBottom: 24 }}>
         Computing portfolio risk metrics
       </div>
       <div
@@ -347,13 +349,13 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
         }}
       >
         <div style={{
-          background: "#F5F5F3", border: "1px solid rgba(12,14,19,.12)",
+          background: "var(--muted)", border: "1px solid var(--border)",
           borderRadius: 9, padding: "17px 19px", textAlign: "left",
         }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 7 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 7, opacity: 0.6 }}>
             Did you know?
           </div>
-          <div style={{ fontSize: 13.5, color: "#0C0E13", lineHeight: 1.62 }}>
+          <div style={{ fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.62 }}>
             {LOADING_FACTS[factIdx]}
           </div>
         </div>
@@ -362,7 +364,7 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
   )
 }
 
-/* ── Chart card wrapper matching v4 .ccard style ── */
+/* ── Chart card wrapper ── */
 function CCard({ title, sub, children, legend }: {
   title: React.ReactNode
   sub?: string
@@ -371,16 +373,16 @@ function CCard({ title, sub, children, legend }: {
 }) {
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-      borderRadius: 20, overflow: "hidden", marginBottom: 20,
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 20, overflow: "hidden", marginBottom: 16,
     }}>
       <div style={{
-        padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+        padding: "20px 28px 16px", borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>{title}</div>
-          {sub && <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>{sub}</div>}
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>{title}</div>
+          {sub && <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>{sub}</div>}
         </div>
         {legend}
       </div>
@@ -395,7 +397,7 @@ function ChartLegend({ items }: { items: { color: string; label: string; dashed?
   return (
     <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" as const, flexShrink: 0 }}>
       {items.map(item => (
-        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "rgba(12,14,19,.5)" }}>
+        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted-foreground)" }}>
           {item.dashed
             ? <div style={{ width: 18, height: 0, borderTop: `2.5px dashed ${item.color}` }} />
             : <div style={{ width: 18, height: 2.5, borderRadius: 2, background: item.color }} />}
@@ -732,16 +734,24 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)" }}>
       {/* Desktop page header */}
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="hidden md:block">
-        <h1 style={{
-          fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-          fontSize: 30, fontWeight: 400, letterSpacing: "-.5px", marginBottom: 4,
-        }}>
-          Portfolio Builder
-        </h1>
-        <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: 30, fontWeight: 400, letterSpacing: "-.5px",
+            color: "var(--foreground)",
+          }}>
+            Portfolio Builder
+          </h1>
+          <span style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase" as const,
+            color: "#34D399", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.20)",
+            padding: "2px 8px", borderRadius: 5,
+          }}>Live</span>
+        </div>
+        <p style={{ fontSize: 13.5, color: "var(--muted-foreground)" }}>
           Institutional-grade backtesting with 20+ years of NSE data.
         </p>
       </div>
@@ -762,7 +772,7 @@ export default function DashboardPage() {
         {/* Builder section — collapsed by default, at top */}
         <div style={{ marginBottom: 20 }} id="builder-section">
           <div style={{
-            background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)", border: "1px solid var(--border)",
             borderRadius: 20,
           }}>
             {/* Builder header — collapsible */}
@@ -772,15 +782,16 @@ export default function DashboardPage() {
                 padding: "18px 26px", cursor: "pointer", transition: "background .14s",
                 minHeight: 56,
               }}
-              className="hover:bg-[rgba(12,14,19,.03)]"
+              className="hover:bg-[rgba(255,255,255,.03)]"
               onClick={() => setBuilderOpen(o => !o)}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
-                  width: 32, height: 32, borderRadius: 9, background: "#0C0E13",
+                  width: 32, height: 32, borderRadius: 9,
+                  background: "rgba(79,128,255,0.12)", border: "1px solid rgba(79,128,255,0.20)",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
-                  <svg viewBox="0 0 17 17" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                  <svg viewBox="0 0 17 17" fill="none" stroke="#6B9FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
                     <rect x="2" y="2" width="5.5" height="5.5" rx=".8" />
                     <rect x="9.5" y="2" width="5.5" height="5.5" rx=".8" />
                     <rect x="2" y="9.5" width="5.5" height="5.5" rx=".8" />
@@ -788,8 +799,8 @@ export default function DashboardPage() {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px" }}>Build Your Portfolio</div>
-                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 2 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Build Your Portfolio</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 2 }}>
                     {!builderOpen && allocations.length > 0
                       ? `${allocations.length} fund${allocations.length !== 1 ? "s" : ""} selected`
                       : "Select funds · Set weights · Generate"}
@@ -801,7 +812,7 @@ export default function DashboardPage() {
                   <span style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-                    background: "#EBF0FF", color: "#1A56DB",
+                    background: "rgba(79,128,255,0.12)", color: "#6B9FFF",
                   }}>
                     {allocations.length} selected
                   </span>
@@ -821,10 +832,10 @@ export default function DashboardPage() {
 
             {/* Builder body */}
             {builderOpen && (
-              <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", padding: "22px 26px" }} className="bld-body-resp">
+              <div style={{ borderTop: "1px solid var(--border)", padding: "22px 26px" }} className="bld-body-resp">
                 {fundsLoading ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid var(--border)", borderTopColor: "var(--foreground)", animation: "spin .75s linear infinite" }} />
                   </div>
                 ) : (
                   <PortfolioBuilder
@@ -846,21 +857,22 @@ export default function DashboardPage() {
           {/* Empty state */}
           {!result && !loading && (
             <div style={{
-              background: "#ffffff", border: "1.5px dashed rgba(12,14,19,.12)",
+              background: "var(--card)", border: "1.5px dashed var(--border)",
               borderRadius: 20, padding: "68px 36px", textAlign: "center",
             }}>
               <div style={{
-                width: 50, height: 50, borderRadius: 15, background: "#F5F5F3",
+                width: 52, height: 52, borderRadius: 14,
+                background: "rgba(79,128,255,0.10)", border: "1px solid rgba(79,128,255,0.18)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                margin: "0 auto 16px",
+                margin: "0 auto 18px",
               }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 25, height: 25, color: "rgba(12,14,19,.3)" }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#6B9FFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               </div>
-              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>No Portfolio Yet</div>
-              <div style={{ fontSize: 14, color: "rgba(12,14,19,.5)", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>
-                Select funds below, adjust weights, then run the backtest to see 20 years of data.
+              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: "var(--foreground)" }}>No Portfolio Yet</div>
+              <div style={{ fontSize: 14, color: "var(--muted-foreground)", maxWidth: 300, margin: "0 auto", lineHeight: 1.65 }}>
+                Select funds above, adjust weights, then run the backtest to see 20 years of historical data.
               </div>
             </div>
           )}
@@ -886,12 +898,12 @@ export default function DashboardPage() {
 
               {/* Portfolio Composition — above Snapshot */}
               <div style={{
-                background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                borderRadius: 20, overflow: "hidden", marginBottom: 20,
+                background: "var(--card)", border: "1px solid var(--border)",
+                borderRadius: 20, overflow: "hidden", marginBottom: 16,
               }}>
-                <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Portfolio Composition</div>
-                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>Weight distribution</div>
+                <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Portfolio Composition</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>Weight distribution</div>
                 </div>
                 <div style={{ padding: "24px 28px 0" }} className="ccard-body-resp">
                   <AllocationPieChart
@@ -923,14 +935,14 @@ export default function DashboardPage() {
               {/* FY Detail — expandable cards */}
               {result.fyTableData && (
                 <div style={{
-                  background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                  borderRadius: 20, overflow: "hidden", marginBottom: 20,
+                  background: "var(--card)", border: "1px solid var(--border)",
+                  borderRadius: 20, overflow: "hidden", marginBottom: 16,
                 }}>
                   <div style={{
-                    padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+                    padding: "20px 28px 16px", borderBottom: "1px solid var(--border)",
                   }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Fiscal Year Detail</div>
-                    <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Fiscal Year Detail</div>
+                    <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>
                       Portfolio NAV at FY start/end vs NIFTY 50 · Tap row to expand fund breakdown
                     </div>
                   </div>
@@ -974,14 +986,15 @@ export default function DashboardPage() {
 
               {/* Disclosure */}
               <div style={{
-                border: "1px dashed rgba(12,14,19,.3)", borderRadius: 16,
-                padding: "22px 24px", marginTop: 8, marginBottom: 20,
+                border: "1px dashed var(--border)", borderRadius: 16,
+                padding: "20px 22px", marginTop: 8, marginBottom: 16,
+                background: "var(--muted)",
               }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 9 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 8, opacity: 0.7 }}>
                   Disclosure
                 </div>
-                <p style={{ fontSize: 12, color: "rgba(12,14,19,.5)", lineHeight: 1.72 }}>
-                  Past performance is not indicative of future results. All computations use adjusted NSE index NAV data (2005–present). CAGR is annualised compounded growth. Volatility is annualised standard deviation of daily returns. Max Drawdown represents the deepest peak-to-trough decline. Comparison vs Nifty 50 is for benchmarking only. <strong style={{ color: "#0C0E13" }}>Data Source: NSE India | FactorLens Calculations.</strong> Not financial advice.
+                <p style={{ fontSize: 12, color: "var(--muted-foreground)", lineHeight: 1.72 }}>
+                  Past performance is not indicative of future results. All computations use adjusted NSE index NAV data (2005–present). CAGR is annualised compounded growth. Volatility is annualised standard deviation of daily returns. Max Drawdown represents the deepest peak-to-trough decline. Comparison vs Nifty 50 is for benchmarking only. <strong style={{ color: "var(--foreground)" }}>Data Source: NSE India | FactorLens Calculations.</strong> Not financial advice.
                 </p>
               </div>
 
@@ -994,10 +1007,10 @@ export default function DashboardPage() {
         {/* Error */}
         {error && (
           <div style={{
-            borderRadius: 12, border: "1px solid rgba(197,39,30,.4)",
-            background: "rgba(197,39,30,.05)", padding: "12px 16px", marginTop: 12,
+            borderRadius: 12, border: "1px solid rgba(239,68,68,.3)",
+            background: "rgba(239,68,68,.06)", padding: "12px 16px", marginTop: 12,
           }}>
-            <p style={{ fontSize: 14, color: "#C5271E" }}>{error}</p>
+            <p style={{ fontSize: 14, color: "#F87171" }}>{error}</p>
           </div>
         )}
 
@@ -1014,10 +1027,10 @@ export default function DashboardPage() {
             onClick={scrollToBuilder}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              padding: "12px 18px", borderRadius: 100,
-              background: "#0C0E13", color: "#ffffff",
+              padding: "12px 20px", borderRadius: 100,
+              background: "#4F80FF", color: "#ffffff",
               fontSize: 13.5, fontWeight: 700,
-              boxShadow: "0 4px 20px rgba(12,14,19,.28)",
+              boxShadow: "0 4px 24px rgba(79,128,255,.35)",
               transition: "all .2s", border: "none",
               fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" as const,
             }}
