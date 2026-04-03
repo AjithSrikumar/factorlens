@@ -1,102 +1,135 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 
 /* ─────────────────────────────────────────
    DATA
 ───────────────────────────────────────── */
 const heroStats = [
-  { v: "20+",   l: "Years of Data" },
-  { v: "28",    l: "NSE Funds"     },
-  { v: "140K+", l: "Data Points"   },
-  { v: "8",     l: "Risk Metrics"  },
+  { v: "20+",    l: "Years of Data"       },
+  { v: "2,500+", l: "Funds Analysed"      },
+  { v: "Quant",  l: "Driven Portfolios"   },
+  { v: "NSE & BSE", l: "Real Market Data" },
 ]
 
-const features = [
+const problemCards = [
   {
-    iconBg: "var(--blue-lg)",
-    iconStroke: "var(--blue)",
-    iconPath: <><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="13" y="2" width="7" height="7" rx="1"/><rect x="2" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></>,
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke="var(--text-muted)" strokeWidth="1.5"/><path d="M11 7v5l3 2" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>,
+    iconBg: "var(--bg3)",
+    title: "Too Many Funds",
+    desc:  "2,500+ schemes, no clear signal. Most investors never find what actually works.",
+  },
+  {
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 16l4-4 3 3 4-5 3 2" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="2" y="4" width="18" height="14" rx="2" stroke="var(--text-muted)" strokeWidth="1.5"/></svg>,
+    iconBg: "var(--bg3)",
+    title: "Messy Portfolios",
+    desc:  "20+ funds, no allocation, no strategy. Accumulation without architecture.",
+  },
+  {
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3v4M11 15v4M4.22 4.22l2.83 2.83M14.95 14.95l2.83 2.83M3 11h4M15 11h4M4.22 17.78l2.83-2.83M14.95 7.05l2.83-2.83" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>,
+    iconBg: "var(--bg3)",
+    title: "Emotional Decisions",
+    desc:  "Buying on news, selling on fear. Emotion consistently erodes long-term performance.",
+  },
+  {
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M5 12l4 4 8-8" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    iconBg: "var(--accent-light)",
+    title: "Meet FactorLens",
+    desc:  "A disciplined, data-driven partner for long-term wealth creation — built around process, not opinion.",
+  },
+]
+
+const platformCards = [
+  {
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="2" y="14" width="4" height="6" rx="1" stroke="var(--text-muted)" strokeWidth="1.5"/><rect x="9" y="9" width="4" height="11" rx="1" stroke="var(--text-muted)" strokeWidth="1.5"/><rect x="16" y="4" width="4" height="16" rx="1" stroke="var(--text-muted)" strokeWidth="1.5"/></svg>,
     title: "Portfolio Builder",
-    desc: "Select up to 10 funds, assign weights, and see your portfolio's exact historical performance — computed in real time.",
+    desc:  "Create your portfolio in minutes — based on your goals and risk profile. Select funds, assign weights, see results instantly.",
   },
   {
-    iconBg: "var(--green-lg)",
-    iconStroke: "var(--green)",
-    iconPath: <><polyline points="21 6 12 15 7.5 10.5 1 17"/><polyline points="16 6 21 6 21 11"/></>,
-    title: "Factor Investing",
-    desc: "Access momentum, quality, low-volatility, alpha and multi-factor strategies backed by academic research and NSE data.",
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M3 17l5-6 4 3 5-7 3 3" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+    title: "Factor Investing Engine",
+    desc:  "Access momentum, value, quality, and multi-factor strategies backed by decades of research and real market data.",
   },
   {
-    iconBg: "var(--red-lg)",
-    iconStroke: "var(--red)",
-    iconPath: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>,
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 3a8 8 0 100 16A8 8 0 0011 3z" stroke="var(--text-muted)" strokeWidth="1.5"/><path d="M11 7v4l3 2" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round"/></svg>,
     title: "Risk Analytics",
-    desc: "Understand max drawdown, volatility, Sharpe ratio, and rolling 3-year returns before you invest.",
+    desc:  "See drawdowns, Sharpe ratios, and rolling returns before you invest — so there are no surprises later.",
   },
   {
-    iconBg: "#FEF5E6",
-    iconStroke: "#B45309",
-    iconPath: <><ellipse cx="11" cy="5" rx="9" ry="3"/><path d="M20 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M2 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>,
-    title: "Real NSE Data",
-    desc: "Every metric is computed from actual NSE index NAV data — not simulations, not estimates. 2005 to present.",
+    icon: <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><ellipse cx="11" cy="11" rx="9" ry="5" stroke="var(--text-muted)" strokeWidth="1.5"/><path d="M2 11c0 2.76 4.03 5 9 5s9-2.24 9-5" stroke="var(--text-muted)" strokeWidth="1.5"/><path d="M2 7.5C2 10.26 6.03 12.5 11 12.5S20 10.26 20 7.5" stroke="var(--text-muted)" strokeWidth="1.5"/></svg>,
+    title: "Real Market Data",
+    desc:  "Built on actual NSE & BSE data — not simulations or assumptions. 2005 to present, updated continuously.",
   },
 ]
 
 const steps = [
-  { n: "01", t: "Select Funds",        d: "Pick 1–10 funds from 28 NSE factor and broad-market indices." },
-  { n: "02", t: "Set Weights",         d: "Adjust sliders to allocate percentages. Auto-sum to 100%." },
-  { n: "03", t: "Generate Portfolio",  d: "Hit Run Backtest. Get CAGR, Sharpe, Drawdown instantly." },
-  { n: "04", t: "Analyse & Decide",    d: "Study interactive charts. Compare against the Nifty 50 benchmark." },
+  { n: "01", t: "Select Funds",          d: "Choose from curated index funds and ETFs covering every major factor style." },
+  { n: "02", t: "Set Your Allocation",   d: "Aligned to your risk profile and goals. They auto-sum to 100% — the maths is always clean." },
+  { n: "03", t: "Generate Portfolio",    d: "Instant backtests, risk metrics, and expected behaviour — computed in real time." },
+  { n: "04", t: "Invest with Confidence",d: "Use your existing broker account. No custody, no lock-ins, full transparency." },
 ]
 
 const whyPoints = [
-  "Systematic, not emotional",
-  "Low-cost index funds",
-  "Diversified across factors",
-  "Decades of academic research",
+  "Factor-based investing proven over long periods",
+  "Diversification across styles — no single factor wins every year",
+  "Data-backed decisions tested on years of market history",
+  "No active fund bias, no stock picking, no manager risk",
 ]
 
 const whyCards = [
-  { t: "Beat the Market",      d: "Factor indices like Momentum and Quality have historically outperformed Nifty 50 by 4–8% annually." },
-  { t: "Passive. Low Cost.",   d: "Rule-based index funds — no active manager, no high fees, no stock picking." },
-  { t: "Diversification Works",d: "Combining factors reduces drawdown and smooths returns. Data proves it." },
-  { t: "Data-Backed Decisions",d: "Every allocation backed by 20 years of real NSE price data." },
+  { tag: "Increase returns",    t: "+6.2% Portfolio vs NIFTY at −1.5% in FY26",      d: "Factor indices like Momentum and Quality have a consistent long-term edge over broad-market benchmarks — verified on real market data." },
+  { tag: "Reduce drawdowns",    t: "Blending factors cuts worst-case losses",           d: "No single factor wins every year. Combining them reduces drawdown while preserving upside — improving risk-adjusted returns." },
+  { tag: "Improve consistency", t: "Smoother return profiles over market cycles",       d: "Because wealth isn't built by chasing returns — it's built by staying invested intelligently through every cycle." },
+  { tag: "Data-backed decisions",t: "Every allocation tested on real NSE history",      d: "Every insight on FactorLens is backed by actual NSE NAV data from 2005 — not simulations, not assumptions." },
 ]
 
 const divStats = [
-  { v: "−38%",  l: "Avg drawdown, single factor"       },
-  { v: "−24%",  l: "Avg drawdown, blended portfolio"   },
-  { v: "+3.2%", l: "Annual outperformance vs Nifty 50" },
+  { v: "−38%",  cls: "neg", l: "Avg drawdown, single factor"       },
+  { v: "−24%",  cls: "neu", l: "Avg drawdown, blended portfolio"   },
+  { v: "+3.2%", cls: "pos", l: "Annual outperformance vs Nifty 50" },
 ]
 
-const footerLinks = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/rankings",  label: "Rankings"  },
-  { href: "/academy",   label: "Academy"   },
+const faqs = [
+  { q: "What is FactorLens?",             a: "FactorLens is a data-driven wealth platform that helps you invest in ready-made, diversified portfolios of mutual funds and ETFs, built using quantitative models. No guesswork — just disciplined, research-backed investing." },
+  { q: "How much do I need to start?",    a: "You can start with just ₹5,000. There is no upper limit. FactorLens is designed for long-term wealth creation at any starting point." },
+  { q: "Is my money safe?",               a: "Yes. Your investments remain in your own brokerage account. We never hold your funds — not even for a moment. FactorLens is a research and analytics platform, not a custodian." },
+  { q: "Are returns guaranteed?",         a: "No. Markets carry risk, and no strategy guarantees future returns. Our goal is to maximize returns while controlling risk, using disciplined, data-backed strategies tested on real NSE data. Please consult a SEBI-registered advisor before investing." },
+  { q: "Can I stop anytime?",             a: "Yes. There are no lock-ins. You can pause or withdraw anytime through your broker. FactorLens imposes no restrictions on your own money." },
+  { q: "Who is FactorLens built for?",    a: "Serious long-term investors who value discipline over speculation, data over opinions, and process over emotion. If that's you, FactorLens is built for you." },
 ]
 
 /* ─────────────────────────────────────────
-   LOGO MARK
+   LOGO ICON
 ───────────────────────────────────────── */
-function LogoMark() {
+function LogoIcon() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-      <div style={{
-        width: 30, height: 30, borderRadius: 8,
-        background: "var(--navy)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <svg viewBox="0 0 15 15" fill="none" style={{ width: 15, height: 15 }}>
-          <rect x="1" y="9"  width="3" height="5"  rx=".8" fill="rgba(255,255,255,.45)"/>
-          <rect x="6" y="5"  width="3" height="9"  rx=".8" fill="rgba(255,255,255,.72)"/>
-          <rect x="11" y="1" width="3" height="13" rx=".8" fill="white"/>
-        </svg>
-      </div>
-      <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.3px" }}>
-        <span style={{ color: "var(--blue)" }}>factor</span>
-        <span style={{ color: "var(--navy)" }}>lens</span>
-      </span>
+    <div style={{
+      width: 26, height: 26, borderRadius: "var(--radius-sm)",
+      background: "var(--text-raw)",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <svg viewBox="0 0 18 18" fill="none" style={{ width: 16, height: 16 }}>
+        <rect x="2"   y="10" width="3" height="6"  rx="1" fill="white"/>
+        <rect x="7.5" y="6"  width="3" height="10" rx="1" fill="white"/>
+        <rect x="13"  y="2"  width="3" height="14" rx="1" fill="white"/>
+      </svg>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────
+   FAQ ITEM (accordion)
+───────────────────────────────────────── */
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className={`faq-item${open ? " open" : ""}`}>
+      <button className="faq-q" onClick={() => setOpen(o => !o)}>
+        {q}
+        <span className="faq-ico">{open ? "×" : "+"}</span>
+      </button>
+      <div className="faq-ans">{a}</div>
     </div>
   )
 }
@@ -106,331 +139,260 @@ function LogoMark() {
 ───────────────────────────────────────── */
 export default function LandingPage() {
   return (
-    <div style={{ background: "var(--off)" }}>
+    <div>
 
-      {/* ══════════════════════════════════════
-          HERO — navy background
-      ══════════════════════════════════════ */}
-      <section style={{
-        background: "var(--navy)",
-        padding: "72px 20px 80px",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        {/* Radial gradient glow */}
-        <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none",
-          background: "radial-gradient(ellipse 70% 60% at 50% -15%,rgba(26,86,219,.20) 0%,transparent 65%)",
-        }} />
-
-        <div style={{
-          maxWidth: 720, margin: "0 auto",
-          position: "relative", zIndex: 1, textAlign: "center",
-        }}>
-          {/* Status pill */}
-          <div style={{
-            display: "inline-flex", alignItems: "center", gap: 8,
-            background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.12)",
-            borderRadius: 100, padding: "5px 14px", marginBottom: 28,
-            fontSize: 11.5, fontWeight: 600, letterSpacing: ".5px", textTransform: "uppercase",
-            color: "rgba(255,255,255,.5)", backdropFilter: "blur(8px)",
-          }}>
-            <span className="hero-pulse-dot" />
-            NSE Factor Investing · 2005–2026
-          </div>
-
-          {/* Headline */}
-          <h1 style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: "clamp(36px,6vw,62px)",
-            fontWeight: 400, lineHeight: 1.08,
-            letterSpacing: "-1.5px", color: "var(--white)", marginBottom: 16,
-          }}>
-            Build smarter portfolios.<br/>
-            Backed by{" "}
-            <em style={{
-              fontStyle: "italic",
-              background: "linear-gradient(120deg,#93c5fd 0%,#6ee7b7 100%)",
-              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
-            }}>data.</em>
-          </h1>
-
-          {/* Subhead */}
-          <p style={{
-            fontSize: "clamp(15px,2.2vw,17px)",
-            color: "rgba(255,255,255,.48)",
-            maxWidth: 400, margin: "0 auto 38px", lineHeight: 1.65,
-          }}>
-            Data-backed factor investing for serious investors. 20 years of real NSE backtest data, instantly.
-          </p>
-
-          {/* CTAs */}
-          <div style={{
-            display: "flex", flexDirection: "column", alignItems: "center",
-            gap: 11, marginBottom: 68,
-          }} className="hero-actions-wrap">
-            <Link href="/dashboard" style={{
-              padding: "14px 30px", borderRadius: 12,
-              background: "var(--white)", color: "var(--navy)",
-              fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px",
-              display: "inline-flex", alignItems: "center", gap: 8,
-              textDecoration: "none", transition: "all .2s",
-              minWidth: 190, justifyContent: "center",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 28px rgba(0,0,0,.22)"; (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; (e.currentTarget as HTMLAnchorElement).style.transform = "none"; }}
-            >
-              Build My Portfolio
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </Link>
-            <Link href="/rankings" style={{
-              padding: "14px 22px", borderRadius: 12,
-              background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.14)",
-              color: "rgba(255,255,255,.72)", fontSize: 14.5, fontWeight: 600,
-              display: "inline-flex", alignItems: "center", gap: 8,
-              textDecoration: "none", transition: "all .2s",
-              backdropFilter: "blur(8px)", minWidth: 190, justifyContent: "center",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,.13)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,.07)"; }}
-            >
-              View Fund Rankings
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </Link>
-          </div>
-
-          {/* Stats grid */}
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1,
-            background: "rgba(255,255,255,.07)",
-            border: "1px solid rgba(255,255,255,.08)",
-            borderRadius: 18, overflow: "hidden", maxWidth: 500, margin: "0 auto",
-          }} className="hero-stats-grid">
-            {heroStats.map(s => (
-              <div key={s.l} style={{ padding: "20px 10px", background: "rgba(255,255,255,.03)", textAlign: "center" }}>
-                <div style={{ fontFamily: "var(--font-serif)", fontSize: 26, fontWeight: 400, color: "var(--white)", lineHeight: 1.1, letterSpacing: "-.4px" }}>{s.v}</div>
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.35)", marginTop: 5, fontWeight: 500 }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
+      {/* ══ HERO ═══════════════════════════════════════════════════ */}
+      <div className="hero">
+        <div className="hero-badge anim-1">
+          <span className="hero-dot" />
+          Quant-driven investing · Real NSE &amp; BSE data
         </div>
-      </section>
 
-      {/* ══════════════════════════════════════
-          FEATURES
-      ══════════════════════════════════════ */}
-      <section style={{ background: "var(--off)", padding: "72px 0" }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
-          <div style={{ textAlign: "center", marginBottom: 44 }}>
-            <span className="sec-lbl">Platform</span>
-            <h2 className="sec-h2">Institutional analytics.<br/>For every investor.</h2>
-            <p className="sec-sub" style={{ maxWidth: 400, margin: "0 auto" }}>No jargon. No complexity. Just data.</p>
-          </div>
+        <h1 className="anim-2">
+          Build real wealth.<br />
+          Backed by <em>data,</em> not noise.
+        </h1>
 
-          <div className="feat-bento">
-            {features.map(f => (
-              <div key={f.title} className="fl-card-hover" style={{ padding: "28px 24px" }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                  background: f.iconBg, display: "flex", alignItems: "center",
-                  justifyContent: "center", marginBottom: 18,
-                }}>
-                  <svg viewBox="0 0 22 22" fill="none" stroke={f.iconStroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
-                    {f.iconPath}
-                  </svg>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", marginBottom: 8, color: "var(--navy)" }}>{f.title}</div>
-                <div style={{ fontSize: 13.5, color: "var(--navy-50)", lineHeight: 1.62 }}>{f.desc}</div>
-              </div>
-            ))}
-          </div>
+        <p className="hero-sub anim-3">
+          Factor investing for serious long-term investors — disciplined, low-cost,
+          and built on 20 years of real market data.
+        </p>
+
+        <div className="hero-ctas anim-4">
+          <Link href="/dashboard" className="btn-accent-ws">Build My Portfolio →</Link>
+          <Link href="/rankings"  className="btn-outline-ws">View Fund Rankings ›</Link>
         </div>
-      </section>
 
-      {/* ══════════════════════════════════════
-          HOW IT WORKS
-      ══════════════════════════════════════ */}
-      <section style={{ background: "var(--white)", padding: "72px 0" }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
-          <div style={{ textAlign: "center", marginBottom: 44 }}>
-            <span className="sec-lbl">Process</span>
-            <h2 className="sec-h2">From idea to insight<br/>in under 30 seconds.</h2>
-          </div>
+        <p className="anim-4" style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 28, marginTop: -12 }}>
+          No lock-ins. No custody. Full control.
+        </p>
 
-          <div className="steps-grid-landing">
-            {steps.map(s => (
-              <div key={s.n}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: 12,
-                  background: "var(--navy)", color: "var(--white)",
-                  fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 500,
-                  display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14,
-                }}>
-                  {s.n}
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", marginBottom: 7, color: "var(--navy)" }}>{s.t}</div>
-                <div style={{ fontSize: 13.5, color: "var(--navy-50)", lineHeight: 1.6 }}>{s.d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════════════════
-          WHY FACTOR INVESTING
-      ══════════════════════════════════════ */}
-      <section style={{ background: "var(--off)", padding: "72px 0" }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
-          <div className="why-grid-landing">
-            {/* Left: copy */}
-            <div>
-              <span className="sec-lbl">Why Factor Investing?</span>
-              <h2 className="sec-h2">Rules-based.<br/>Research-backed.<br/>Proven 20 years.</h2>
-              <p style={{ fontSize: 15, color: "var(--navy-50)", lineHeight: 1.7, marginBottom: 4 }}>
-                Factor investing selects stocks based on attributes associated with higher returns — implemented
-                as NSE indices accessible as low-cost index funds.
-              </p>
-
-              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 11, margin: "22px 0 30px", padding: 0 }}>
-                {whyPoints.map(p => (
-                  <li key={p} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--navy)" }}>
-                    <span style={{
-                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                      background: "var(--green-lg)", display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <svg viewBox="0 0 11 11" fill="none" style={{ width: 11, height: 11 }}>
-                        <path d="M2 5.5l2 2 4-4" stroke="#0A7C4E" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </span>
-                    {p}
-                  </li>
-                ))}
-              </ul>
-
-              <Link href="/academy" className="fl-btn-outline" style={{ display: "inline-flex" }}>
-                Learn in Academy
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M6 12l4-4-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Link>
+        <div className="stats-strip anim-5">
+          {heroStats.map(s => (
+            <div key={s.l} className="stat-cell">
+              <div className="stat-num">{s.v}</div>
+              <div className="stat-lbl">{s.l}</div>
             </div>
+          ))}
+        </div>
+      </div>
 
+      {/* ══ THE PROBLEM ════════════════════════════════════════════ */}
+      <div className="plat-bg">
+        <div className="section section-c">
+          <p className="eyebrow">The Problem</p>
+          <h2 className="sec-h2">Investing today<br />is broken.</h2>
+          <p className="sec-sub">Too many funds. Too much noise. Too little discipline. FactorLens fixes this.</p>
+          <div className="cards-grid">
+            {problemCards.map(c => (
+              <div key={c.title} className="plat-card">
+                <div className="pc-ico" style={{ background: c.iconBg }}>{c.icon}</div>
+                <div className="pc-t">{c.title}</div>
+                <div className="pc-d">{c.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ══ VALUE PROP ═════════════════════════════════════════════ */}
+      <div style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section section-c">
+          <p className="eyebrow">A smarter portfolio</p>
+          <h2 className="sec-h2">Built for your risk.<br />Designed for your future.</h2>
+          <p className="sec-sub">
+            Diversified across factors, asset classes, and market cycles. Built using low-cost index funds and ETFs.
+            Continuously monitored and rebalanced. All powered by quantitative models — not opinions.
+          </p>
+        </div>
+      </div>
+
+      {/* ══ PLATFORM ═══════════════════════════════════════════════ */}
+      <div className="plat-bg">
+        <div className="section section-c">
+          <p className="eyebrow">Platform</p>
+          <h2 className="sec-h2">Institutional-grade investing.<br />Made simple.</h2>
+          <p className="sec-sub">
+            The same tools professional fund managers use — now in your hands,
+            without the jargon or complexity.
+          </p>
+          <div className="cards-grid">
+            {platformCards.map(c => (
+              <div key={c.title} className="plat-card">
+                <div className="pc-ico">{c.icon}</div>
+                <div className="pc-t">{c.title}</div>
+                <div className="pc-d">{c.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ══ PROCESS ════════════════════════════════════════════════ */}
+      <div className="section section-c">
+        <p className="eyebrow">Process</p>
+        <h2 className="sec-h2">From confusion to clarity<br />in under 30 seconds.</h2>
+        <p className="sec-sub">No finance degree required. Four steps between you and a data-backed portfolio.</p>
+        <div className="steps-grid">
+          {steps.map(s => (
+            <div key={s.n} className="step">
+              <div className="step-line" />
+              <div className="step-n">{s.n}</div>
+              <div className="step-t">{s.t}</div>
+              <div className="step-d">{s.d}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ══ WHY FACTOR ═════════════════════════════════════════════ */}
+      <div style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
+          <p className="eyebrow">Core differentiation</p>
+          <div className="why-grid">
+            {/* Left */}
+            <div>
+              <h2 className="why-h2">Rules-based.<br />Research-backed.<br />Built to outperform.</h2>
+              <p className="why-p">
+                FactorLens portfolios are designed to increase returns, reduce drawdowns, and improve consistency.
+                Factor-based investing is proven to outperform over long periods — implemented systematically, at low cost.
+              </p>
+              <ul className="check-list">
+                {whyPoints.map(p => <li key={p}>{p}</li>)}
+              </ul>
+              <Link href="/academy" className="btn-text-link">Learn in Academy →</Link>
+            </div>
             {/* Right: 2×2 cards */}
-            <div className="why-cards-landing">
+            <div className="why-cards">
               {whyCards.map(w => (
-                <div key={w.t} style={{
-                  background: "var(--white)", border: "1px solid var(--navy-12)",
-                  borderRadius: "var(--r)", padding: "20px", transition: "all .18s",
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--navy-30)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "var(--sh-xs)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = "var(--navy-12)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--blue)", marginBottom: 7 }}>{w.t}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--navy-50)", lineHeight: 1.6 }}>{w.d}</div>
+                <div key={w.t} className="why-card">
+                  <div className="wc-tag">{w.tag}</div>
+                  <div className="wc-t">{w.t}</div>
+                  <div className="wc-d">{w.d}</div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ══════════════════════════════════════
-          DIVERSIFICATION BANNER
-      ══════════════════════════════════════ */}
-      <section style={{ background: "var(--white)", padding: "48px 0" }}>
-        <div style={{ maxWidth: 1160, margin: "0 auto", padding: "0 32px" }} className="landing-pw">
+      {/* ══ DIVERSIFICATION ════════════════════════════════════════ */}
+      <div className="div-bg">
+        <div className="section section-c">
+          <p className="eyebrow">Risk &amp; return philosophy</p>
+          <h2 className="sec-h2">Maximize return.<br />Minimize risk.</h2>
+          <p className="sec-sub">
+            Our portfolio construction system is designed to reduce volatility and drawdowns, deliver smoother
+            return profiles, and stay aligned with long-term compounding.
+          </p>
+          <div className="div-stats">
+            {divStats.map(s => (
+              <div key={s.l} className="dv-cell">
+                <div className={`dv-val ${s.cls}`}>{s.v}</div>
+                <div className="dv-lbl">{s.l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Safety strip */}
           <div style={{
-            background: "var(--navy)", borderRadius: "var(--r-xl)",
-            padding: "60px 52px", textAlign: "center",
-            position: "relative", overflow: "hidden",
-          }} className="div-banner-landing">
-            {/* Glow */}
-            <div style={{
-              position: "absolute", inset: 0, pointerEvents: "none",
-              background: "radial-gradient(ellipse 60% 70% at 20% 50%,rgba(26,86,219,.14) 0%,transparent 65%)",
-            }} />
-            <div style={{ position: "relative", zIndex: 1 }}>
-              <span className="sec-lbl" style={{ color: "rgba(255,255,255,.32)" }}>Why Diversification?</span>
-              <h2 style={{
-                fontFamily: "var(--font-serif)",
-                fontSize: "clamp(26px,3.5vw,40px)", fontWeight: 400,
-                letterSpacing: "-.8px", lineHeight: 1.15,
-                color: "var(--white)", maxWidth: 420, margin: "0 auto 13px",
-              }}>
-                No single factor wins every year.
-              </h2>
-              <p style={{
-                fontSize: 16, color: "rgba(255,255,255,.45)",
-                maxWidth: 460, margin: "0 auto", lineHeight: 1.7,
-              }}>
-                Blend factors to reduce worst-case drawdown while preserving long-term return potential.
+            marginTop: 48, background: "var(--surface)", border: "1px solid var(--border-mid)",
+            borderRadius: "var(--radius-lg)", padding: "36px 40px",
+            textAlign: "left", display: "flex", justifyContent: "space-between",
+            alignItems: "center", gap: 40, flexWrap: "wrap",
+          }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 10 }}>Safety &amp; Control</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "1.5rem", letterSpacing: "-0.02em", marginBottom: 8 }}>
+                Your money stays yours.
+              </div>
+              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.7, maxWidth: 320 }}>
+                Invest via your own broker. No custody, no lock-ins, full transparency at every step.
               </p>
-
-              <div className="div-stats-landing">
-                {divStats.map(s => (
-                  <div key={s.l} style={{
-                    background: "rgba(255,255,255,.06)",
-                    border: "1px solid rgba(255,255,255,.09)",
-                    borderRadius: "var(--r)", padding: "22px 16px",
+            </div>
+            <div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--text-dim)", marginBottom: 16 }}>
+                Supported Platforms
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, maxWidth: 340 }}>
+                {[
+                  { name: "Groww",        bg: "#00D09C" },
+                  { name: "Zerodha",      bg: "#387ED1" },
+                  { name: "Upstox",       bg: "#6C63FF" },
+                  { name: "ICICI Direct", bg: "#F15B25" },
+                  { name: "Angel One",    bg: "#E60000" },
+                  { name: "Paytm Money",  bg: "#00B9F1" },
+                ].map(p => (
+                  <div key={p.name} style={{
+                    background: "var(--bg2)", border: "1px solid var(--border-mid)",
+                    borderRadius: "var(--radius-md)", padding: "10px 14px",
+                    display: "flex", alignItems: "center", gap: 8,
                   }}>
-                    <div style={{ fontFamily: "var(--font-serif)", fontSize: 32, fontWeight: 400, color: "#22D3A0", letterSpacing: "-.5px", lineHeight: 1.1 }}>{s.v}</div>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.40)", marginTop: 6 }}>{s.l}</div>
+                    <div style={{ width: 18, height: 18, borderRadius: 4, background: p.bg, flexShrink: 0 }} />
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-raw)" }}>{p.name}</span>
                   </div>
                 ))}
               </div>
-
-              <Link href="/dashboard" style={{
-                padding: "15px 30px", borderRadius: 12,
-                background: "var(--white)", color: "var(--navy)",
-                fontSize: 15, fontWeight: 700, letterSpacing: "-.2px",
-                display: "inline-flex", alignItems: "center", gap: 8,
-                textDecoration: "none", position: "relative", zIndex: 1,
-                transition: "all .2s",
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 28px rgba(0,0,0,.22)"; (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; (e.currentTarget as HTMLAnchorElement).style.transform = "none"; }}
-              >
-                Build My Portfolio
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </Link>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ══════════════════════════════════════
-          FOOTER
-      ══════════════════════════════════════ */}
-      <footer style={{ borderTop: "1px solid var(--navy-12)", background: "var(--white)", padding: "26px 0" }}>
-        <div style={{
-          maxWidth: 1160, margin: "0 auto", padding: "0 32px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          gap: 16, flexWrap: "wrap",
-        }} className="footer-inner-landing">
-          <LogoMark />
+      {/* ══ CTA ════════════════════════════════════════════════════ */}
+      <div className="cta-section">
+        <p className="eyebrow" style={{ marginBottom: 14 }}>Disciplined investing, done right</p>
+        <h2>Blend factors.<br />Stay invested.</h2>
+        <p>No single strategy wins every year. That&apos;s why diversification matters — build a portfolio designed to last.</p>
+        <Link href="/dashboard" className="btn-accent-ws" style={{ fontSize: "0.95rem", padding: "12px 30px" }}>
+          Build My Portfolio →
+        </Link>
+      </div>
 
-          <p style={{ fontSize: 11.5, color: "var(--navy-30)", textAlign: "center", flex: 1 }}>
-            Data sourced from NSE India. For educational purposes only. Not financial advice.
-          </p>
+      {/* ══ FAQ ════════════════════════════════════════════════════ */}
+      <div style={{ background: "var(--bg2)", borderTop: "1px solid var(--border)" }}>
+        <div className="faq-wrap">
+          <h2>Common questions,<br />straight answers.</h2>
+          <p className="faq-sub">If you value discipline over speculation, data over opinions, and process over emotion — read on.</p>
+          {faqs.map(f => <FaqItem key={f.q} q={f.q} a={f.a} />)}
+        </div>
+      </div>
 
-          <div style={{ display: "flex", gap: 20, flexShrink: 0 }}>
-            {footerLinks.map(l => (
-              <Link key={l.href} href={l.href} style={{
-                fontSize: 13, color: "var(--navy-50)", textDecoration: "none", transition: "color .15s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = "var(--navy)")}
-              onMouseLeave={e => (e.currentTarget.style.color = "var(--navy-50)")}
-              >
-                {l.label}
-              </Link>
-            ))}
+      {/* ══ FOOTER ═════════════════════════════════════════════════ */}
+      <footer className="site-footer">
+        <div className="footer-top">
+          <div className="footer-brand">
+            <Link href="/">
+              <LogoIcon />
+              factorlens
+            </Link>
+            <p>Investing doesn&apos;t need to be complicated.<br />It just needs to be done right.</p>
           </div>
+          <div className="footer-links">
+            <div className="footer-col">
+              <h4>Platform</h4>
+              <ul>
+                <li><Link href="/dashboard">Dashboard</Link></li>
+                <li><Link href="/dashboard">Portfolio Builder</Link></li>
+                <li><Link href="/rankings">Fund Rankings</Link></li>
+                <li><Link href="/maverst">Regime Tracker</Link></li>
+              </ul>
+            </div>
+            <div className="footer-col">
+              <h4>Learn</h4>
+              <ul>
+                <li><Link href="/academy">Academy</Link></li>
+                <li><Link href="/academy">Factor Primer</Link></li>
+                <li><Link href="/academy">Methodology</Link></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <p className="footer-legal">
+            Data sourced from NSE India. For educational purposes only. Not financial advice.
+            Past performance is not indicative of future returns. Please consult a SEBI-registered advisor.
+          </p>
+          <p className="footer-copy">© 2025 FactorLens</p>
         </div>
       </footer>
     </div>
