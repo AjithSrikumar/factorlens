@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { SiteFooter } from "@/components/site-footer"
 
 /* ─────────────────────────────────────────
    DATA
@@ -358,43 +359,7 @@ export default function LandingPage() {
       </div>
 
       {/* ══ FOOTER ═════════════════════════════════════════════════ */}
-      <footer className="site-footer">
-        <div className="footer-top">
-          <div className="footer-brand">
-            <Link href="/">
-              <LogoIcon />
-              factorlens
-            </Link>
-            <p>Investing doesn&apos;t need to be complicated.<br />It just needs to be done right.</p>
-          </div>
-          <div className="footer-links">
-            <div className="footer-col">
-              <h4>Platform</h4>
-              <ul>
-                <li><Link href="/dashboard">Dashboard</Link></li>
-                <li><Link href="/dashboard">Portfolio Builder</Link></li>
-                <li><Link href="/rankings">Fund Rankings</Link></li>
-                <li><Link href="/maverst">Regime Tracker</Link></li>
-              </ul>
-            </div>
-            <div className="footer-col">
-              <h4>Learn</h4>
-              <ul>
-                <li><Link href="/academy">Academy</Link></li>
-                <li><Link href="/academy">Factor Primer</Link></li>
-                <li><Link href="/academy">Methodology</Link></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <p className="footer-legal">
-            Data sourced from NSE India. For educational purposes only. Not financial advice.
-            Past performance is not indicative of future returns. Please consult a SEBI-registered advisor.
-          </p>
-          <p className="footer-copy">© 2025 FactorLens</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

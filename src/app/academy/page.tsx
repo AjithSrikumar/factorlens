@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { SiteFooter } from "@/components/site-footer"
 
 export default function AcademyPage() {
   return (
@@ -506,6 +507,7 @@ export default function AcademyPage() {
         {/* Mobile spacer */}
         <div style={{ height: 32 }} />
       </div>
+      <SiteFooter />
     </div>
   )
 }

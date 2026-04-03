@@ -6,6 +6,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { getTrackedIndex } from "@/lib/index-fund-map"
 import { amcLogoUrl, amcSlug } from "@/lib/amc"
+import { SiteFooter } from "@/components/site-footer"
 
 interface MFFund {
   scheme_code:     number
@@ -179,7 +180,7 @@ function SkeletonRow() {
         <td key={i} style={{ padding: "14px 16px" }}>
           <div style={{
             height: 12, width: w, borderRadius: 6,
-            background: "rgba(255,255,255,.07)",
+            background: "rgba(0,0,0,0.07)",
             animation: "mf-pulse 1.4s ease infinite",
           }} />
         </td>
@@ -290,6 +291,46 @@ function FundsPageInner() {
         .mf-scroll-cats { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: "oklch(0.085 0.015 255)",
+        position: "relative", overflow: "hidden",
+        padding: "64px 24px 56px", textAlign: "center",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(16,185,129,.18) 0%, transparent 70%)",
+        }} />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 99,
+            background: "rgba(16,185,129,.18)", border: "1px solid rgba(16,185,129,.35)",
+            marginBottom: 20,
+          }}>
+            <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+              <rect x="1" y="9" width="3" height="6" rx=".8" fill="#34d399" />
+              <rect x="6" y="5" width="3" height="10" rx=".8" fill="#34d399" />
+              <rect x="11" y="1" width="3" height="14" rx=".8" fill="#34d399" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#6ee7b7", letterSpacing: ".5px", textTransform: "uppercase" }}>
+              Fund Database
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+            color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+          }}>
+            Mutual Funds
+          </h1>
+          <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+            Browse 1,000+ mutual funds with live NAV data, 1Y, 3Y, and 5Y returns —
+            filter by strategy, search by name, and link to index rankings.
+          </p>
+        </div>
+      </div>
+
       <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 20px 80px" }}>
 
         {/* ── Header ── */}
@@ -360,9 +401,9 @@ function FundsPageInner() {
                       onClick={() => setCategoryFilter(c)}
                       className="mf-cat-pill"
                       style={{
-                        background: categoryFilter === c ? "#4F80FF" : "rgba(255,255,255,.06)",
+                        background: categoryFilter === c ? "#4F80FF" : "var(--bg2)",
                         color: categoryFilter === c ? "#ffffff" : "var(--muted-foreground)",
-                        borderColor: categoryFilter === c ? "#4F80FF" : "rgba(255,255,255,.12)",
+                        borderColor: categoryFilter === c ? "#4F80FF" : "var(--border-mid)",
                       }}
                     >
                       {c}
@@ -385,7 +426,7 @@ function FundsPageInner() {
             {/* ── Desktop Table ── */}
             <div className="md:block hidden" style={{
               background: "var(--card)",
-              border: "1px solid rgba(255,255,255,.08)",
+              border: "1px solid var(--border)",
               borderRadius: 16, overflow: "hidden",
             }}>
               <div style={{ overflowX: "auto" }}>
@@ -433,7 +474,7 @@ function FundsPageInner() {
                           onClick={() => window.location.href = `/funds/${fund.scheme_code}`}
                           style={{
                             cursor: "pointer",
-                            borderBottom: "1px solid rgba(255,255,255,.06)",
+                            borderBottom: "1px solid var(--border-raw)",
                             transition: "background .12s",
                           }}
                         >
@@ -502,9 +543,9 @@ function FundsPageInner() {
                           <td style={{ padding: "13px 16px" }}>
                             <span style={{
                               display: "inline-block", padding: "3px 8px",
-                              borderRadius: 6, background: "rgba(255,255,255,.06)",
+                              borderRadius: 6, background: "var(--bg2)",
                               fontSize: 11, fontWeight: 600,
-                              color: "rgba(12,14,19,.55)",
+                              color: "var(--text-muted)",
                             }}>
                               {catLabel(fund.scheme_name, fund.scheme_category)}
                             </span>
@@ -514,7 +555,7 @@ function FundsPageInner() {
                               ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: "var(--foreground)" }}>
                                   ₹{fund.nav.toFixed(1)}
                                 </span>
-                              : <span style={{ color: "rgba(255,255,255,.12)", fontSize: 12 }}>—</span>
+                              : <span style={{ color: "var(--text-dim)", fontSize: 12 }}>—</span>
                             }
                             {fund.nav_date && (
                               <div style={{ fontSize: 10, color: "var(--muted-foreground)", marginTop: 1 }}>
@@ -551,7 +592,7 @@ function FundsPageInner() {
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} style={{
                       height: 110, borderRadius: 14,
-                      background: "rgba(255,255,255,.06)",
+                      background: "rgba(0,0,0,0.06)",
                       animation: "mf-pulse 1.4s ease infinite",
                     }} />
                   ))
@@ -562,7 +603,7 @@ function FundsPageInner() {
                       style={{
                         display: "block", textDecoration: "none",
                         background: "var(--card)",
-                        border: "1px solid rgba(255,255,255,.08)",
+                        border: "1px solid var(--border)",
                         borderRadius: 14, padding: "14px 16px",
                       }}
                     >
@@ -623,8 +664,8 @@ function FundsPageInner() {
                       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                         <span style={{
                           display: "inline-block", padding: "2px 7px",
-                          borderRadius: 5, background: "rgba(255,255,255,.06)",
-                          fontSize: 10.5, fontWeight: 600, color: "var(--muted-foreground)",
+                          borderRadius: 5, background: "var(--bg2)",
+                          fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)",
                         }}>
                           {catLabel(fund.scheme_name, fund.scheme_category)}
                         </span>
@@ -692,6 +733,7 @@ function FundsPageInner() {
               </div>
             )}
       </div>
+      <SiteFooter />
     </div>
   )
 }
@@ -700,7 +742,7 @@ export default function FundsPage() {
   return (
     <Suspense fallback={
       <div style={{ minHeight: "100vh", background: "var(--background)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid rgba(255,255,255,.08)", borderTopColor: "#1A56DB", animation: "spin 0.8s linear infinite" }} />
+        <div style={{ width: 32, height: 32, borderRadius: "50%", border: "3px solid var(--border)", borderTopColor: "#1A56DB", animation: "spin 0.8s linear infinite" }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     }>

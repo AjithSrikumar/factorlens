@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { NavChart, DrawdownChart, FiscalYearDetailCards } from "@/components/portfolio-charts"
+import { SiteFooter } from "@/components/site-footer"
 
 interface Fund {
   id: number
@@ -123,6 +124,7 @@ export default function RankingsPage() {
   const [funds, setFunds] = useState<Fund[]>([])
   const [lastNavDate, setLastNavDate] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [catFilter, setCatFilter] = useState("All")
   const [sortKey, setSortKey] = useState<SortKey>("final_rank")
@@ -144,10 +146,12 @@ export default function RankingsPage() {
         } else if (Array.isArray(d)) {
           // Backwards-compat: old API returned bare array
           setFunds(d)
+        } else if (d && typeof d === "object" && "error" in d) {
+          setFetchError(String(d.error))
         }
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch((e) => { setFetchError(e.message); setLoading(false) })
   }, [])
 
   useEffect(() => {
@@ -277,6 +281,45 @@ export default function RankingsPage() {
         .rcats-scroll { -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
         .rcats-scroll::-webkit-scrollbar { display: none; }
       `}</style>
+
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: "oklch(0.085 0.015 255)",
+        position: "relative", overflow: "hidden",
+        padding: "64px 24px 56px", textAlign: "center",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(245,158,11,.18) 0%, transparent 70%)",
+        }} />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 99,
+            background: "rgba(245,158,11,.18)", border: "1px solid rgba(245,158,11,.35)",
+            marginBottom: 20,
+          }}>
+            <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+              <path d="M2 14l4-4 3 3 4-5 3 3" stroke="#fbbf24" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#fcd34d", letterSpacing: ".5px", textTransform: "uppercase" }}>
+              Quant Rankings
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+            color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+          }}>
+            NSE Index Fund Rankings
+          </h1>
+          <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+            Every NSE index fund scored and ranked by 20Y CAGR, Sharpe ratio, rolling returns,
+            and drawdown protection — backed by real market data.
+          </p>
+        </div>
+      </div>
+
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "32px 32px 64px" }} className="rank-wrap-resp">
 
         {/* Page header */}
@@ -406,6 +449,22 @@ export default function RankingsPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Error banner */}
+        {fetchError && (
+          <div style={{
+            background: "rgba(239,68,68,.05)", border: "1px solid rgba(239,68,68,.25)",
+            borderRadius: 10, padding: "13px 17px", marginBottom: 20,
+            display: "flex", gap: 10, alignItems: "flex-start",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#F87171" strokeWidth="1.8" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="8" cy="8" r="7" /><line x1="8" y1="5" x2="8" y2="8" /><line x1="8" y1="11" x2="8.01" y2="11" />
+            </svg>
+            <p style={{ fontSize: 13, color: "#F87171", margin: 0, lineHeight: 1.6 }}>
+              <strong>Failed to load rankings data.</strong> {fetchError}
+            </p>
           </div>
         )}
 
@@ -1158,6 +1217,7 @@ export default function RankingsPage() {
         )}
 
       </div>
+      <SiteFooter />
     </div>
   )
 }

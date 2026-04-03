@@ -105,8 +105,8 @@
   --secondary-foreground: #1a1a1a;
   --muted:              #f7f6f2;
   --muted-foreground:   #555550;
-  --accent:             #e8faf4;
-  --accent-foreground:  #0fa070;
+  --accent:             #14b885;
+  --accent-foreground:  #ffffff;
   --destructive:        #e03e3e;
   --border:             rgba(0,0,0,0.08);
   --input:              rgba(0,0,0,0.08);
@@ -213,7 +213,7 @@ nextjs-portal { display: none !important; }
 
 .btn-outline-ws {
   background: transparent; color: var(--text-raw);
-  border: 1.5px solid var(--border-mid); border-radius: 100px;
+  border: 1.5px solid rgba(0,0,0,0.25); border-radius: 100px;
   font-family: var(--font-body); font-size: 0.95rem; font-weight: 500;
   cursor: pointer; padding: 12px 30px;
   text-decoration: none; display: inline-flex; align-items: center; gap: 8px;

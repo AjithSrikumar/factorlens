@@ -9,6 +9,7 @@ import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
 import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
+import { SiteFooter } from "@/components/site-footer"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
 
@@ -735,6 +736,47 @@ export default function DashboardPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--background)" }}>
+
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: "oklch(0.085 0.015 255)",
+        position: "relative", overflow: "hidden",
+        padding: "64px 24px 56px", textAlign: "center",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(79,128,255,.20) 0%, transparent 70%)",
+        }} />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 99,
+            background: "rgba(79,128,255,.18)", border: "1px solid rgba(79,128,255,.35)",
+            marginBottom: 20,
+          }}>
+            <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+              <rect x="1" y="9" width="3" height="6" rx=".8" fill="#93c5fd" />
+              <rect x="6" y="5" width="3" height="10" rx=".8" fill="#93c5fd" />
+              <rect x="11" y="1" width="3" height="14" rx=".8" fill="#93c5fd" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#93c5fd", letterSpacing: ".5px", textTransform: "uppercase" }}>
+              Portfolio Builder
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+            color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+          }}>
+            Build Your Portfolio
+          </h1>
+          <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+            Select factor index funds, set your allocation weights, and instantly see backtested
+            performance, risk metrics, and fiscal-year returns — all computed from real NSE data.
+          </p>
+        </div>
+      </div>
+
       {/* Desktop page header */}
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="hidden md:block">
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
@@ -1016,6 +1058,8 @@ export default function DashboardPage() {
 
 
       </div>
+
+      <SiteFooter />
 
       {/* Sticky FAB — mobile only, shows when results visible */}
       {result && (

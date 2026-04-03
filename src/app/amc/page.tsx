@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { AMC_LIST, amcSlug, amcLogoUrl } from "@/lib/amc"
+import { SiteFooter } from "@/components/site-footer"
 
 interface MFFund {
   scheme_code:     number
@@ -59,8 +60,47 @@ export default function AmcListPage() {
     <div style={{ minHeight: "100vh", background: "var(--background)" }}>
       <style>{`
         @keyframes amc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
-        .amc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(255,255,255,.08) !important; }
+        .amc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.10) !important; }
       `}</style>
+
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: "oklch(0.085 0.015 255)",
+        position: "relative", overflow: "hidden",
+        padding: "64px 24px 56px", textAlign: "center",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(59,130,246,.20) 0%, transparent 70%)",
+        }} />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 99,
+            background: "rgba(59,130,246,.18)", border: "1px solid rgba(59,130,246,.35)",
+            marginBottom: 20,
+          }}>
+            <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+              <circle cx="8" cy="6" r="4" stroke="#60a5fa" strokeWidth="1.5" />
+              <path d="M2 14c0-3 2.7-5 6-5s6 2 6 5" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#93c5fd", letterSpacing: ".5px", textTransform: "uppercase" }}>
+              AMC Directory
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+            color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+          }}>
+            Asset Management Companies
+          </h1>
+          <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+            Explore all AMCs offering mutual funds in India. Find their index funds, ETFs,
+            and factor strategies — all in one place.
+          </p>
+        </div>
+      </div>
 
       <div style={{ maxWidth: 1160, margin: "0 auto", padding: "28px 20px 80px" }}>
 
@@ -109,7 +149,7 @@ export default function AmcListPage() {
             {Array.from({ length: 18 }).map((_, i) => (
               <div key={i} style={{
                 height: 96, borderRadius: 14,
-                background: "rgba(255,255,255,.06)",
+                background: "rgba(0,0,0,0.06)",
                 animation: "amc-pulse 1.4s ease infinite",
               }} />
             ))}
@@ -131,11 +171,11 @@ export default function AmcListPage() {
                     display: "flex", flexDirection: "column",
                     alignItems: "center", textAlign: "center",
                     background: "var(--card)",
-                    border: "1px solid rgba(255,255,255,.08)",
+                    border: "1px solid var(--border)",
                     borderRadius: 14, padding: "20px 16px",
                     textDecoration: "none",
                     transition: "all .2s",
-                    boxShadow: "0 1px 4px rgba(255,255,255,.05)",
+                    boxShadow: "var(--shadow-sm)",
                   }}
                 >
                   {/* Logo */}
@@ -148,7 +188,7 @@ export default function AmcListPage() {
                       />
                     : <div style={{
                         width: 44, height: 44, borderRadius: 10,
-                        background: "rgba(255,255,255,.07)",
+                        background: "var(--bg2)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         marginBottom: 10,
                       }}>
@@ -171,8 +211,8 @@ export default function AmcListPage() {
                   {/* Fund count badge */}
                   <span style={{
                     fontSize: 10.5, fontWeight: 600,
-                    color: "rgba(148,163,184,.7)",
-                    background: "rgba(255,255,255,.06)",
+                    color: "var(--text-muted)",
+                    background: "var(--bg2)",
                     padding: "2px 8px", borderRadius: 99,
                   }}>
                     {amc.count} fund{amc.count !== 1 ? "s" : ""}
@@ -189,6 +229,7 @@ export default function AmcListPage() {
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   )
 }
