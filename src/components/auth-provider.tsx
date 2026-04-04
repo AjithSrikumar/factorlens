@@ -50,13 +50,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: { access_type: "offline", prompt: "consent" },
       },
     })
+    // If Supabase rejects (e.g. provider not enabled), fall back to the
+    // sign-in page where the error will be shown clearly to the user.
+    if (error) {
+      window.location.href = `/auth/signin?error=${encodeURIComponent(error.message)}`
+    }
   }
 
   const signOut = async () => {
