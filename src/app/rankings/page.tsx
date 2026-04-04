@@ -538,7 +538,7 @@ export default function RankingsPage() {
         </div>
 
         {/* Desktop Table */}
-        <div className="hidden md:block">
+        <div className="max-md:hidden">
           <div style={{
             background: "var(--card)", border: "1px solid var(--border)",
             borderRadius: 20, overflow: "hidden",
@@ -681,7 +681,7 @@ export default function RankingsPage() {
 
         {/* Unranked section — insufficient history (desktop only; mobile rendered below ranked cards) */}
         {!loading && unrankedSorted.length > 0 && (
-          <div className="hidden md:block" style={{ marginTop: 32 }}>
+          <div className="max-md:hidden" style={{ marginTop: 32 }}>
             {/* Collapsible header */}
             <button
               onClick={() => setUnrankedExpanded(v => !v)}
@@ -940,7 +940,7 @@ export default function RankingsPage() {
 
         {/* ── Fixed Income Section (desktop) ───────────────────────────────── */}
         {!loading && fixedIncomeSorted.length > 0 && (
-          <div className="hidden md:block" style={{ marginTop: 32 }}>
+          <div className="max-md:hidden" style={{ marginTop: 32 }}>
             <button
               onClick={() => setFixedIncomeExpanded(v => !v)}
               style={{

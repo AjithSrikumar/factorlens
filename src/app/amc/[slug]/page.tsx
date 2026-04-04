@@ -193,7 +193,7 @@ export default function AmcDetailPage({ params }: { params: Promise<{ slug: stri
         )}
 
         {/* Desktop Table */}
-        <div className="md:block hidden" style={{
+        <div className="max-md:hidden" style={{
           background: "#ffffff",
           border: "1px solid rgba(12,14,19,.1)",
           borderRadius: 16, overflow: "hidden",

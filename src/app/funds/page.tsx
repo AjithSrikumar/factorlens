@@ -424,7 +424,7 @@ function FundsPageInner() {
             )}
 
             {/* ── Desktop Table ── */}
-            <div className="md:block hidden" style={{
+            <div className="max-md:hidden" style={{
               background: "var(--card)",
               border: "1px solid var(--border)",
               borderRadius: 16, overflow: "hidden",

@@ -778,7 +778,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Desktop page header */}
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="hidden md:block">
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="max-md:hidden">
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
           <h1 style={{
             fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
