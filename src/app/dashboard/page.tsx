@@ -656,10 +656,11 @@ export default function DashboardPage() {
             .eq('user_id', user.id)
             .single()
           if (savedPortfolio?.allocations) {
-            const saved = savedPortfolio.allocations as { fundId: number; weight: number }[]
+            const saved = savedPortfolio.allocations as { fundId: number; code?: string; weight: number }[]
             const restored = saved
-              .map(({ fundId, weight }) => {
-                const f = allFunds.find(d => d.id === fundId)
+              .map(({ fundId, code, weight }) => {
+                // Match by code (stable) first; fall back to id for older saved portfolios
+                const f = (code ? allFunds.find(d => d.code === code) : null) ?? allFunds.find(d => d.id === fundId)
                 return f ? { fund: f, weight } : null
               })
               .filter(Boolean) as FundAllocation[]
@@ -678,7 +679,8 @@ export default function DashboardPage() {
             .map(rf => {
               // Search in all funds (not just filtered) so risk-recommended indices
               // like Gold/LowVol that may not be MF-eligible by code still map correctly
-              const f = allFunds.find((d) => d.id === rf.id)
+              // Match by code (stable) first; fall back to id for backwards-compat
+              const f = allFunds.find((d) => d.code === rf.code) ?? allFunds.find((d) => d.id === rf.id)
               return f ? { fund: f, weight: rf.weight } : null
             })
             .filter(Boolean) as FundAllocation[]
@@ -729,7 +731,7 @@ export default function DashboardPage() {
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100)
       // Persist portfolio allocations to Supabase if logged in
       if (user) {
-        const allocs = allocations.map(a => ({ fundId: a.fund.id, weight: a.weight }))
+        const allocs = allocations.map(a => ({ fundId: a.fund.id, code: a.fund.code, weight: a.weight }))
         supabase.from('user_portfolios').upsert(
           { user_id: user.id, allocations: allocs },
           { onConflict: 'user_id' }
