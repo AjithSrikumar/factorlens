@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { SiteFooter } from "@/components/site-footer"
+import { FiscalYearHeatmap } from "@/components/fy-heatmap"
 
 export default function AcademyPage() {
   return (
@@ -303,6 +304,22 @@ export default function AcademyPage() {
                   * Illustrative averages based on 20-year NSE backtest data
                 </div>
               </div>
+
+              {/* ── Heatmap divider ── */}
+              <div style={{ margin: "28px 0 4px" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--foreground)", marginBottom: 6 }}>
+                  Which style wins each year? Nobody knows — so own them all.
+                </div>
+                <p style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 13.5, lineHeight: 1.7 }}>
+                  The heatmap below ranks 8 asset classes by fiscal-year return, from best (dark green) to worst (dark red).
+                  Notice how the top performer shuffles unpredictably every year — Gold, Momentum, Nifty 50, and Global all
+                  take turns at the top. A blended portfolio removes the need to guess who wins next. It also dampens the
+                  pain of holding the year&apos;s worst performer alone.
+                </p>
+              </div>
+
+              {/* ── Live Heatmap ── */}
+              <FiscalYearHeatmap />
             </div>
           </div>
         </section>
