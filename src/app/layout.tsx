@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { VisualEditsMessenger } from "orchids-visual-edits";
 import { Navbar } from "@/components/navbar";
+import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "FactorLens — Build real wealth. Backed by data, not noise.",
@@ -18,8 +19,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       {/* pt-[64px] accounts for fixed navbar height */}
       <body className="antialiased" style={{ fontFamily: "var(--font-body)", background: "var(--bg)", color: "var(--text-raw)" }}>
-        <Navbar />
-        <main className="pt-[64px]">{children}</main>
+        <AuthProvider>
+          <Navbar />
+          <main className="pt-[64px]">{children}</main>
+        </AuthProvider>
         <VisualEditsMessenger />
       </body>
     </html>

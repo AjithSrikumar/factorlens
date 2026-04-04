@@ -10,6 +10,8 @@ import { InvestNow } from "@/components/invest-now"
 import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
 import { SiteFooter } from "@/components/site-footer"
+import { useAuth } from "@/components/auth-provider"
+import { supabase } from "@/lib/supabase"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
 
@@ -537,6 +539,8 @@ function RiskBanner({
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
+
   const [step, setStep]           = useState<'questionnaire' | 'portfolio'>('questionnaire')
   const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
   const [whyOpen, setWhyOpen]     = useState(false)
@@ -557,17 +561,43 @@ export default function DashboardPage() {
   // generateRef always points to the latest handleGenerate so auto-run never has stale closures
   const generateRef = useRef<() => void>(() => {})
 
-  // Check localStorage for existing risk profile on mount
+  // ── Load risk profile on mount ──────────────────────────────────────────────
+  // Priority: Supabase (if logged in) > localStorage (guest fallback)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('fl_risk_profile')
-      if (saved) {
-        const p: RiskProfile = JSON.parse(saved)
-        setRiskProfile(p)
-        setStep('portfolio')
+    async function loadProfile() {
+      if (user) {
+        // Try Supabase first
+        const { data } = await supabase
+          .from('user_risk_profiles')
+          .select('answers, score, category, funds')
+          .eq('user_id', user.id)
+          .single()
+        if (data) {
+          const p: RiskProfile = {
+            answers:   data.answers,
+            score:     data.score,
+            category:  data.category as RiskCategory,
+            funds:     data.funds,
+            timestamp: Date.now(),
+          }
+          setRiskProfile(p)
+          setStep('portfolio')
+          return
+        }
       }
-    } catch { /* ignore */ }
-  }, [])
+      // Guest: fall back to localStorage
+      try {
+        const saved = localStorage.getItem('fl_risk_profile')
+        if (saved) {
+          const p: RiskProfile = JSON.parse(saved)
+          setRiskProfile(p)
+          setStep('portfolio')
+        }
+      } catch { /* ignore */ }
+    }
+    loadProfile()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   // Fetch MF trackers for risk profile funds when profile is set
   useEffect(() => {
@@ -605,7 +635,7 @@ export default function DashboardPage() {
 
     fetch("/api/funds")
       .then((r) => r.json())
-      .then((body: { data: Fund[]; lastNavDate: string | null }) => {
+      .then(async (body: { data: Fund[]; lastNavDate: string | null }) => {
         if (cancelled) return   // stale fetch — a newer run has already taken over
         // Extract the funds array from the API response envelope
         const allFunds: Fund[] = Array.isArray(body) ? body : (body.data ?? [])
@@ -616,6 +646,31 @@ export default function DashboardPage() {
         )
         setFunds(data)
         setFundsLoading(false)
+
+        // ── Try to restore a previously saved custom portfolio (logged-in users) ──
+        // Check Supabase for saved allocations before falling back to risk-profile defaults.
+        if (user) {
+          const { data: savedPortfolio } = await supabase
+            .from('user_portfolios')
+            .select('allocations')
+            .eq('user_id', user.id)
+            .single()
+          if (savedPortfolio?.allocations) {
+            const saved = savedPortfolio.allocations as { fundId: number; weight: number }[]
+            const restored = saved
+              .map(({ fundId, weight }) => {
+                const f = allFunds.find(d => d.id === fundId)
+                return f ? { fund: f, weight } : null
+              })
+              .filter(Boolean) as FundAllocation[]
+            if (restored.length > 0 && !cancelled) {
+              setAllocations(restored)
+              setIsDefault(false)
+              pendingRun.current = true
+              return
+            }
+          }
+        }
 
         if (riskProfile) {
           // Populate from risk recommendation — only include funds found in the DB
@@ -654,7 +709,7 @@ export default function DashboardPage() {
 
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step])  // re-run when step changes (questionnaire → portfolio)
+  }, [step, user?.id])  // re-run when step changes or user logs in/out
 
   const handleGenerate = useCallback(async () => {
     if (allocations.length === 0) return
@@ -672,12 +727,20 @@ export default function DashboardPage() {
       setResult(data)
       setBuilderOpen(false)
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100)
+      // Persist portfolio allocations to Supabase if logged in
+      if (user) {
+        const allocs = allocations.map(a => ({ fundId: a.fund.id, weight: a.weight }))
+        supabase.from('user_portfolios').upsert(
+          { user_id: user.id, allocations: allocs },
+          { onConflict: 'user_id' }
+        ).then(() => {})
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error")
     } finally {
       setLoading(false)
     }
-  }, [allocations])
+  }, [allocations, user])
 
   // Keep generateRef pointing to the latest handleGenerate on every render
   generateRef.current = handleGenerate
@@ -694,23 +757,38 @@ export default function DashboardPage() {
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
+    // Persist to Supabase if logged in
+    if (user) {
+      supabase.from('user_risk_profiles').upsert({
+        user_id:  user.id,
+        answers:  profile.answers,
+        score:    profile.score,
+        category: profile.category,
+        funds:    profile.funds,
+      }, { onConflict: 'user_id' }).then(() => {})
+    }
     pendingRun.current = true    // backtest will run once new allocations arrive
     setResult(null)
     setAllocations([])           // clear stale allocations so old data never triggers the run
     setIsDefault(false)
     setRiskProfile(profile)
     setStep('portfolio')
-  }, [])
+  }, [user])
 
   const handleRetakeQuestionnaire = useCallback(() => {
     try { localStorage.removeItem('fl_risk_profile') } catch { /* ignore */ }
+    // Clear from Supabase if logged in
+    if (user) {
+      supabase.from('user_risk_profiles').delete().eq('user_id', user.id).then(() => {})
+      supabase.from('user_portfolios').delete().eq('user_id', user.id).then(() => {})
+    }
     pendingRun.current = false   // cancel any pending auto-run
     setRiskProfile(null)
     setResult(null)
     setAllocations([])
     setWhyOpen(false)
     setStep('questionnaire')
-  }, [])
+  }, [user])
 
   const handleAllocationsChange = useCallback((next: FundAllocation[]) => {
     setAllocations(next)

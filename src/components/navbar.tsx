@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useAuth } from "@/components/auth-provider"
 
 /* ── Drawer nav links (no News) ──────────────────────────────────── */
 const drawerLinks = [
@@ -25,8 +26,111 @@ function LogoIcon({ size = 18 }: { size?: number }) {
   )
 }
 
+/* ── User Avatar + Dropdown ──────────────────────────────────────────────── */
+function UserMenu() {
+  const { user, signOut } = useAuth()
+  const [open, setOpen]   = useState(false)
+  const ref               = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  if (!user) return null
+
+  const name   = user.user_metadata?.full_name as string | undefined
+  const avatar = user.user_metadata?.avatar_url as string | undefined
+  const initials = name
+    ? name.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()
+    : (user.email?.[0] ?? "U").toUpperCase()
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label="Account menu"
+        style={{
+          width: 34, height: 34, borderRadius: "50%",
+          border: "2px solid var(--border-mid)",
+          background: "var(--bg2)",
+          cursor: "pointer", padding: 0,
+          overflow: "hidden",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "border-color 0.2s",
+        }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = "var(--text-raw)")}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border-mid)")}
+      >
+        {avatar
+          ? <img src={avatar} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover" }} referrerPolicy="no-referrer" />
+          : <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-raw)" }}>{initials}</span>
+        }
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 8px)", right: 0,
+          background: "var(--bg)",
+          border: "1px solid var(--border-mid)",
+          borderRadius: "var(--radius-md)",
+          boxShadow: "var(--shadow-lg)",
+          minWidth: 200, zIndex: 300,
+          overflow: "hidden",
+        }}>
+          {/* User info */}
+          <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border-mid)" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-raw)", marginBottom: 2 }}>
+              {name ?? "Account"}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", wordBreak: "break-all" }}>
+              {user.email}
+            </div>
+          </div>
+          {/* Actions */}
+          <div style={{ padding: "8px 0" }}>
+            <Link
+              href="/dashboard"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block", padding: "9px 16px",
+                fontSize: 13, color: "var(--text-raw)",
+                textDecoration: "none", transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--bg2)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              My Portfolio
+            </Link>
+            <button
+              onClick={() => { setOpen(false); signOut() }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "9px 16px",
+                fontSize: 13, color: "#dc2626",
+                background: "none", border: "none",
+                cursor: "pointer", fontFamily: "inherit",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,.06)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Navbar() {
   const pathname = usePathname()
+  const { user, loading: authLoading, signInWithGoogle } = useAuth()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
@@ -78,8 +182,40 @@ export function Navbar() {
           factorlens
         </Link>
 
-        {/* Right side: CTA + hamburger */}
+        {/* Right side: auth + CTA + hamburger */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+
+          {/* Sign In button — shown only when not logged in */}
+          {!authLoading && !user && (
+            <button
+              onClick={signInWithGoogle}
+              style={{
+                background: "none",
+                border: "1px solid var(--border-mid)",
+                borderRadius: "100px",
+                fontFamily: "var(--font-body)", fontSize: "0.82rem", fontWeight: 600,
+                cursor: "pointer", padding: "7px 18px",
+                color: "var(--text-raw)",
+                transition: "all 0.2s", letterSpacing: "0.01em",
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.borderColor = "var(--text-raw)"
+                el.style.background = "var(--bg2)"
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.borderColor = "var(--border-mid)"
+                el.style.background = "none"
+              }}
+            >
+              Sign In
+            </button>
+          )}
+
+          {/* User avatar — shown when logged in */}
+          {!authLoading && user && <UserMenu />}
+
           <Link
             href="/dashboard"
             style={{
