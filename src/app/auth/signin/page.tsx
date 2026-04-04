@@ -28,8 +28,16 @@ export default function SignInPage() {
     })
 
     const params = new URLSearchParams(window.location.search)
-    if (params.get("error") === "timeout") {
+    const urlError = params.get("error")
+    if (urlError === "timeout") {
       setError("Sign-in timed out. Please try again.")
+    } else if (urlError) {
+      // Provider-not-enabled or other Supabase errors forwarded from navbar
+      setError(
+        urlError.includes("not enabled")
+          ? "Google sign-in is not configured yet. Please contact the site admin."
+          : decodeURIComponent(urlError)
+      )
     }
   }, [router])
 
