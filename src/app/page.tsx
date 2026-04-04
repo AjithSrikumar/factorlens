@@ -316,21 +316,13 @@ export default function LandingPage() {
                 Supported Platforms
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, maxWidth: 340 }}>
-                {[
-                  { name: "Groww",        bg: "#00D09C" },
-                  { name: "Zerodha",      bg: "#387ED1" },
-                  { name: "Upstox",       bg: "#6C63FF" },
-                  { name: "ICICI Direct", bg: "#F15B25" },
-                  { name: "Angel One",    bg: "#E60000" },
-                  { name: "Paytm Money",  bg: "#00B9F1" },
-                ].map(p => (
-                  <div key={p.name} style={{
+                {["Groww", "Zerodha", "Upstox", "ICICI Direct", "Angel One", "Paytm Money"].map(name => (
+                  <div key={name} style={{
                     background: "var(--bg2)", border: "1px solid var(--border-mid)",
                     borderRadius: "var(--radius-md)", padding: "10px 14px",
-                    display: "flex", alignItems: "center", gap: 8,
+                    display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <div style={{ width: 18, height: 18, borderRadius: 4, background: p.bg, flexShrink: 0 }} />
-                    <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-raw)" }}>{p.name}</span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-raw)" }}>{name}</span>
                   </div>
                 ))}
               </div>
