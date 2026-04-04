@@ -266,6 +266,9 @@ nextjs-portal { display: none !important; }
   border-radius: var(--radius-lg);
   overflow: hidden;
 }
+@media (max-width: 767px) {
+  .cards-grid { grid-template-columns: 1fr; }
+}
 .plat-card {
   background: var(--surface); padding: 34px 26px; transition: background 0.2s;
 }
@@ -462,6 +465,14 @@ nextjs-portal { display: none !important; }
   border-bottom: 1px solid var(--border-raw);
 }
 nav.nav-scrolled { box-shadow: var(--shadow-md); }
+@media (max-width: 767px) {
+  .nav-glass {
+    padding: 0 16px !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+}
 
 /* ═══════════════════════════════════════════════
    PERFORMANCE COLORS

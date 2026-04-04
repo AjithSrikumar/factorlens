@@ -54,7 +54,7 @@ export function SiteFooter() {
           Data sourced from NSE India &amp; AMFI. For educational purposes only. Not financial advice.
           Past performance is not indicative of future returns. Please consult a SEBI-registered advisor.
         </p>
-        <p className="footer-copy">© 2025 FactorLens</p>
+        <p className="footer-copy">© 2026 FactorLens</p>
       </div>
     </footer>
   )
