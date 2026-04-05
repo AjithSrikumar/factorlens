@@ -757,15 +757,16 @@ export default function DashboardPage() {
   // Keep generateRef pointing to the latest handleGenerate on every render
   generateRef.current = handleGenerate
 
-  // Single auto-run: fires whenever allocations change.
-  // Uses pendingRun (a ref, not state) so it never causes stale-closure issues.
-  // generateRef always holds the latest handleGenerate with up-to-date allocations.
+  // Single auto-run: fires whenever allocations reference changes.
+  // Using allocations (not allocations.length) ensures the backtest re-runs even when
+  // the count stays the same — e.g. 5 saved funds replaced by 5 new questionnaire funds.
+  // pendingRun ref gates execution so only intentional triggers (questionnaire / load) run.
   useEffect(() => {
     if (!pendingRun.current || allocations.length === 0) return
     pendingRun.current = false
     generateRef.current()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allocations.length])   // fire when allocation count changes (0 → N after fund fetch)
+  }, [allocations])   // fire whenever allocation array reference changes
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
