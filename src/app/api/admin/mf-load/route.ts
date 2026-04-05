@@ -413,12 +413,19 @@ async function resolveSchemeCode(
 interface MfapiRow { date: string; nav: string }
 
 function mfapiDateToISO(s: string): string {
+  const p = s.trim().split('-')
+  if (p.length !== 3) return ''
+  const [dd, p2, yyyy] = p
+  // mfapi.in uses DD-MM-YYYY (numeric months: "22-03-2026")
+  if (/^\d{2}$/.test(dd) && /^\d{2}$/.test(p2) && /^\d{4}$/.test(yyyy)) {
+    return `${yyyy}-${p2}-${dd}`
+  }
+  // Fallback: DD-Mon-YYYY abbreviated month ("22-Mar-2026")
   const MONTHS: Record<string, string> = {
     Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
     Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12',
   }
-  const [dd, mon, yyyy] = s.trim().split('-')
-  const mm = MONTHS[mon]
+  const mm = MONTHS[p2]
   if (!mm) return ''
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
 }
