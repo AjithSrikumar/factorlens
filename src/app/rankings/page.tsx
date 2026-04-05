@@ -316,7 +316,7 @@ export default function RankingsPage() {
               See 14+ years of performance charts, drawdown analysis, and fiscal year returns for every index fund.
             </p>
             <button
-              onClick={() => { setShowAuthGate(false); signInWithGoogle() }}
+              onClick={() => { setShowAuthGate(false); signInWithGoogle(typeof window !== 'undefined' ? window.location.pathname : '/rankings') }}
               style={{
                 width: "100%", padding: "13px", borderRadius: 12,
                 background: "var(--text-raw)", color: "#fff",

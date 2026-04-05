@@ -62,14 +62,22 @@ export async function GET(req: NextRequest) {
   log.push(`GOLD fund id: ${fundId}`)
 
   // ── 2. Load all existing GOLD nav_data ────────────────────────────────────
-  const { data: existing, error: loadErr } = await supabaseAdmin
-    .from('nav_data')
-    .select('date, nav_value')
-    .eq('fund_id', fundId)
-    .order('date', { ascending: true })
-  if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 })
-  const rows = (existing ?? []).map(r => ({ date: r.date as string, value: Number(r.nav_value) }))
-  log.push(`Loaded ${rows.length} existing rows`)
+  // Supabase JS client caps at 1000 rows by default; paginate to load everything.
+  const rows: { date: string; value: number }[] = []
+  const PAGE = 2000
+  for (let page = 0; ; page++) {
+    const { data, error: loadErr } = await supabaseAdmin
+      .from('nav_data')
+      .select('date, nav_value')
+      .eq('fund_id', fundId)
+      .order('date', { ascending: true })
+      .range(page * PAGE, (page + 1) * PAGE - 1)
+    if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 })
+    if (!data?.length) break
+    rows.push(...data.map(r => ({ date: r.date as string, value: Number(r.nav_value) })))
+    if (data.length < PAGE) break
+  }
+  log.push(`Loaded ${rows.length} existing rows (paginated)`)
 
   if (rows.length < 2) return NextResponse.json({ error: 'Not enough data to process', log }, { status: 400 })
 

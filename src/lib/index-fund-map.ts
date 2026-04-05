@@ -24,6 +24,9 @@ export interface IndexEntry {
  * that could be a sub-string match (e.g. "NIFTY 100" before "NIFTY 50").
  */
 export const NSE_INDEX_LIST: IndexEntry[] = [
+  // ── Commodity ─────────────────────────────────────────────────────────────
+  { code: "GOLD",        name: "Gold ETF",                                        category: "Commodity",   inception: "2007-03-22" },
+
   // ── Broad Market ──────────────────────────────────────────────────────────
   { code: "NTM",         name: "NIFTY TOTAL MKT",                                 category: "Broad Market", inception: "2005-01-03" },
   { code: "N500",        name: "NIFTY 500",                                        category: "Broad Market", inception: "1995-11-03" },
@@ -351,11 +354,12 @@ export function getIndexSearchTerms(indexName: string): string[] {
   const base = indexName.toLowerCase().trim()
 
   // Special override for Gold commodity fund
-  if (base === 'mcx gold' || base === 'gold') {
+  if (base === 'mcx gold' || base === 'gold' || base.startsWith('gold etf')) {
     return [
       'nippon india etf gold bees',
       'nippon india etf gold',
       'gold bees',
+      'nippon india gold savings',
       'sbi gold etf',
       'hdfc gold etf',
       'axis gold etf',

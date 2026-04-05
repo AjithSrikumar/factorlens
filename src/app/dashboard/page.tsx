@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Info, TrendingUp } from "lucide-react"
 import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
-import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES } from "@/lib/risk-engine"
+import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES, TRACKED_INDEX_CODES } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
 import { SiteFooter } from "@/components/site-footer"
 import { useAuth } from "@/components/auth-provider"
@@ -561,6 +561,9 @@ export default function DashboardPage() {
   const pendingRun = useRef(false)
   // generateRef always points to the latest handleGenerate so auto-run never has stale closures
   const generateRef = useRef<() => void>(() => {})
+  // freshFromQuestionnaire: true for the one effect run after questionnaire completion.
+  // Prevents a stale Supabase user_portfolios entry from overriding new recommendations.
+  const freshFromQuestionnaire = useRef(false)
 
   // ── Load risk profile on mount ──────────────────────────────────────────────
   // Priority: Supabase (if logged in) > localStorage (guest fallback)
@@ -643,14 +646,18 @@ export default function DashboardPage() {
         // Only expose ranked funds that have a tracking mutual fund — keeps the portfolio
         // builder free of indices with no investable vehicle or insufficient history.
         const data = allFunds.filter(f =>
-          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code)
+          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code) && TRACKED_INDEX_CODES.has(f.code)
         )
         setFunds(data)
         setFundsLoading(false)
 
         // ── Try to restore a previously saved custom portfolio (logged-in users) ──
-        // Check Supabase for saved allocations before falling back to risk-profile defaults.
-        if (user) {
+        // Skip if the user just completed the questionnaire — the new recommendations
+        // should take priority over any stale saved portfolio.
+        const skipSavedPortfolio = freshFromQuestionnaire.current
+        freshFromQuestionnaire.current = false  // consume the flag
+
+        if (user && !skipSavedPortfolio) {
           const { data: savedPortfolio } = await supabase
             .from('user_portfolios')
             .select('allocations')
@@ -765,7 +772,8 @@ export default function DashboardPage() {
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
-    // Persist to Supabase if logged in
+    // Persist to Supabase if logged in; also clear any old saved portfolio so
+    // the new recommendations take effect (not the old saved allocation).
     if (user) {
       supabase.from('user_risk_profiles').upsert({
         user_id:  user.id,
@@ -774,7 +782,9 @@ export default function DashboardPage() {
         category: profile.category,
         funds:    profile.funds,
       }, { onConflict: 'user_id' }).then(() => {})
+      supabase.from('user_portfolios').delete().eq('user_id', user.id).then(() => {})
     }
+    freshFromQuestionnaire.current = true  // skip stale Supabase portfolio in next effect run
     pendingRun.current = true    // backtest will run once new allocations arrive
     setResult(null)
     setAllocations([])           // clear stale allocations so old data never triggers the run
@@ -1068,7 +1078,7 @@ export default function DashboardPage() {
                 Your portfolio recommendations are ready. Sign in to unlock the full 20-year backtest, risk metrics, and save your portfolio.
               </p>
               <button
-                onClick={() => { setShowAuthGate(false); signInWithGoogle() }}
+                onClick={() => { setShowAuthGate(false); signInWithGoogle(typeof window !== 'undefined' ? window.location.pathname : '/dashboard') }}
                 style={{
                   width: "100%", padding: "13px", borderRadius: 12,
                   background: "var(--text-raw)", color: "#fff",
