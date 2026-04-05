@@ -650,14 +650,36 @@ export default function DashboardPage() {
         )
         setFunds(data)
         setFundsLoading(false)
+        freshFromQuestionnaire.current = false  // consume any pending flag
 
-        // ── Try to restore a previously saved custom portfolio (logged-in users) ──
-        // Skip if the user just completed the questionnaire — the new recommendations
-        // should take priority over any stale saved portfolio.
-        const skipSavedPortfolio = freshFromQuestionnaire.current
-        freshFromQuestionnaire.current = false  // consume the flag
+        // ── Priority 1: Risk profile (questionnaire recommendations) ─────────
+        // Always use the questionnaire output when present — it is the canonical
+        // portfolio the user asked for. user_portfolios (saved backtest state) is
+        // only a fallback for users who have never taken the questionnaire.
+        if (riskProfile) {
+          const allocs = riskProfile.funds
+            .map(rf => {
+              // Search all funds so Gold/LowVol codes not in MF_ELIGIBLE_CODES still resolve
+              const f = allFunds.find((d) => d.code === rf.code) ?? allFunds.find((d) => d.id === rf.id)
+              return f ? { fund: f, weight: rf.weight } : null
+            })
+            .filter(Boolean) as FundAllocation[]
+          if (allocs.length > 0 && !cancelled) {
+            const totalW = allocs.reduce((s, a) => s + a.weight, 0)
+            const normalised = totalW > 0 && Math.abs(totalW - 100) > 0.5
+              ? allocs.map(a => ({ ...a, weight: Math.round((a.weight / totalW) * 100) }))
+              : allocs
+            setAllocations(normalised)
+            setIsDefault(false)
+            pendingRun.current = true
+            return
+          }
+        }
 
-        if (user && !skipSavedPortfolio) {
+        // ── Priority 2: Saved custom portfolio (no questionnaire taken) ───────
+        // Only reached when riskProfile is null (user skipped questionnaire or
+        // has never taken it). Restores any previously saved builder state.
+        if (user) {
           const { data: savedPortfolio } = await supabase
             .from('user_portfolios')
             .select('allocations')
@@ -667,7 +689,6 @@ export default function DashboardPage() {
             const saved = savedPortfolio.allocations as { fundId: number; code?: string; weight: number }[]
             const restored = saved
               .map(({ fundId, code, weight }) => {
-                // Match by code (stable) first; fall back to id for older saved portfolios
                 const f = (code ? allFunds.find(d => d.code === code) : null) ?? allFunds.find(d => d.id === fundId)
                 return f ? { fund: f, weight } : null
               })
@@ -678,30 +699,6 @@ export default function DashboardPage() {
               pendingRun.current = true
               return
             }
-          }
-        }
-
-        if (riskProfile) {
-          // Populate from risk recommendation — only include funds found in the DB
-          const allocs = riskProfile.funds
-            .map(rf => {
-              // Search in all funds (not just filtered) so risk-recommended indices
-              // like Gold/LowVol that may not be MF-eligible by code still map correctly
-              // Match by code (stable) first; fall back to id for backwards-compat
-              const f = allFunds.find((d) => d.code === rf.code) ?? allFunds.find((d) => d.id === rf.id)
-              return f ? { fund: f, weight: rf.weight } : null
-            })
-            .filter(Boolean) as FundAllocation[]
-          if (allocs.length > 0) {
-            // Re-normalise weights in case some funds were missing
-            const totalW = allocs.reduce((s, a) => s + a.weight, 0)
-            const normalised = totalW > 0 && Math.abs(totalW - 100) > 0.5
-              ? allocs.map(a => ({ ...a, weight: Math.round((a.weight / totalW) * 100) }))
-              : allocs
-            setAllocations(normalised)
-            setIsDefault(false)
-            pendingRun.current = true   // trigger auto-backtest once allocations arrive
-            return
           }
         }
 
