@@ -162,23 +162,37 @@ export async function GET() {
       const idToCode = Object.fromEntries(fundRows.map(f => [f.id as number, f.code as string]))
       const fundIds  = fundRows.map(f => f.id as number)
 
-      // Fetch all nav_data rows for these funds in the date range
-      const fromISO = '2009-01-01' // a bit before first boundary
-      const { data: navRows } = await supabaseAdmin
-        .from('nav_data')
-        .select('fund_id, date, nav_value')
-        .in('fund_id', fundIds)
-        .gte('date', fromISO)
-        .lte('date', todayISO)
-        .order('date', { ascending: true })
+      // Fetch nav_data for each fund in parallel with pagination.
+      // A single combined .in() query is capped at Supabase's default row limit;
+      // per-fund pagination guarantees complete data for every index.
+      const fromISO = '2009-01-01'
+      const PAGE = 2000
 
-      if (navRows) {
-        for (const r of navRows) {
-          const code = idToCode[r.fund_id as number]
-          if (!code) continue
-          if (!navByCode[code]) navByCode[code] = []
-          navByCode[code].push({ date: r.date as string, nav: Number(r.nav_value) })
+      const fetchFundRows = async (id: number): Promise<{ fund_id: number; date: string; nav_value: number }[]> => {
+        const rows: { fund_id: number; date: string; nav_value: number }[] = []
+        for (let page = 0; ; page++) {
+          const { data } = await supabaseAdmin
+            .from('nav_data')
+            .select('fund_id, date, nav_value')
+            .eq('fund_id', id)
+            .gte('date', fromISO)
+            .lte('date', todayISO)
+            .order('date', { ascending: true })
+            .range(page * PAGE, (page + 1) * PAGE - 1)
+          if (!data?.length) break
+          rows.push(...data as { fund_id: number; date: string; nav_value: number }[])
+          if (data.length < PAGE) break
         }
+        return rows
+      }
+
+      const allRows = (await Promise.all(fundIds.map(fetchFundRows))).flat()
+
+      for (const r of allRows) {
+        const code = idToCode[r.fund_id]
+        if (!code) continue
+        if (!navByCode[code]) navByCode[code] = []
+        navByCode[code].push({ date: r.date, nav: Number(r.nav_value) })
       }
     }
   }
