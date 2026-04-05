@@ -55,5 +55,10 @@ export async function GET() {
     .single()
   if (latestNav?.date) lastNavDate = latestNav.date as string
 
-  return NextResponse.json({ data: data ?? [], lastNavDate }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ data: data ?? [], lastNavDate }, {
+    headers: {
+      // Cache at CDN for 5 min, serve stale for up to 1 hour while revalidating
+      'Cache-Control': 's-maxage=300, stale-while-revalidate=3600',
+    },
+  })
 }

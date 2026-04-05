@@ -704,6 +704,10 @@ nav.nav-scrolled { box-shadow: var(--shadow-md); }
 .hidden { display: none !important; }
 .hidden-mob { display: block; }
 @media (max-width: 767px) { .hidden-mob { display: none; } }
+/* Navbar: Sign In button hidden on mobile, shown in drawer instead */
+@media (max-width: 767px) { .nav-signin-desktop { display: none !important; } }
+.nav-signin-mobile { display: none; }
+@media (max-width: 767px) { .nav-signin-mobile { display: block; } }
 .mono { font-family: var(--font-mono); }
 .sep-row { height: 1px; background: var(--border-raw); }
 @media (max-width: 767px) { .mobile-gap { height: 12px; background: var(--bg2); } }

@@ -185,10 +185,11 @@ export function Navbar() {
         {/* Right side: auth + CTA + hamburger */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
 
-          {/* Sign In button — shown only when not logged in */}
+          {/* Sign In button — desktop only, hidden on mobile */}
           {!authLoading && !user && (
             <button
               onClick={signInWithGoogle}
+              className="nav-signin-desktop"
               style={{
                 background: "none",
                 border: "1px solid var(--border-mid)",
@@ -309,6 +310,28 @@ export function Navbar() {
         }}
       >
         <ul style={{ listStyle: "none", marginBottom: 24 }}>
+          {/* Sign In — mobile only, shown in drawer when not logged in */}
+          {!authLoading && !user && (
+            <li className="nav-signin-mobile">
+              <button
+                onClick={() => { setDrawerOpen(false); signInWithGoogle() }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  width: "100%", padding: "11px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  background: "var(--text-raw)", color: "#fff",
+                  fontWeight: 600, fontSize: "0.9rem",
+                  border: "none", cursor: "pointer", fontFamily: "inherit",
+                  marginBottom: 8,
+                }}
+              >
+                <svg viewBox="0 0 20 20" fill="none" style={{ width: 16, height: 16 }}>
+                  <path d="M10 2a8 8 0 100 16A8 8 0 0010 2zm0 3a2.5 2.5 0 110 5 2.5 2.5 0 010-5zm0 10a6 6 0 01-4.7-2.3C5.7 11.6 7.8 11 10 11s4.3.6 4.7 1.7A6 6 0 0110 15z" fill="currentColor" />
+                </svg>
+                Sign In with Google
+              </button>
+            </li>
+          )}
           {drawerLinks.map(({ href, label }) => {
             const active = pathname.startsWith(href)
             return (

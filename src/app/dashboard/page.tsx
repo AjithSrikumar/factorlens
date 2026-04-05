@@ -539,7 +539,7 @@ function RiskBanner({
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, signInWithGoogle } = useAuth()
 
   const [step, setStep]           = useState<'questionnaire' | 'portfolio'>('questionnaire')
   const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
@@ -552,6 +552,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [isDefault, setIsDefault] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)  // closed by default
+  const [showAuthGate, setShowAuthGate] = useState(false)
   const resultsRef = useRef<HTMLDivElement>(null)
   // MF trackers for risk profile funds (shown in RiskBanner "Why this portfolio")
   const [riskMfTrackers, setRiskMfTrackers] = useState<Record<number, { schemeName: string; amcLogo: string | null }>>({})
@@ -715,6 +716,11 @@ export default function DashboardPage() {
 
   const handleGenerate = useCallback(async () => {
     if (allocations.length === 0) return
+    // Gate backtest behind authentication
+    if (!user) {
+      setShowAuthGate(true)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -807,10 +813,64 @@ export default function DashboardPage() {
   // Show questionnaire if no profile yet
   if (step === 'questionnaire') {
     return (
-      <RiskQuestionnaire
-        onComplete={handleQuestionnaireComplete}
-        onSkip={() => { pendingRun.current = false; setResult(null); setAllocations([]); setIsDefault(false); setStep('portfolio') }}
-      />
+      <div style={{ minHeight: "100vh", background: "var(--background)" }}>
+        {/* Hero Banner */}
+        <div style={{
+          background: "oklch(0.085 0.015 255)",
+          position: "relative", overflow: "hidden",
+          padding: "64px 24px 56px", textAlign: "center",
+        }}>
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(16,185,129,.18) 0%, transparent 70%)",
+          }} />
+          <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "5px 14px", borderRadius: 99,
+              background: "rgba(16,185,129,.18)", border: "1px solid rgba(16,185,129,.35)",
+              marginBottom: 20,
+            }}>
+              <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+                <path d="M8 1l2 4 5 .7-3.5 3.4.8 5L8 12l-4.3 2.1.8-5L1 5.7 6 5z" stroke="#6ee7b7" strokeWidth="1.5" strokeLinejoin="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6ee7b7", letterSpacing: ".5px", textTransform: "uppercase" }}>
+                Model Portfolio
+              </span>
+            </div>
+            <h1 style={{
+              fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+              fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+              color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+            }}>
+              Your Personalised<br />Factor Portfolio
+            </h1>
+            <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: "0 0 24px" }}>
+              Answer 4 quick questions about your risk appetite. We'll recommend a data-backed
+              factor index portfolio and show you exactly how it would have performed over 20 years.
+            </p>
+            <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" as const }}>
+              {[
+                { icon: "🎯", label: "Risk-matched indices" },
+                { icon: "📊", label: "20-year backtest" },
+                { icon: "🏦", label: "Real MF trackers" },
+              ].map(item => (
+                <div key={item.label} style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  fontSize: 13, color: "rgba(255,255,255,.65)", fontWeight: 500,
+                }}>
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <RiskQuestionnaire
+          onComplete={handleQuestionnaireComplete}
+          onSkip={() => { pendingRun.current = false; setResult(null); setAllocations([]); setIsDefault(false); setStep('portfolio') }}
+        />
+      </div>
     )
   }
 
@@ -972,6 +1032,71 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* ── Auth Gate Modal ── */}
+        {showAuthGate && (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 500,
+            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "20px",
+          }} onClick={() => setShowAuthGate(false)}>
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: "var(--bg)", borderRadius: 20,
+                border: "1px solid var(--border-mid)",
+                boxShadow: "0 24px 80px rgba(0,0,0,0.25)",
+                padding: "40px 36px", maxWidth: 420, width: "100%",
+                textAlign: "center",
+              }}
+            >
+              <div style={{
+                width: 56, height: 56, borderRadius: 14,
+                background: "rgba(79,128,255,0.10)", border: "1px solid rgba(79,128,255,0.18)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" style={{ width: 26, height: 26 }}>
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke="#6B9FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.4px", marginBottom: 10, color: "var(--text-raw)" }}>
+                Sign in to see your backtest
+              </h2>
+              <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.65, marginBottom: 28 }}>
+                Your portfolio recommendations are ready. Sign in to unlock the full 20-year backtest, risk metrics, and save your portfolio.
+              </p>
+              <button
+                onClick={() => { setShowAuthGate(false); signInWithGoogle() }}
+                style={{
+                  width: "100%", padding: "13px", borderRadius: 12,
+                  background: "var(--text-raw)", color: "#fff",
+                  fontSize: 15, fontWeight: 700, border: "none",
+                  cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  marginBottom: 10,
+                }}
+              >
+                <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }} fill="none">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </button>
+              <button
+                onClick={() => setShowAuthGate(false)}
+                style={{
+                  width: "100%", padding: "11px", borderRadius: 12,
+                  background: "none", color: "var(--text-muted)",
+                  fontSize: 13, fontWeight: 500,
+                  border: "1px solid var(--border-mid)", cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Results section */}
         <div>
