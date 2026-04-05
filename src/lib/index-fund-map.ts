@@ -24,23 +24,26 @@ export interface IndexEntry {
  * that could be a sub-string match (e.g. "NIFTY 100" before "NIFTY 50").
  */
 export const NSE_INDEX_LIST: IndexEntry[] = [
+  // ── Commodity ─────────────────────────────────────────────────────────────
+  { code: "GOLD",        name: "Gold ETF",                                        category: "Commodity",   inception: "2007-03-22" },
+
   // ── Broad Market ──────────────────────────────────────────────────────────
-  { code: "NTM",         name: "NIFTY TOTAL MARKET",                              category: "Broad Market", inception: "2005-01-03" },
+  { code: "NTM",         name: "NIFTY TOTAL MKT",                                 category: "Broad Market", inception: "2005-01-03" },
   { code: "N500",        name: "NIFTY 500",                                        category: "Broad Market", inception: "1995-11-03" },
   { code: "N200",        name: "NIFTY 200",                                        category: "Broad Market", inception: "2004-01-01" },
   { code: "N100",        name: "NIFTY 100",                                        category: "Broad Market", inception: "2004-01-01" },
-  { code: "NLMC250",     name: "NIFTY LARGEMIDCAP 250",                            category: "Broad Market", inception: "2004-01-01" },
+  { code: "NLMC250",     name: "NIFTY LARGEMID250",                               category: "Broad Market", inception: "2004-01-01" },
   { code: "NMSC400",     name: "NIFTY MIDSMALLCAP 400",                            category: "Broad Market", inception: "2004-01-01" },
   { code: "NN50",        name: "NIFTY NEXT 50",                                    category: "Broad Market", inception: "1997-01-01" },
   { code: "N50",         name: "NIFTY 50",                                         category: "Broad Market", inception: "1995-11-03" },
   { code: "NMC150",      name: "NIFTY MIDCAP 150",                                 category: "Broad Market", inception: "2004-01-01" },
   { code: "NMC100",      name: "NIFTY MIDCAP 100",                                 category: "Broad Market", inception: "2004-01-01" },
   { code: "NMC50",       name: "NIFTY MIDCAP 50",                                  category: "Broad Market", inception: "2004-01-01" },
-  { code: "NMCSEL",      name: "NIFTY MIDCAP SELECT",                              category: "Broad Market", inception: "2014-01-01" },
+  { code: "NMCSEL",      name: "NIFTY MID SELECT",                                category: "Broad Market", inception: "2014-01-01" },
   { code: "NSC250",      name: "NIFTY SMALLCAP 250",                               category: "Broad Market", inception: "2004-01-01" },
   { code: "NSC100",      name: "NIFTY SMALLCAP 100",                               category: "Broad Market", inception: "2004-01-01" },
   { code: "NSC50",       name: "NIFTY SMALLCAP 50",                                category: "Broad Market", inception: "2004-01-01" },
-  { code: "NμC250",      name: "NIFTY MICROCAP 250",                               category: "Broad Market", inception: "2005-01-03" },
+  { code: "NμC250",      name: "NIFTY MICROCAP250",                               category: "Broad Market", inception: "2005-01-03" },
   { code: "NSC500",      name: "NIFTY SMALLCAP 500",                               category: "Broad Market", inception: "2005-01-03" },
   { code: "N500MC5025",  name: "NIFTY500 MULTICAP 50:25:25",                       category: "Broad Market", inception: "2005-01-03" },
   { code: "N500LMSECW",  name: "NIFTY500 LARGEMIDSMALL EQUAL-CAP WEIGHTED",        category: "Broad Market", inception: "2005-01-03" },
@@ -103,10 +106,10 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NGRWTH15",    name: "NIFTY GROWTH SECTORS 15",                         category: "Thematic",    inception: "2005-01-03" },
 
   // ── Leverage / Inverse ───────────────────────────────────────────────────
-  { code: "N50TR2X",     name: "NIFTY50 TR 2X LEVERAGE",                          category: "Leverage",    inception: "2010-01-04" },
-  { code: "N50PR2X",     name: "NIFTY50 PR 2X LEVERAGE",                          category: "Leverage",    inception: "2010-01-04" },
-  { code: "N50TR1XI",    name: "NIFTY50 TR 1X INVERSE",                           category: "Leverage",    inception: "2010-01-04" },
-  { code: "N50PR1XI",    name: "NIFTY50 PR 1X INVERSE",                           category: "Leverage",    inception: "2010-01-04" },
+  { code: "N50TR2X",     name: "NIFTY50 TR 2X LEV",                               category: "Leverage",    inception: "2010-01-04" },
+  { code: "N50PR2X",     name: "NIFTY50 PR 2X LEV",                               category: "Leverage",    inception: "2010-01-04" },
+  { code: "N50TR1XI",    name: "NIFTY50 TR 1X INV",                               category: "Leverage",    inception: "2010-01-04" },
+  { code: "N50PR1XI",    name: "NIFTY50 PR 1X INV",                               category: "Leverage",    inception: "2010-01-04" },
 
   // ── USD / FPI ────────────────────────────────────────────────────────────
   { code: "N50USD",      name: "NIFTY50 USD",                                     category: "Broad Market",inception: "1995-11-03" },
@@ -117,17 +120,17 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NFIN",        name: "NIFTY FINANCIAL SERVICES",                        category: "Thematic",    inception: "2004-01-01" },
   { code: "NFIN2550",    name: "NIFTY FINANCIAL SERVICES 25/50",                  category: "Thematic",    inception: "2004-01-01" },
   { code: "NFINEXBNK",   name: "NIFTY FINANCIAL SERVICES EX-BANK",                category: "Thematic",    inception: "2017-01-01" },
-  { code: "NPVTBNK",     name: "NIFTY PRIVATE BANK",                              category: "Thematic",    inception: "2006-04-03" },
+  { code: "NPVTBNK",     name: "Nifty Pvt Bank",                                  category: "Thematic",    inception: "2006-04-03" },
   { code: "NPSUBNK",     name: "NIFTY PSU BANK",                                  category: "Thematic",    inception: "2004-01-01" },
   { code: "NIT",         name: "NIFTY IT",                                        category: "Thematic",    inception: "1996-01-01" },
   { code: "NPHARMA",     name: "NIFTY PHARMA",                                    category: "Thematic",    inception: "2001-01-01" },
-  { code: "NHCARE",      name: "NIFTY HEALTHCARE INDEX",                          category: "Thematic",    inception: "2017-01-01" },
+  { code: "NHCARE",      name: "Nifty Healthcare",                                category: "Thematic",    inception: "2017-01-01" },
   { code: "NAUTO",       name: "NIFTY AUTO",                                      category: "Thematic",    inception: "2001-01-01" },
   { code: "NFMCG",       name: "NIFTY FMCG",                                      category: "Thematic",    inception: "1996-01-01" },
   { code: "NMETAL",      name: "NIFTY METAL",                                     category: "Thematic",    inception: "2004-01-01" },
   { code: "NENERGY",     name: "NIFTY ENERGY",                                    category: "Thematic",    inception: "2001-01-01" },
-  { code: "NOILGAS",     name: "NIFTY OIL & GAS",                                 category: "Thematic",    inception: "2018-01-01" },
-  { code: "NINFRA",      name: "NIFTY INFRASTRUCTURE",                            category: "Thematic",    inception: "2004-01-01" },
+  { code: "NOILGAS",     name: "Nifty Oil and Gas",                               category: "Thematic",    inception: "2018-01-01" },
+  { code: "NINFRA",      name: "Nifty Infra",                                     category: "Thematic",    inception: "2004-01-01" },
   { code: "NREALTY",     name: "NIFTY REALTY",                                    category: "Thematic",    inception: "2007-01-01" },
   { code: "NMEDIA",      name: "NIFTY MEDIA",                                     category: "Thematic",    inception: "2004-01-01" },
   { code: "NCONSDUR",    name: "NIFTY CONSUMER DURABLES",                         category: "Thematic",    inception: "2018-01-01" },
@@ -136,8 +139,8 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NPSE",        name: "NIFTY PSE",                                       category: "Thematic",    inception: "2007-01-01" },
   { code: "NCPSE",       name: "NIFTY CPSE",                                      category: "Thematic",    inception: "2013-01-01" },
   { code: "NCOMMOD",     name: "NIFTY COMMODITIES",                               category: "Thematic",    inception: "2004-01-01" },
-  { code: "NCON",        name: "NIFTY INDIA CONSUMPTION",                         category: "Thematic",    inception: "2011-01-03" },
-  { code: "NSVC",        name: "NIFTY SERVICES SECTOR",                           category: "Thematic",    inception: "2004-01-01" },
+  { code: "NCON",        name: "Nifty Consumption",                               category: "Thematic",    inception: "2011-01-03" },
+  { code: "NSVC",        name: "Nifty Serv Sector",                               category: "Thematic",    inception: "2004-01-01" },
   { code: "N500HCARE",   name: "NIFTY500 HEALTHCARE",                             category: "Thematic",    inception: "2017-01-01" },
   { code: "NMSHCARE",    name: "NIFTY MIDSMALL HEALTHCARE",                       category: "Thematic",    inception: "2017-01-01" },
   { code: "NMSFIN",      name: "NIFTY MIDSMALL FINANCIAL SERVICES",               category: "Thematic",    inception: "2017-01-01" },
@@ -165,7 +168,7 @@ export const NSE_INDEX_LIST: IndexEntry[] = [
   { code: "NIIL",        name: "NIFTY INDIA INFRASTRUCTURE & LOGISTICS",          category: "Thematic",    inception: "2022-01-03" },
   { code: "NIRNPSU",     name: "NIFTY INDIA RAILWAYS PSU",                        category: "Thematic",    inception: "2022-01-03" },
   { code: "NCONG50",     name: "NIFTY CONGLOMERATE 50",                           category: "Thematic",    inception: "2022-01-03" },
-  { code: "NINDIAMFG",   name: "NIFTY INDIA MANUFACTURING",                       category: "Thematic",    inception: "2018-01-01" },
+  { code: "NINDIAMFG",   name: "Nifty India Mfg",                                 category: "Thematic",    inception: "2018-01-01" },
   { code: "NITATACG",    name: "NIFTY INDIA CORPORATE GROUP INDEX - TATA GROUP 25% CAP", category: "Thematic", inception: "2019-01-01" },
   { code: "N500MCIM",    name: "NIFTY500 MULTICAP INDIA MANUFACTURING 50:30:20",  category: "Thematic",    inception: "2020-01-01" },
   { code: "N500MCINFRA", name: "NIFTY500 MULTICAP INFRASTRUCTURE 50:30:20",       category: "Thematic",    inception: "2020-01-01" },
@@ -351,11 +354,12 @@ export function getIndexSearchTerms(indexName: string): string[] {
   const base = indexName.toLowerCase().trim()
 
   // Special override for Gold commodity fund
-  if (base === 'mcx gold' || base === 'gold') {
+  if (base === 'mcx gold' || base === 'gold' || base.startsWith('gold etf')) {
     return [
       'nippon india etf gold bees',
       'nippon india etf gold',
       'gold bees',
+      'nippon india gold savings',
       'sbi gold etf',
       'hdfc gold etf',
       'axis gold etf',

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -10,8 +12,8 @@ import {
 } from '@/lib/calculations'
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key'
 )
 
 export async function POST(req: NextRequest) {
@@ -36,32 +38,34 @@ export async function POST(req: NextRequest) {
     const { data: n50Fund } = await supabase.from('funds').select('id').eq('code', 'N50').single()
     const niftyId = n50Fund?.id ?? 1
 
-      // Fetch NAV data for all selected funds (paginate to get all rows)
-      // Supabase returns max 1000 rows per request by default
-      const fundIds = Array.from(new Set([...allocations.map((a) => a.fundId), niftyId])) // Always include Nifty 50
-      const PAGE = 1000
-      let navRows: { fund_id: number; date: string; nav_value: number }[] = []
-      let from = 0
-      while (true) {
+      // Fetch NAV data for each fund independently in parallel.
+    // A single combined .in() query with large offsets is fragile for 30k+ rows —
+    // per-fund parallel fetches are faster and guarantee all rows for every fund.
+    const fundIds = Array.from(new Set([...allocations.map((a) => a.fundId), niftyId]))
+
+    const fetchFundNav = async (id: number): Promise<{ id: number; rows: { date: string; value: number }[] }> => {
+      const rows: { date: string; value: number }[] = []
+      const PAGE = 2000
+      for (let page = 0; ; page++) {
         const { data, error } = await supabase
           .from('nav_data')
-          .select('fund_id, date, nav_value')
-          .in('fund_id', fundIds)
-          .order('fund_id', { ascending: true })
+          .select('date, nav_value')
+          .eq('fund_id', id)
           .order('date', { ascending: true })
-          .range(from, from + PAGE - 1)
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        if (!data || data.length === 0) break
-        navRows = navRows.concat(data)
+          .range(page * PAGE, (page + 1) * PAGE - 1)
+        if (error || !data?.length) break
+        rows.push(...data.map(r => ({ date: r.date as string, value: Number(r.nav_value) })))
         if (data.length < PAGE) break
-        from += PAGE
       }
+      return { id, rows }
+    }
+
+    const navResults = await Promise.all(fundIds.map(fetchFundNav))
 
     // Group by fund
     const navByFund = new Map<number, { date: string; value: number }[]>()
-    for (const row of navRows) {
-      if (!navByFund.has(row.fund_id)) navByFund.set(row.fund_id, [])
-      navByFund.get(row.fund_id)!.push({ date: row.date, value: Number(row.nav_value) })
+    for (const { id, rows } of navResults) {
+      navByFund.set(id, rows)
     }
 
       // Build input for portfolio computation

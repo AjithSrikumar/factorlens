@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -11,8 +13,8 @@ import {
 import { NSE_INDEX_LIST } from '@/lib/index-fund-map'
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key'
 )
 
 // ── Index definitions ────────────────────────────────────────────────────────
@@ -113,7 +115,10 @@ async function fetchNiftyIndex(
   const parsed = rows
     .map((row) => {
       const dateStr  = row['HistoricalDate'] ?? row['Date'] ?? row['date'] ?? ''
-      const closeStr = row['CLOSE'] ?? row['Close'] ?? row['close'] ?? ''
+      const closeStr =
+        row['CLOSE'] ?? row['Close'] ?? row['close'] ??
+        row['TotalReturnsIndex'] ?? row['IndexValue'] ?? row['Value'] ??
+        row['CloseValue'] ?? row['NET_ASSET_VALUE'] ?? ''
       const date  = niftyDateToISO(dateStr)
       const value = parseNum(closeStr)
       return { date, value }
@@ -257,6 +262,10 @@ function computeMetricsFromNav(nav: NavPoint[]) {
 
 export const maxDuration = 300
 
+export async function POST(req: NextRequest) {
+  return GET(req)
+}
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const cleanupMode   = url.searchParams.get('cleanup') === 'true'
@@ -275,6 +284,10 @@ export async function GET(req: NextRequest) {
   // ?recompute_all=true →  skip scraping; recompute & store metrics for every fund from its full nav history
 
   const today = todayIST()
+  const startTime = Date.now()
+  // Reserve the last 45 s for metrics + ranking; abort NSE fetching after 250 s
+  const NSE_DEADLINE_MS = 250_000
+
   const log: string[] = [
     `[EOD scraper] started at ${new Date().toISOString()} — today IST: ${today}`,
     cleanupMode ? `[cleanup mode] deleting records after ${cleanupAfter}` : '[normal mode]',
@@ -292,6 +305,14 @@ export async function GET(req: NextRequest) {
       })),
       { onConflict: 'code', ignoreDuplicates: true }
     )
+
+    // Also ensure Yahoo-sourced funds (GOLD, SPX) exist in the DB.
+    // These are NOT in NSE_INDEX_LIST but are fetched via Yahoo Finance below.
+    // Without this upsert, fetchAndInsert() silently skips them.
+    await supabase.from('funds').upsert([
+      { code: 'GOLD', name: 'Gold ETF (GOLDBEES)',   category: 'Commodity', inception_date: '2007-03-22' },
+      { code: 'SPX',  name: 'S&P 500 (^GSPC)',       category: 'Global',    inception_date: '2000-01-03' },
+    ], { onConflict: 'code', ignoreDuplicates: true })
 
     // ── 1. Load funds ────────────────────────────────────────────────────────
     const { data: funds, error: fundsErr } = await supabase
@@ -343,176 +364,105 @@ export async function GET(req: NextRequest) {
     // included in the scraped batch for anchor computation
     const OVERLAP_DAYS = 20
 
-    // ── 3b. Detect funds bootstrapped with stale DEFAULT_LAST date ────────────
-    // Previously the code used a hardcoded DEFAULT_LAST = { date: '2026-02-27' }
-    // for funds with no DB data, causing them to only get ~3 weeks of history.
-    // Detect such funds: have data but their latest date is suspiciously close to
-    // the old DEFAULT_LAST date AND their inception was years before that.
-    // These need a full re-scrape from inception.
-    const BOOTSTRAP_SENTINEL = '2026-02-27'           // the old DEFAULT_LAST date
-    const BOOTSTRAP_WINDOW_DAYS = 45                  // ±45d around sentinel date
-    const bootstrapCutoffLow  = addDays(BOOTSTRAP_SENTINEL, -BOOTSTRAP_WINDOW_DAYS)
-    const bootstrapCutoffHigh = addDays(BOOTSTRAP_SENTINEL, +BOOTSTRAP_WINDOW_DAYS)
-
-    const fundsNeedingBackfill = new Set<number>()
-    for (const { code, indexName: _idx } of NSE_INDICES) {
-      const fundId    = codeToId.get(code)
-      const inception = codeToInception.get(code) ?? '2005-01-03'
-      if (!fundId) continue
-      const last = latestByFund.get(fundId)
-      if (!last) continue   // no data → handled below by inception logic
-      // Bootstrap pattern: latest date is within the sentinel window BUT inception was much earlier
-      const inceptionYearsAgo = (new Date(today).getTime() - new Date(inception).getTime()) / (365.25 * 86400e3)
-      if (
-        last.date >= bootstrapCutoffLow &&
-        last.date <= bootstrapCutoffHigh &&
-        inceptionYearsAgo > 2   // inception was >2 years ago — shouldn't have just 3 weeks of data
-      ) {
-        fundsNeedingBackfill.add(fundId)
-        log.push(`[${code}] BACKFILL: detected DEFAULT_LAST bootstrap (latest=${last.date}, inception=${inception}) — clearing and re-scraping from inception`)
-      }
-    }
-
-    // Clear corrupted data for funds needing backfill
-    if (fundsNeedingBackfill.size > 0) {
-      for (const fundId of fundsNeedingBackfill) {
-        await supabase.from('nav_data').delete().eq('fund_id', fundId)
-      }
-      // Re-build latestByFund: remove cleared funds so they're treated as brand-new
-      for (const fundId of fundsNeedingBackfill) {
-        latestByFund.delete(fundId)
-      }
-    }
-
-    // ── 4. Fetch NSE indices sequentially (avoid rate limiting) ──────────────
-    // Skipped in recompute_all mode (no new data needed, only metrics refresh).
-    const nseResults: Array<{
-      code: string; fundId?: number
-      rows: { date: string; value: number }[]
-      error: string | null; skipped?: boolean
-    }> = []
+    // ── 4. Fetch + insert NSE indices (ranked funds first, inline saves) ────────
+    // Ranked funds are prioritised so that even if the cron times out mid-loop,
+    // the visible rankings page already has up-to-date data.
+    // Data is inserted immediately after each successful fetch so partial
+    // progress survives a Vercel function timeout.
 
     if (recomputeAll) {
       log.push('[recompute_all] skipping NAV scraping — will recompute metrics for all funds')
     }
 
-    for (const { code, indexName } of recomputeAll ? [] : NSE_INDICES) {
-      const fundId = codeToId.get(code)
-      if (!fundId) { nseResults.push({ code, rows: [], error: 'Fund not found in DB' }); continue }
+    // Build the ordered index list: ranked funds (by final_rank ASC) first, then the rest
+    const { data: rankedFunds } = await supabase
+      .from('funds')
+      .select('code, final_rank')
+      .not('final_rank', 'is', null)
+      .order('final_rank', { ascending: true })
 
-      const last      = latestByFund.get(fundId)   // undefined if new or just-cleared
-      const inception = codeToInception.get(code) ?? '2005-01-03'
+    const rankedCodes = new Set((rankedFunds ?? []).map((f: { code: string }) => f.code))
+    const rankedOrder = new Map((rankedFunds ?? []).map((f: { code: string; final_rank: number }) => [f.code, f.final_rank]))
 
-      // New fund (no data): fetch full history from inception date, scale = 1
-      // Existing fund: fetch with overlap window for anchor, scale for continuity
-      const isNew    = !last
-      const fromISO  = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
-      const newAfter = isNew ? ''         : last.date  // '' means accept all dates
+    const orderedNSE = [...NSE_INDICES].sort((a, b) => {
+      const ra = rankedOrder.get(a.code) ?? 9999
+      const rb = rankedOrder.get(b.code) ?? 9999
+      return ra - rb
+    })
 
-      if (!isNew && addDays(last.date, 1) > today) {
-        nseResults.push({ code, rows: [], error: null, skipped: true })
-        continue
-      }
-
-      try {
-        const rawRows = await fetchNiftyIndex(indexName, fromISO, today)
-        // For new funds, scale = 1 (store raw index values); otherwise normalise for continuity
-        const scale = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
-        const rows  = rawRows
-          .filter((r) => r.date > newAfter)
-          .map((r)   => ({ date: r.date, value: r.value * scale }))
-        // Debug: log raw count to help diagnose empty results
-        if (rawRows.length === 0) {
-          log.push(`[${code}] WARNING: API returned 0 rows for range ${fromISO}→${today} (indexName="${indexName}")`)
-        } else if (isNew) {
-          log.push(`[${code}] BACKFILL from ${inception}: ${rawRows.length} raw rows, inserting ${rows.length}`)
-        }
-        nseResults.push({ code, fundId, rows, error: null })
-      } catch (e) {
-        nseResults.push({ code, fundId, rows: [], error: String(e) })
-      }
-
-      await new Promise((r) => setTimeout(r, 350))
-    }
-
-    // ── 5. Fetch Yahoo Finance (SPX, GOLD) ───────────────────────────────────
-    const yahooResults = await Promise.all(
-      (recomputeAll ? [] : YAHOO_FUNDS).map(async ({ code, symbol }) => {
-        const fundId = codeToId.get(code)
-        if (!fundId) return { code, rows: [] as { date: string; value: number }[], error: 'Fund not found in DB' }
-
-        const last      = latestByFund.get(fundId)
-        const inception = codeToInception.get(code) ?? '2007-01-01'  // sensible Yahoo fallback
-        const isNew     = !last
-        const fromISO   = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
-        const newAfter  = isNew ? ''        : last.date
-
-        if (!isNew && addDays(last.date, 1) > today) {
-          return { code, rows: [] as { date: string; value: number }[], error: null, skipped: true }
-        }
-
-        try {
-          const rawRows = await fetchYahoo(symbol, fromISO, today)
-          const scale   = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
-          const rows    = rawRows
-            .filter((r) => r.date > newAfter)
-            .map((r)   => ({ date: r.date, value: r.value * scale }))
-          return { code, fundId, rows, error: null }
-        } catch (e) {
-          return { code, fundId, rows: [] as { date: string; value: number }[], error: String(e) }
-        }
-      })
-    )
-
-    const allResults = [...nseResults, ...yahooResults]
-
-    // ── 6. Insert new rows ───────────────────────────────────────────────────
     let totalInserted = 0
     const fundsWithNewData = new Set<number>()
 
-    for (const result of allResults) {
-      if ('skipped' in result && result.skipped) {
-        log.push(`[${result.code}] up to date`)
-        continue
-      }
-      if (result.error) {
-        log.push(`[${result.code}] ERROR: ${result.error}`)
-        continue
-      }
-      if (!result.rows.length) {
-        log.push(`[${result.code}] no new data`)
-        continue
+    // Helper: fetch data for one fund and immediately upsert into nav_data
+    async function fetchAndInsert(
+      code: string,
+      indexName: string,
+      fetcher: (from: string, to: string) => Promise<{ date: string; value: number }[]>
+    ): Promise<void> {
+      const fundId = codeToId.get(code)
+      if (!fundId) { log.push(`[${code}] not found in DB`); return }
+
+      const last      = latestByFund.get(fundId)
+      const inception = codeToInception.get(code) ?? '2005-01-03'
+      const isNew     = !last
+      const fromISO   = isNew ? inception : addDays(last.date, -OVERLAP_DAYS)
+      const newAfter  = isNew ? ''        : last.date
+
+      if (!isNew && addDays(last.date, 1) > today) {
+        log.push(`[${code}] up to date`)
+        return
       }
 
-      const fundId  = (result as { fundId: number }).fundId
-      const records = result.rows.map((r) => ({
-        fund_id:   fundId,
-        date:      r.date,
-        nav_value: r.value,
-      }))
+      try {
+        const rawRows = await fetcher(fromISO, today)
+        if (rawRows.length === 0) {
+          log.push(`[${code}] WARNING: API returned 0 rows for ${fromISO}→${today} (name="${indexName}")`)
+          return
+        }
+        const scale   = isNew ? 1 : computeScale(rawRows, last!.date, last!.value)
+        const rows    = rawRows
+          .filter((r) => r.date > newAfter)
+          .map((r)   => ({ date: r.date, value: r.value * scale }))
 
-      // Delete any existing rows for this date range before inserting
-      const minDate = records[0].date
-      const maxDate = records[records.length - 1].date
-      await supabase
-        .from('nav_data')
-        .delete()
-        .eq('fund_id', fundId)
-        .gte('date', minDate)
-        .lte('date', maxDate)
+        if (rows.length === 0) { log.push(`[${code}] no new rows after filter`); return }
 
-      const { error: insertErr } = await supabase
-        .from('nav_data')
-        .insert(records)
+        const records = rows.map((r) => ({ fund_id: fundId, date: r.date, nav_value: r.value }))
+        const minDate = records[0].date
+        const maxDate = records[records.length - 1].date
 
-      if (insertErr) {
-        log.push(`[${result.code}] insert error: ${insertErr.message}`)
-      } else {
-        const latestInserted = records[records.length - 1].date
-        log.push(`[${result.code}] inserted ${records.length} rows → ${latestInserted} (scale=${(result.rows[0].value / ((allResults.find(r => r.code === result.code) as any)?.rows?.[0]?.value || 1)).toFixed(4)})`)
-        totalInserted += records.length
-        fundsWithNewData.add(fundId)
+        // Delete any overlapping rows then insert fresh
+        await supabase.from('nav_data').delete()
+          .eq('fund_id', fundId).gte('date', minDate).lte('date', maxDate)
+
+        const { error: insertErr } = await supabase.from('nav_data').insert(records)
+        if (insertErr) {
+          log.push(`[${code}] insert error: ${insertErr.message}`)
+        } else {
+          if (isNew) log.push(`[${code}] BACKFILL ${inception}→${maxDate}: ${rows.length} rows`)
+          else       log.push(`[${code}] +${rows.length} rows → ${maxDate}`)
+          totalInserted += rows.length
+          fundsWithNewData.add(fundId)
+          // Update latestByFund so Yahoo/subsequent calls see fresh value
+          latestByFund.set(fundId, { date: maxDate, value: rows[rows.length - 1].value })
+        }
+      } catch (e) {
+        log.push(`[${code}] ERROR: ${String(e)}`)
       }
+    }
+
+    for (const { code, indexName } of recomputeAll ? [] : orderedNSE) {
+      // Time-budget guard: stop fetching if we're approaching the deadline
+      if (Date.now() - startTime > NSE_DEADLINE_MS) {
+        log.push(`[EOD] time budget reached after ${Math.round((Date.now() - startTime) / 1000)}s — stopping NSE fetch loop`)
+        break
+      }
+      await fetchAndInsert(code, indexName, (from, to) => fetchNiftyIndex(indexName, from, to))
+      await new Promise((r) => setTimeout(r, 150))
+    }
+
+    // ── 5. Fetch + insert Yahoo Finance (SPX, GOLD) ──────────────────────────
+    for (const { code, symbol } of recomputeAll ? [] : YAHOO_FUNDS) {
+      await fetchAndInsert(code, symbol, (from, to) => fetchYahoo(symbol, from, to))
     }
 
     // ── 7. Recompute metrics for ALL funds every run ──────────────────────────
@@ -524,6 +474,14 @@ export async function GET(req: NextRequest) {
 
     if (recomputeAll) {
       log.push('[recompute_all] recomputing metrics for all funds from nav history…')
+    }
+
+    // Skip metrics + ranking if we've already used most of our time budget
+    const timeUsedMs = Date.now() - startTime
+    if (timeUsedMs > 270_000) {
+      log.push(`[EOD] skipping metrics/ranking — only ${Math.round((300_000 - timeUsedMs) / 1000)}s left`)
+      log.push(`\nDone — ${totalInserted} new rows, metrics skipped (time budget)`)
+      return NextResponse.json({ ok: true, log })
     }
 
     if (true) {  // always recompute all funds on every run
@@ -582,10 +540,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 8. Recompute final_rank for all funds with ≥10Y history ──────────────
-    // Clear existing ranks, then assign score + final_rank based on a
-    // weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
-    await supabase.from('funds').update({ score: null, final_rank: null }).not('id', 'is', null)
-
+    // Weighted composite: 30% long CAGR, 25% avg 3Y rolling, 30% Sharpe, 15% max-DD.
+    // NOTE: do NOT clear all ranks first — if the function is killed mid-step
+    // that would leave the rankings table empty. Instead compute new ranks and
+    // overwrite only the updated rows; unranked funds keep their old rank until
+    // they have enough history.
     const { data: rankableFunds } = await supabase
       .from('funds')
       .select('id, cagr_10y, cagr_20y, avg_3y_rolling_return, sharpe_ratio, max_drawdown')

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import postgres from 'postgres'
@@ -8,10 +10,10 @@ import { AMC_LIST } from '@/lib/amc'
 // Use service role key if available, otherwise fall back to anon key
 // (works when RLS is disabled on mf_funds / mf_nav_data tables).
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here')
     ? process.env.SUPABASE_SERVICE_ROLE_KEY
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 )
 
 const AMFI_NAV_URL = 'https://www.amfiindia.com/spages/NAVAll.txt'
@@ -192,92 +194,115 @@ async function computeAndStoreReturns(
     fundUpdates.push(rec)
   }
 
-  // Direct PostgreSQL connection bypasses PostgREST schema cache entirely.
-  const dbUrl = process.env.SUPABASE_DB_URL
-  if (!dbUrl) {
-    log.push(`[mf-eod] SUPABASE_DB_URL not set — skipping metrics update (returns will be null)`)
-    return
-  }
-
-  const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
-  try {
-    // ── Patch split-affected funds with normalized returns ──────────────────
-    // Uses the supabase (PostgREST) client — same path as the window queries
-    // that correctly detected the split. Direct SQL failed here silently due
-    // to a likely int4 vs int8 type mismatch for scheme_code.
-    if (splitAffectedCodes.size > 0) {
-      log.push(`[mf-eod] fetching full history for ${splitAffectedCodes.size} split-affected fund(s)`)
-      for (const sc of splitAffectedCodes) {
-        try {
-          // Paginate: a fund with 15y of daily NAVs has ~3750 rows
-          const histRows: Array<{ date: string; nav: number }> = []
-          let offset = 0
-          while (true) {
-            const { data, error } = await supabase
-              .from('mf_nav_data')
-              .select('date, nav')
-              .eq('scheme_code', sc)
-              .order('date', { ascending: true })
-              .range(offset, offset + 999)
-            if (error || !data || data.length === 0) {
-              if (error) log.push(`[mf-eod] split-fix ${sc} page error: ${error.message}`)
-              break
-            }
-            for (const r of data) histRows.push({ date: r.date as string, nav: Number(r.nav) })
-            if (data.length < 1000) break
-            offset += 1000
+  // ── Patch split-affected funds with normalized returns ──────────────────────
+  // Must happen before the bulk write so the patched returns are used.
+  if (splitAffectedCodes.size > 0) {
+    log.push(`[mf-eod] fetching full history for ${splitAffectedCodes.size} split-affected fund(s)`)
+    for (const sc of splitAffectedCodes) {
+      try {
+        const histRows: Array<{ date: string; nav: number }> = []
+        let offset = 0
+        while (true) {
+          const { data, error } = await supabase
+            .from('mf_nav_data')
+            .select('date, nav')
+            .eq('scheme_code', sc)
+            .order('date', { ascending: true })
+            .range(offset, offset + 999)
+          if (error || !data || data.length === 0) {
+            if (error) log.push(`[mf-eod] split-fix ${sc} page error: ${error.message}`)
+            break
           }
-          log.push(`[mf-eod] split-fix ${sc}: fetched ${histRows.length} history rows`)
-          if (histRows.length < 2) continue
-          const splits  = detectSplits(histRows, sc)
-          const adjNavs = normalizeHistory(histRows, splits)
-          const norm    = histRows.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
-          const m       = computeMetrics(norm)
-          log.push(`[mf-eod] split-fix ${sc}: splits=${splits.length} 1y=${m.return_1y?.toFixed(1)} 3y=${m.return_3y?.toFixed(1)} 5y=${m.return_5y?.toFixed(1)}`)
-          // Patch the corresponding entry in fundUpdates
-          const entry = fundUpdates.find(u => u.scheme_code === sc)
-          if (entry) {
-            entry.return_1y = m.return_1y
-            entry.return_3y = m.return_3y
-            entry.return_5y = m.return_5y
-          }
-        } catch (splitErr) {
-          log.push(`[mf-eod] split-fix ${sc} error: ${splitErr instanceof Error ? splitErr.message : String(splitErr)}`)
+          for (const r of data) histRows.push({ date: r.date as string, nav: Number(r.nav) })
+          if (data.length < 1000) break
+          offset += 1000
         }
+        log.push(`[mf-eod] split-fix ${sc}: fetched ${histRows.length} history rows`)
+        if (histRows.length < 2) continue
+        const splits  = detectSplits(histRows, sc)
+        const adjNavs = normalizeHistory(histRows, splits)
+        const norm    = histRows.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
+        const m       = computeMetrics(norm)
+        log.push(`[mf-eod] split-fix ${sc}: splits=${splits.length} 1y=${m.return_1y?.toFixed(1)} 3y=${m.return_3y?.toFixed(1)} 5y=${m.return_5y?.toFixed(1)}`)
+        const entry = fundUpdates.find(u => u.scheme_code === sc)
+        if (entry) {
+          entry.return_1y = m.return_1y
+          entry.return_3y = m.return_3y
+          entry.return_5y = m.return_5y
+        }
+      } catch (splitErr) {
+        log.push(`[mf-eod] split-fix ${sc} error: ${splitErr instanceof Error ? splitErr.message : String(splitErr)}`)
       }
     }
+  }
 
-    // Pass data as JSON — avoids postgres.js array serialization quirks.
-    const jsonData = fundUpdates.map(r => ({
-      code:     r.scheme_code,
-      nav:      r.nav,
-      nav_date: r.nav_date,
-      r1y:      r.return_1y  ?? null,
-      r3y:      r.return_3y  ?? null,
-      r5y:      r.return_5y  ?? null,
-      house:    r.fund_house       ?? null,
-      cat:      r.scheme_category  ?? null,
-    }))
+  // ── Write returns to mf_funds ─────────────────────────────────────────────
+  // Prefer direct PostgreSQL (bypasses PostgREST schema cache).
+  // Falls back to Supabase JS upsert when SUPABASE_DB_URL is not configured.
+  const dbUrl = process.env.SUPABASE_DB_URL
+  if (dbUrl) {
+    const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+    try {
+      const jsonData = fundUpdates.map(r => ({
+        code:     r.scheme_code,
+        nav:      r.nav,
+        nav_date: r.nav_date,
+        r1y:      r.return_1y  ?? null,
+        r3y:      r.return_3y  ?? null,
+        r5y:      r.return_5y  ?? null,
+        house:    r.fund_house       ?? null,
+        cat:      r.scheme_category  ?? null,
+      }))
 
-    await sql`
-      UPDATE mf_funds m SET
-        nav             = (d.nav)::numeric,
-        nav_date        = (d.nav_date)::date,
-        return_1y       = (d.r1y)::numeric,
-        return_3y       = (d.r3y)::numeric,
-        return_5y       = (d.r5y)::numeric,
-        fund_house      = COALESCE(d.house, m.fund_house),
-        scheme_category = COALESCE(d.cat,   m.scheme_category)
-      FROM jsonb_to_recordset(${sql.json(jsonData)}) AS d(
-        code int, nav text, nav_date text, r1y text, r3y text, r5y text, house text, cat text
+      await sql`
+        UPDATE mf_funds m SET
+          nav             = (d.nav)::numeric,
+          nav_date        = (d.nav_date)::date,
+          return_1y       = (d.r1y)::numeric,
+          return_3y       = (d.r3y)::numeric,
+          return_5y       = (d.r5y)::numeric,
+          fund_house      = COALESCE(d.house, m.fund_house),
+          scheme_category = COALESCE(d.cat,   m.scheme_category)
+        FROM jsonb_to_recordset(${sql.json(jsonData)}) AS d(
+          code int, nav text, nav_date text, r1y text, r3y text, r5y text, house text, cat text
+        )
+        WHERE m.scheme_code = d.code
+      `
+      log.push(`[mf-eod] mf_funds updated via direct SQL for ${fundUpdates.length} schemes`)
+    } catch (e) {
+      log.push(`[mf-eod] direct SQL metrics update failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      await sql.end()
+    }
+  } else {
+    // ── PostgREST fallback (no SUPABASE_DB_URL) ────────────────────────────
+    // Upsert in chunks — only include fund_house/scheme_category when non-null
+    // so we don't accidentally overwrite existing values with null.
+    log.push(`[mf-eod] SUPABASE_DB_URL not set — using PostgREST upsert fallback`)
+    const CHUNK = 100
+    let upsertErrors = 0
+    for (let i = 0; i < fundUpdates.length; i += CHUNK) {
+      const chunk = fundUpdates.slice(i, i + CHUNK)
+      const { error } = await supabase.from('mf_funds').upsert(
+        chunk.map(r => ({
+          scheme_code: r.scheme_code,
+          nav:         r.nav,
+          nav_date:    r.nav_date,
+          return_1y:   r.return_1y ?? null,
+          return_3y:   r.return_3y ?? null,
+          return_5y:   r.return_5y ?? null,
+          ...(r.fund_house      ? { fund_house:      r.fund_house      } : {}),
+          ...(r.scheme_category ? { scheme_category: r.scheme_category } : {}),
+        })),
+        { onConflict: 'scheme_code' },
       )
-      WHERE m.scheme_code = d.code
-    `
-    log.push(`[mf-eod] mf_funds updated with returns for ${fundUpdates.length} / ${fundUpdates.length} schemes`)
-  } catch (e) {
-    log.push(`[mf-eod] direct SQL metrics update failed: ${e instanceof Error ? e.message : String(e)}`)
-  } finally {
-    await sql.end()
+      if (error) {
+        log.push(`[mf-eod] PostgREST upsert chunk ${Math.floor(i / CHUNK) + 1} error: ${error.message}`)
+        upsertErrors++
+      }
+    }
+    const chunks = Math.ceil(fundUpdates.length / CHUNK)
+    log.push(`[mf-eod] mf_funds updated via PostgREST for ${fundUpdates.length} schemes (${chunks - upsertErrors}/${chunks} chunks ok)`)
   }
 }
 

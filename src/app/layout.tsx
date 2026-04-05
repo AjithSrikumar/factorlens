@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { VisualEditsMessenger } from "orchids-visual-edits";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/navbar";
+import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
-  title: "FactorLens — Institutional Portfolio Analytics",
+  title: "FactorLens — Build real wealth. Backed by data, not noise.",
   description:
-    "Build smarter portfolios backed by 20+ years of NSE backtest data. Select funds, allocate weights, and instantly see risk-adjusted performance.",
+    "Factor investing for serious long-term investors — disciplined, low-cost, built on 20 years of real NSE market data.",
 };
 
 export default function RootLayout({
@@ -17,12 +17,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      {/* pt-[64px] accounts for fixed navbar height */}
+      <body className="antialiased" style={{ fontFamily: "var(--font-body)", background: "var(--bg)", color: "var(--text-raw)" }}>
+        <AuthProvider>
           <Navbar />
-          {/* pt-[52px] on mobile for top bar; pb-[72px] for bottom nav */}
-          <main className="pt-[52px] md:pt-0 pb-[72px] md:pb-0">{children}</main>
-        </ThemeProvider>
+          <main className="pt-[64px]">{children}</main>
+        </AuthProvider>
         <VisualEditsMessenger />
       </body>
     </html>

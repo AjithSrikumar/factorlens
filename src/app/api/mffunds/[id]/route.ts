@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
 import postgres from 'postgres'
 import { fetchViaProxy } from '@/lib/fetch-proxy'
@@ -89,7 +91,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!histErr && rawHistory?.length) {
         const latestHistDate = rawHistory[rawHistory.length - 1].date as string
         const cutoff = new Date()
-        cutoff.setDate(cutoff.getDate() - 3)
+        cutoff.setDate(cutoff.getDate() - 7)   // 7 days: tolerates weekends + public holidays
         const isStale = latestHistDate < cutoff.toISOString().slice(0, 10)
 
         if (!isStale) {
@@ -240,7 +242,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       fy_data,
       nav_history: history,
     }, {
-      headers: { 'Cache-Control': 's-maxage=1800, stale-while-revalidate=1800' },
+      headers: { 'Cache-Control': 'no-store' },
     })
 
   } catch (e) {

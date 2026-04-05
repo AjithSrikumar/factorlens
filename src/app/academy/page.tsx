@@ -1,14 +1,16 @@
 "use client"
 
 import Link from "next/link"
+import { SiteFooter } from "@/components/site-footer"
+import { FiscalYearHeatmap } from "@/components/fy-heatmap"
 
 export default function AcademyPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)" }}>
 
       {/* ── Hero ── */}
       <div style={{
-        background: "#0C0E13",
+        background: "oklch(0.085 0.015 255)",
         position: "relative",
         overflow: "hidden",
         padding: "72px 24px 64px",
@@ -59,13 +61,13 @@ export default function AcademyPage() {
 
         {/* TOC Card */}
         <div style={{
-          background: "#ffffff",
-          border: "1px solid rgba(12,14,19,.12)",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
           borderRadius: 18,
           padding: "24px 28px",
           marginBottom: 32,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(12,14,19,.35)", letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted-foreground)", opacity: 0.6, letterSpacing: ".8px", textTransform: "uppercase", marginBottom: 14 }}>
             Contents
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -79,13 +81,13 @@ export default function AcademyPage() {
               <a key={href} href={href} style={{
                 display: "flex", alignItems: "center", gap: 12,
                 padding: "9px 12px", borderRadius: 10, textDecoration: "none",
-                color: "#0C0E13", fontSize: 14, fontWeight: 500,
+                color: "var(--foreground)", fontSize: 14, fontWeight: 500,
                 transition: "background .15s",
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#F5F5F3")}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(79,128,255,.06)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "rgba(12,14,19,.3)", minWidth: 22 }}>{num}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted-foreground)", minWidth: 22 }}>{num}</span>
                 {label}
               </a>
             ))}
@@ -95,13 +97,13 @@ export default function AcademyPage() {
         {/* ── Section 01: Passive Investing ── */}
         <section id="passive" style={{ scrollMarginTop: 80, marginBottom: 40 }}>
           <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 18,
             overflow: "hidden",
           }}>
             {/* Header */}
-            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -114,7 +116,7 @@ export default function AcademyPage() {
                 </div>
                 <h2 style={{
                   fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                  fontSize: 24, fontWeight: 400, color: "#0C0E13",
+                  fontSize: 24, fontWeight: 400, color: "var(--foreground)",
                   margin: 0, letterSpacing: "-.02em",
                 }}>
                   What is Passive Investing?
@@ -129,7 +131,7 @@ export default function AcademyPage() {
                   "Instead of paying a fund manager to make active decisions, you simply own the market. Research consistently shows that over long periods, most active funds fail to beat their benchmarks after fees.",
                   "Index funds — especially factor-based ones — give you low-cost, diversified exposure to proven return drivers.",
                 ].map((para, i) => (
-                  <p key={i} style={{ margin: 0, color: "rgba(12,14,19,.65)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
+                  <p key={i} style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
                 ))}
               </div>
               {/* Facts */}
@@ -149,7 +151,7 @@ export default function AcademyPage() {
                       <circle cx="8" cy="8" r="7" fill="rgba(10,124,78,.15)" />
                       <path d="M5 8l2 2 4-4" stroke="#0A7C4E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span style={{ fontSize: 13.5, color: "#0C0E13", lineHeight: 1.5 }}>{fact}</span>
+                    <span style={{ fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.5 }}>{fact}</span>
                   </div>
                 ))}
               </div>
@@ -160,12 +162,12 @@ export default function AcademyPage() {
         {/* ── Section 02: Factor Investing ── */}
         <section id="factor" style={{ scrollMarginTop: 80, marginBottom: 40 }}>
           <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 18,
             overflow: "hidden",
           }}>
-            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -178,7 +180,7 @@ export default function AcademyPage() {
                 </div>
                 <h2 style={{
                   fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                  fontSize: 24, fontWeight: 400, color: "#0C0E13",
+                  fontSize: 24, fontWeight: 400, color: "var(--foreground)",
                   margin: 0, letterSpacing: "-.02em",
                 }}>
                   What is Factor Investing?
@@ -192,7 +194,7 @@ export default function AcademyPage() {
                   "These factors are systematic and rules-based. They remove human emotion from the equation and have been validated across multiple markets and decades.",
                   "NSE India offers 20+ factor indices that are tracked by low-cost index funds, making them accessible to every investor.",
                 ].map((para, i) => (
-                  <p key={i} style={{ margin: 0, color: "rgba(12,14,19,.65)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
+                  <p key={i} style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
                 ))}
               </div>
               {/* Factor grid */}
@@ -200,10 +202,10 @@ export default function AcademyPage() {
                 {[
                   { name: "Momentum", desc: "Stocks that have recently risen tend to keep rising", bg: "rgba(234,88,12,.08)", color: "#c2410c", border: "rgba(234,88,12,.15)" },
                   { name: "Quality", desc: "High ROE, low debt, stable earnings companies", bg: "rgba(13,148,136,.08)", color: "#0f766e", border: "rgba(13,148,136,.15)" },
-                  { name: "Low Volatility", desc: "Less volatile stocks with better risk-adjusted returns", bg: "rgba(10,124,78,.08)", color: "#0A7C4E", border: "rgba(10,124,78,.15)" },
+                  { name: "Low Volatility", desc: "Less volatile stocks with better risk-adjusted returns", bg: "rgba(10,124,78,.08)", color: "#34D399", border: "rgba(10,124,78,.15)" },
                   { name: "Value", desc: "Undervalued companies with strong fundamentals", bg: "rgba(202,138,4,.08)", color: "#a16207", border: "rgba(202,138,4,.15)" },
                   { name: "Alpha", desc: "Stocks with high excess returns vs market beta", bg: "rgba(219,39,119,.08)", color: "#be185d", border: "rgba(219,39,119,.15)" },
-                  { name: "Multi-Factor", desc: "Blend of multiple factors for diversified exposure", bg: "rgba(26,86,219,.08)", color: "#1A56DB", border: "rgba(26,86,219,.15)" },
+                  { name: "Multi-Factor", desc: "Blend of multiple factors for diversified exposure", bg: "rgba(26,86,219,.08)", color: "#6B9FFF", border: "rgba(26,86,219,.15)" },
                 ].map((f) => (
                   <div key={f.name} style={{
                     padding: "14px 16px",
@@ -218,7 +220,7 @@ export default function AcademyPage() {
                       color: f.color, letterSpacing: ".3px",
                       textTransform: "uppercase",
                     }}>{f.name}</span>
-                    <span style={{ fontSize: 13, color: "rgba(12,14,19,.65)", lineHeight: 1.5 }}>{f.desc}</span>
+                    <span style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.5 }}>{f.desc}</span>
                   </div>
                 ))}
               </div>
@@ -229,12 +231,12 @@ export default function AcademyPage() {
         {/* ── Section 03: Diversification ── */}
         <section id="diversification" style={{ scrollMarginTop: 80, marginBottom: 40 }}>
           <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 18,
             overflow: "hidden",
           }}>
-            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -247,7 +249,7 @@ export default function AcademyPage() {
                 </div>
                 <h2 style={{
                   fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                  fontSize: 24, fontWeight: 400, color: "#0C0E13",
+                  fontSize: 24, fontWeight: 400, color: "var(--foreground)",
                   margin: 0, letterSpacing: "-.02em",
                 }}>
                   Why Diversification Matters
@@ -261,19 +263,19 @@ export default function AcademyPage() {
                   "By combining multiple factors and market-cap segments, you reduce concentration risk, smooth out return variability, and lower your worst-case drawdown.",
                   "Our 20-year backtest data shows that blended portfolios consistently achieve better risk-adjusted returns than single-factor bets.",
                 ].map((para, i) => (
-                  <p key={i} style={{ margin: 0, color: "rgba(12,14,19,.65)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
+                  <p key={i} style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
                 ))}
               </div>
               {/* Comparison table */}
-              <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid rgba(12,14,19,.1)" }}>
+              <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid rgba(255,255,255,.08)" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 440 }}>
                   <thead>
-                    <tr style={{ background: "#F5F5F3", borderBottom: "1px solid rgba(12,14,19,.1)" }}>
+                    <tr style={{ background: "var(--muted)", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
                       {["Strategy", "CAGR", "Max DD", "Sharpe"].map(h => (
                         <th key={h} style={{
                           padding: "10px 14px", textAlign: "left",
                           fontSize: 10.5, fontWeight: 700,
-                          color: "rgba(12,14,19,.4)", letterSpacing: ".8px",
+                          color: "var(--muted-foreground)", letterSpacing: ".8px",
                           textTransform: "uppercase",
                         }}>{h}</th>
                       ))}
@@ -287,21 +289,37 @@ export default function AcademyPage() {
                       { label: "Nifty 50 (benchmark)", cagr: "12.7%", dd: "−60%", sharpe: "0.61" },
                     ].map((row, i) => (
                       <tr key={row.label} style={{
-                        borderBottom: i < 3 ? "1px solid rgba(12,14,19,.07)" : "none",
-                        background: i % 2 !== 0 ? "rgba(12,14,19,.02)" : "transparent",
+                        borderBottom: i < 3 ? "1px solid rgba(255,255,255,.06)" : "none",
+                        background: i % 2 !== 0 ? "rgba(255,255,255,.03)" : "transparent",
                       }}>
                         <td style={{ padding: "11px 14px", fontSize: 13.5, fontWeight: 500, color: "#0C0E13" }}>{row.label}</td>
-                        <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#0A7C4E", fontWeight: 600 }}>{row.cagr}</td>
-                        <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#C5271E" }}>{row.dd}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#34D399", fontWeight: 600 }}>{row.cagr}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#F87171" }}>{row.dd}</td>
                         <td style={{ padding: "11px 14px", fontFamily: "var(--font-mono)", fontSize: 13, color: "#0C0E13" }}>{row.sharpe}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div style={{ padding: "9px 14px", borderTop: "1px solid rgba(12,14,19,.07)", fontSize: 11, color: "rgba(12,14,19,.35)" }}>
+                <div style={{ padding: "9px 14px", borderTop: "1px solid rgba(255,255,255,.06)", fontSize: 11, color: "var(--muted-foreground)", opacity: 0.6 }}>
                   * Illustrative averages based on 20-year NSE backtest data
                 </div>
               </div>
+
+              {/* ── Heatmap divider ── */}
+              <div style={{ margin: "28px 0 4px" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--foreground)", marginBottom: 6 }}>
+                  Which style wins each year? Nobody knows — so own them all.
+                </div>
+                <p style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 13.5, lineHeight: 1.7 }}>
+                  The heatmap below ranks 8 asset classes by fiscal-year return, from best (dark green) to worst (dark red).
+                  Notice how the top performer shuffles unpredictably every year — Gold, Momentum, Nifty 50, and Global all
+                  take turns at the top. A blended portfolio removes the need to guess who wins next. It also dampens the
+                  pain of holding the year&apos;s worst performer alone.
+                </p>
+              </div>
+
+              {/* ── Live Heatmap ── */}
+              <FiscalYearHeatmap />
             </div>
           </div>
         </section>
@@ -309,12 +327,12 @@ export default function AcademyPage() {
         {/* ── Section 04: Active vs Passive ── */}
         <section id="active-vs-passive" style={{ scrollMarginTop: 80, marginBottom: 40 }}>
           <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 18,
             overflow: "hidden",
           }}>
-            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -327,7 +345,7 @@ export default function AcademyPage() {
                 </div>
                 <h2 style={{
                   fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                  fontSize: 24, fontWeight: 400, color: "#0C0E13",
+                  fontSize: 24, fontWeight: 400, color: "var(--foreground)",
                   margin: 0, letterSpacing: "-.02em",
                 }}>
                   Active vs Passive: What the Data Says
@@ -340,22 +358,22 @@ export default function AcademyPage() {
                   "The debate between active and passive investing has been settled by data. Over a 20-year horizon, passive factor investing consistently outperforms active stock picking on a risk-adjusted basis.",
                   "Active managers charge higher fees, change strategies, face key-person risk, and often underperform benchmarks. Factor indices, by contrast, are transparent, low-cost, and mechanically disciplined.",
                 ].map((para, i) => (
-                  <p key={i} style={{ margin: 0, color: "rgba(12,14,19,.65)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
+                  <p key={i} style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
                 ))}
               </div>
               {/* Comparison cards */}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {[
-                  { label: "Active Large-Cap Funds", pro: "Manager expertise, potential for alpha", con: "High fees (1.8–2.5%), frequent underperformance", proColor: "#0A7C4E", conColor: "#C5271E" },
-                  { label: "Nifty 50 Index Fund", pro: "Low cost, full market return", con: "No factor premium, capped upside", proColor: "#0A7C4E", conColor: "#C5271E" },
-                  { label: "Factor Index Funds", pro: "Low cost + proven premium returns", con: "Slightly more complex to understand", proColor: "#0A7C4E", conColor: "#C5271E" },
+                  { label: "Active Large-Cap Funds", pro: "Manager expertise, potential for alpha", con: "High fees (1.8–2.5%), frequent underperformance", proColor: "#34D399", conColor: "#F87171" },
+                  { label: "Nifty 50 Index Fund", pro: "Low cost, full market return", con: "No factor premium, capped upside", proColor: "#34D399", conColor: "#F87171" },
+                  { label: "Factor Index Funds", pro: "Low cost + proven premium returns", con: "Slightly more complex to understand", proColor: "#34D399", conColor: "#F87171" },
                 ].map((item) => (
                   <div key={item.label} style={{
                     borderRadius: 12,
-                    border: "1px solid rgba(12,14,19,.1)",
+                    border: "1px solid rgba(255,255,255,.08)",
                     padding: "14px 18px",
                   }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#0C0E13", marginBottom: 10 }}>{item.label}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--foreground)", marginBottom: 10 }}>{item.label}</div>
                     <div className="cmp-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                         <div style={{
@@ -367,7 +385,7 @@ export default function AcademyPage() {
                             <path d="M2 5l2 2 4-4" stroke="#0A7C4E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         </div>
-                        <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.6)", lineHeight: 1.5 }}>{item.pro}</span>
+                        <span style={{ fontSize: 12.5, color: "var(--muted-foreground)", lineHeight: 1.5 }}>{item.pro}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                         <div style={{
@@ -379,7 +397,7 @@ export default function AcademyPage() {
                             <path d="M3 3l4 4M7 3l-4 4" stroke="#C5271E" strokeWidth="1.5" strokeLinecap="round" />
                           </svg>
                         </div>
-                        <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.6)", lineHeight: 1.5 }}>{item.con}</span>
+                        <span style={{ fontSize: 12.5, color: "var(--muted-foreground)", lineHeight: 1.5 }}>{item.con}</span>
                       </div>
                     </div>
                   </div>
@@ -392,12 +410,12 @@ export default function AcademyPage() {
         {/* ── Section 05: Backtest Results ── */}
         <section id="backtest" style={{ scrollMarginTop: 80, marginBottom: 40 }}>
           <div style={{
-            background: "#ffffff",
-            border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 18,
             overflow: "hidden",
           }}>
-            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid rgba(12,14,19,.08)" }}>
+            <div style={{ padding: "24px 28px 20px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -410,7 +428,7 @@ export default function AcademyPage() {
                 </div>
                 <h2 style={{
                   fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                  fontSize: 24, fontWeight: 400, color: "#0C0E13",
+                  fontSize: 24, fontWeight: 400, color: "var(--foreground)",
                   margin: 0, letterSpacing: "-.02em",
                 }}>
                   20-Year Backtest Results
@@ -424,7 +442,7 @@ export default function AcademyPage() {
                   "Every CAGR, Sharpe ratio, drawdown, and rolling return you see is computed from this real data, not simulations or hypothetical assumptions.",
                   "The top-ranked multi-factor funds delivered 18–22% CAGR over this period, compared to 12.7% for Nifty 50.",
                 ].map((para, i) => (
-                  <p key={i} style={{ margin: 0, color: "rgba(12,14,19,.65)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
+                  <p key={i} style={{ margin: 0, color: "var(--muted-foreground)", fontSize: 14.5, lineHeight: 1.7 }}>{para}</p>
                 ))}
               </div>
               {/* Highlights grid */}
@@ -441,18 +459,18 @@ export default function AcademyPage() {
                     background: "rgba(26,86,219,.04)",
                     border: "1px solid rgba(26,86,219,.12)",
                   }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(12,14,19,.4)", letterSpacing: ".7px", textTransform: "uppercase", marginBottom: 6 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted-foreground)", letterSpacing: ".7px", textTransform: "uppercase", marginBottom: 6 }}>
                       {h.metric}
                     </div>
                     <div style={{
                       fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
                       fontSize: 30, fontWeight: 400,
-                      color: "#1A56DB", letterSpacing: "-.02em", lineHeight: 1,
+                      color: "#6B9FFF", letterSpacing: "-.02em", lineHeight: 1,
                       marginBottom: 4,
                     }}>
                       {h.value}
                     </div>
-                    <div style={{ fontSize: 12, color: "rgba(12,14,19,.45)", lineHeight: 1.4 }}>{h.sub}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted-foreground)", lineHeight: 1.4 }}>{h.sub}</div>
                   </div>
                 ))}
               </div>
@@ -462,7 +480,7 @@ export default function AcademyPage() {
 
         {/* ── CTA ── */}
         <div style={{
-          background: "#0C0E13",
+          background: "oklch(0.085 0.015 255)",
           borderRadius: 20,
           padding: "44px 36px",
           textAlign: "center",
@@ -506,6 +524,7 @@ export default function AcademyPage() {
         {/* Mobile spacer */}
         <div style={{ height: 32 }} />
       </div>
+      <SiteFooter />
     </div>
   )
 }

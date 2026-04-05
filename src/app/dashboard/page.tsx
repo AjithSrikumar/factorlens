@@ -7,8 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Info, TrendingUp } from "lucide-react"
 import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
-import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES } from "@/lib/risk-engine"
+import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES, TRACKED_INDEX_CODES } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
+import { SiteFooter } from "@/components/site-footer"
+import { useAuth } from "@/components/auth-provider"
+import { supabase } from "@/lib/supabase"
 
 const DEFAULT_FUND_IDS = [26, 9, 19, 28, 27]
 
@@ -74,18 +77,20 @@ function InfoTip({ text }: { text: string }) {
   return (
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }} className="info-wrap-dash">
       <span style={{
-        width: 16, height: 16, borderRadius: "50%", background: "rgba(12,14,19,.12)",
+        width: 15, height: 15, borderRadius: "50%",
+        background: "rgba(148,163,184,0.15)", border: "1px solid rgba(148,163,184,0.2)",
         display: "inline-flex", alignItems: "center", justifyContent: "center",
-        cursor: "pointer", fontSize: 9, fontWeight: 800, color: "rgba(12,14,19,.5)",
+        cursor: "pointer", fontSize: 9, fontWeight: 800, color: "var(--muted-foreground)",
         lineHeight: 1,
       }}>i</span>
       <span style={{
         position: "absolute", bottom: "calc(100% + 8px)", left: "50%",
         transform: "translateX(-50%)",
-        background: "#0C0E13", color: "rgba(255,255,255,.85)",
+        background: "#0E1320", color: "rgba(226,232,240,.90)",
+        border: "1px solid rgba(255,255,255,0.08)",
         fontSize: 12, lineHeight: 1.55, padding: "10px 13px", borderRadius: 9,
         width: 200, zIndex: 400, pointerEvents: "none" as const,
-        boxShadow: "0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.05)",
+        boxShadow: "0 16px 40px rgba(0,0,0,.30)",
         textAlign: "left" as const, fontWeight: 400,
         opacity: 0, transition: "opacity .18s",
       }} className="info-tip-dash">
@@ -93,7 +98,7 @@ function InfoTip({ text }: { text: string }) {
         <span style={{
           content: "", position: "absolute", top: "100%", left: "50%",
           transform: "translateX(-50%)", border: "5px solid transparent",
-          borderTopColor: "#0C0E13",
+          borderTopColor: "#0E1320",
           display: "block", width: 0, height: 0,
         }} />
       </span>
@@ -122,36 +127,36 @@ function PortfolioSnapshot({
 
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-      borderRadius: 20, overflow: "hidden", marginBottom: 20,
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 20, overflow: "hidden", marginBottom: 16,
     }}>
       {/* Header */}
       <div style={{
-        padding: "22px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+        padding: "22px 28px 16px", borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         flexWrap: "wrap" as const, gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px" }}>Portfolio Snapshot</div>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px", color: "var(--foreground)" }}>Portfolio Snapshot</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const, marginTop: 6 }}>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "#EBF0FF", color: "#1A56DB",
+              background: "rgba(79,128,255,0.12)", color: "#6B9FFF",
             }}>
               {allocations.length} asset{allocations.length !== 1 ? "s" : ""}
             </span>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)",
+              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
             }}>
               {startYear} – {endYear}
             </span>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
               padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(12,14,19,.06)", color: "rgba(12,14,19,.5)",
+              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
             }}>
               vs NIFTY 50
             </span>
@@ -160,7 +165,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* Big 3 tiles — 10Y CAGR | Sharpe | Max Drawdown */}
-      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid var(--border)" }}
         className="snap-3-grid">
         {[
           {
@@ -195,7 +200,7 @@ function PortfolioSnapshot({
               key={tile.label}
               style={{
                 padding: "24px 28px",
-                borderRight: i < 2 ? "1px solid rgba(12,14,19,.12)" : "none",
+                borderRight: i < 2 ? "1px solid var(--border)" : "none",
                 position: "relative",
               }}
               className="snap-tile-resp"
@@ -203,7 +208,7 @@ function PortfolioSnapshot({
               <div style={{
                 display: "flex", alignItems: "center", gap: 6,
                 fontSize: 10.5, fontWeight: 700, letterSpacing: ".9px",
-                textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 10,
+                textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 10, opacity: 0.7,
               }}>
                 {tile.label} <InfoTip text={tile.info} />
               </div>
@@ -211,14 +216,14 @@ function PortfolioSnapshot({
                 fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
                 fontSize: "clamp(28px, 3.5vw, 36px)", fontWeight: 400, lineHeight: 1.0,
                 letterSpacing: "-1px",
-                color: tile.cls === "pos" ? "#0A7C4E" : tile.cls === "neg" ? "#C5271E" : "#0C0E13",
+                color: tile.cls === "pos" ? "#34D399" : tile.cls === "neg" ? "#F87171" : "var(--foreground)",
               }}>
                 {tile.value}
               </div>
               {tile.benchV && (
                 <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" as const }}>
-                  <span style={{ fontSize: 12, color: "rgba(12,14,19,.3)" }}>vs Nifty 50</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "rgba(12,14,19,.7)" }}>
+                  <span style={{ fontSize: 12, color: "var(--muted-foreground)", opacity: 0.7 }}>vs Nifty 50</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)" }}>
                     {tile.benchV}
                   </span>
                   {tile.delta != null && (
@@ -227,8 +232,8 @@ function PortfolioSnapshot({
                       padding: "2px 8px", borderRadius: 100,
                       fontSize: 11, fontWeight: 700,
                       fontFamily: "var(--font-mono)",
-                      background: isPos ? "#E6F4EE" : "#FCE8E7",
-                      color: isPos ? "#0A7C4E" : "#C5271E",
+                      background: isPos ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+                      color: isPos ? "#34D399" : "#F87171",
                     }}>
                       {tile.deltaRaw
                         ? `${tile.delta > 0 ? "+" : ""}${tile.delta.toFixed(2)}`
@@ -243,7 +248,7 @@ function PortfolioSnapshot({
       </div>
 
       {/* 6 mini metrics */}
-      <div style={{ borderBottom: "1px solid rgba(12,14,19,.12)" }}
+      <div style={{ borderBottom: "1px solid var(--border)" }}
         className="snap-6-grid">
         {[
           { label: "Since-Inception CAGR", info: "Compound Annual Growth Rate since the portfolio's earliest common start date.", value: pct(metrics.cagr), benchV: benchmark ? pct(benchmark.cagr) : null, pos: true },
@@ -257,7 +262,7 @@ function PortfolioSnapshot({
             key={m.label}
             style={{
               padding: "16px 20px",
-              borderRight: i < 5 ? "1px solid rgba(12,14,19,.12)" : "none",
+              borderRight: i < 5 ? "1px solid var(--border)" : "none",
               textAlign: "center",
             }}
             className="snap-mini-resp"
@@ -265,19 +270,19 @@ function PortfolioSnapshot({
             <div style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
               fontSize: 10, fontWeight: 700, letterSpacing: ".8px",
-              textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 7,
+              textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 7, opacity: 0.7,
             }}>
               {m.label} {m.info && <InfoTip text={m.info} />}
             </div>
             <div style={{
               fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
               fontSize: 20, fontWeight: 400, letterSpacing: "-.3px", lineHeight: 1.1,
-              color: m.pos ? "#0A7C4E" : "#0C0E13",
+              color: m.pos ? "#34D399" : "var(--foreground)",
             }}>
               {m.value}
             </div>
             {m.benchV && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "rgba(12,14,19,.3)", marginTop: 3 }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted-foreground)", marginTop: 3, opacity: 0.6 }}>
                 N50 {m.benchV}
               </div>
             )}
@@ -291,14 +296,14 @@ function PortfolioSnapshot({
           padding: "13px 28px", display: "flex", alignItems: "center",
           justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const,
         }}>
-          <span style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)" }}>
+          <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>
             Annualised outperformance vs Nifty 50
           </span>
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
             padding: "4px 12px", borderRadius: 100,
-            background: outperf >= 0 ? "#E6F4EE" : "#FCE8E7",
-            color: outperf >= 0 ? "#0A7C4E" : "#C5271E",
+            background: outperf >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+            color: outperf >= 0 ? "#34D399" : "#F87171",
           }}>
             {outperf >= 0 ? "+" : ""}{outperf.toFixed(2)}%
           </span>
@@ -326,18 +331,18 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
 
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+      background: "var(--card)", border: "1px solid var(--border)",
       borderRadius: 20, padding: "68px 36px", textAlign: "center",
     }}>
       <div style={{
         width: 44, height: 44, borderRadius: "50%",
-        border: "3px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13",
+        border: "3px solid var(--border)", borderTopColor: "#6B9FFF",
         animation: "spin .75s linear infinite", margin: "0 auto 18px",
       }} />
-      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, color: "var(--foreground)" }}>
         {isDefault ? "Loading model portfolio…" : "Running 20 years of historical backtest…"}
       </div>
-      <div style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)", marginBottom: 24 }}>
+      <div style={{ fontSize: 13.5, color: "var(--muted-foreground)", marginBottom: 24 }}>
         Computing portfolio risk metrics
       </div>
       <div
@@ -347,13 +352,13 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
         }}
       >
         <div style={{
-          background: "#F5F5F3", border: "1px solid rgba(12,14,19,.12)",
+          background: "var(--muted)", border: "1px solid var(--border)",
           borderRadius: 9, padding: "17px 19px", textAlign: "left",
         }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 7 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 7, opacity: 0.6 }}>
             Did you know?
           </div>
-          <div style={{ fontSize: 13.5, color: "#0C0E13", lineHeight: 1.62 }}>
+          <div style={{ fontSize: 13.5, color: "var(--foreground)", lineHeight: 1.62 }}>
             {LOADING_FACTS[factIdx]}
           </div>
         </div>
@@ -362,7 +367,7 @@ function LoadingFacts({ isDefault }: { isDefault: boolean }) {
   )
 }
 
-/* ── Chart card wrapper matching v4 .ccard style ── */
+/* ── Chart card wrapper ── */
 function CCard({ title, sub, children, legend }: {
   title: React.ReactNode
   sub?: string
@@ -371,16 +376,16 @@ function CCard({ title, sub, children, legend }: {
 }) {
   return (
     <div style={{
-      background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-      borderRadius: 20, overflow: "hidden", marginBottom: 20,
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 20, overflow: "hidden", marginBottom: 16,
     }}>
       <div style={{
-        padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+        padding: "20px 28px 16px", borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>{title}</div>
-          {sub && <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>{sub}</div>}
+          <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>{title}</div>
+          {sub && <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>{sub}</div>}
         </div>
         {legend}
       </div>
@@ -395,7 +400,7 @@ function ChartLegend({ items }: { items: { color: string; label: string; dashed?
   return (
     <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" as const, flexShrink: 0 }}>
       {items.map(item => (
-        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "rgba(12,14,19,.5)" }}>
+        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted-foreground)" }}>
           {item.dashed
             ? <div style={{ width: 18, height: 0, borderTop: `2.5px dashed ${item.color}` }} />
             : <div style={{ width: 18, height: 2.5, borderRadius: 2, background: item.color }} />}
@@ -534,6 +539,8 @@ function RiskBanner({
 }
 
 export default function DashboardPage() {
+  const { user, signInWithGoogle } = useAuth()
+
   const [step, setStep]           = useState<'questionnaire' | 'portfolio'>('questionnaire')
   const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
   const [whyOpen, setWhyOpen]     = useState(false)
@@ -545,6 +552,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [isDefault, setIsDefault] = useState(false)
   const [builderOpen, setBuilderOpen] = useState(false)  // closed by default
+  const [showAuthGate, setShowAuthGate] = useState(false)
   const resultsRef = useRef<HTMLDivElement>(null)
   // MF trackers for risk profile funds (shown in RiskBanner "Why this portfolio")
   const [riskMfTrackers, setRiskMfTrackers] = useState<Record<number, { schemeName: string; amcLogo: string | null }>>({})
@@ -553,18 +561,47 @@ export default function DashboardPage() {
   const pendingRun = useRef(false)
   // generateRef always points to the latest handleGenerate so auto-run never has stale closures
   const generateRef = useRef<() => void>(() => {})
+  // freshFromQuestionnaire: true for the one effect run after questionnaire completion.
+  // Prevents a stale Supabase user_portfolios entry from overriding new recommendations.
+  const freshFromQuestionnaire = useRef(false)
 
-  // Check localStorage for existing risk profile on mount
+  // ── Load risk profile on mount ──────────────────────────────────────────────
+  // Priority: Supabase (if logged in) > localStorage (guest fallback)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('fl_risk_profile')
-      if (saved) {
-        const p: RiskProfile = JSON.parse(saved)
-        setRiskProfile(p)
-        setStep('portfolio')
+    async function loadProfile() {
+      if (user) {
+        // Try Supabase first
+        const { data } = await supabase
+          .from('user_risk_profiles')
+          .select('answers, score, category, funds')
+          .eq('user_id', user.id)
+          .single()
+        if (data) {
+          const p: RiskProfile = {
+            answers:   data.answers,
+            score:     data.score,
+            category:  data.category as RiskCategory,
+            funds:     data.funds,
+            timestamp: Date.now(),
+          }
+          setRiskProfile(p)
+          setStep('portfolio')
+          return
+        }
       }
-    } catch { /* ignore */ }
-  }, [])
+      // Guest: fall back to localStorage
+      try {
+        const saved = localStorage.getItem('fl_risk_profile')
+        if (saved) {
+          const p: RiskProfile = JSON.parse(saved)
+          setRiskProfile(p)
+          setStep('portfolio')
+        }
+      } catch { /* ignore */ }
+    }
+    loadProfile()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   // Fetch MF trackers for risk profile funds when profile is set
   useEffect(() => {
@@ -602,38 +639,66 @@ export default function DashboardPage() {
 
     fetch("/api/funds")
       .then((r) => r.json())
-      .then((body: { data: Fund[]; lastNavDate: string | null }) => {
+      .then(async (body: { data: Fund[]; lastNavDate: string | null }) => {
         if (cancelled) return   // stale fetch — a newer run has already taken over
         // Extract the funds array from the API response envelope
         const allFunds: Fund[] = Array.isArray(body) ? body : (body.data ?? [])
         // Only expose ranked funds that have a tracking mutual fund — keeps the portfolio
         // builder free of indices with no investable vehicle or insufficient history.
         const data = allFunds.filter(f =>
-          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code)
+          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code) && TRACKED_INDEX_CODES.has(f.code)
         )
         setFunds(data)
         setFundsLoading(false)
+        freshFromQuestionnaire.current = false  // consume any pending flag
 
+        // ── Priority 1: Risk profile (questionnaire recommendations) ─────────
+        // Always use the questionnaire output when present — it is the canonical
+        // portfolio the user asked for. user_portfolios (saved backtest state) is
+        // only a fallback for users who have never taken the questionnaire.
         if (riskProfile) {
-          // Populate from risk recommendation — only include funds found in the DB
           const allocs = riskProfile.funds
             .map(rf => {
-              // Search in all funds (not just filtered) so risk-recommended indices
-              // like Gold/LowVol that may not be MF-eligible by code still map correctly
-              const f = allFunds.find((d) => d.id === rf.id)
+              // Search all funds so Gold/LowVol codes not in MF_ELIGIBLE_CODES still resolve
+              const f = allFunds.find((d) => d.code === rf.code) ?? allFunds.find((d) => d.id === rf.id)
               return f ? { fund: f, weight: rf.weight } : null
             })
             .filter(Boolean) as FundAllocation[]
-          if (allocs.length > 0) {
-            // Re-normalise weights in case some funds were missing
+          if (allocs.length > 0 && !cancelled) {
             const totalW = allocs.reduce((s, a) => s + a.weight, 0)
             const normalised = totalW > 0 && Math.abs(totalW - 100) > 0.5
               ? allocs.map(a => ({ ...a, weight: Math.round((a.weight / totalW) * 100) }))
               : allocs
             setAllocations(normalised)
             setIsDefault(false)
-            pendingRun.current = true   // trigger auto-backtest once allocations arrive
+            pendingRun.current = true
             return
+          }
+        }
+
+        // ── Priority 2: Saved custom portfolio (no questionnaire taken) ───────
+        // Only reached when riskProfile is null (user skipped questionnaire or
+        // has never taken it). Restores any previously saved builder state.
+        if (user) {
+          const { data: savedPortfolio } = await supabase
+            .from('user_portfolios')
+            .select('allocations')
+            .eq('user_id', user.id)
+            .single()
+          if (savedPortfolio?.allocations) {
+            const saved = savedPortfolio.allocations as { fundId: number; code?: string; weight: number }[]
+            const restored = saved
+              .map(({ fundId, code, weight }) => {
+                const f = (code ? allFunds.find(d => d.code === code) : null) ?? allFunds.find(d => d.id === fundId)
+                return f ? { fund: f, weight } : null
+              })
+              .filter(Boolean) as FundAllocation[]
+            if (restored.length > 0 && !cancelled) {
+              setAllocations(restored)
+              setIsDefault(false)
+              pendingRun.current = true
+              return
+            }
           }
         }
 
@@ -651,10 +716,15 @@ export default function DashboardPage() {
 
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step])  // re-run when step changes (questionnaire → portfolio)
+  }, [step, user?.id])  // re-run when step changes or user logs in/out
 
   const handleGenerate = useCallback(async () => {
     if (allocations.length === 0) return
+    // Gate backtest behind authentication
+    if (!user) {
+      setShowAuthGate(true)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -669,45 +739,72 @@ export default function DashboardPage() {
       setResult(data)
       setBuilderOpen(false)
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100)
+      // Persist portfolio allocations to Supabase if logged in
+      if (user) {
+        const allocs = allocations.map(a => ({ fundId: a.fund.id, code: a.fund.code, weight: a.weight }))
+        supabase.from('user_portfolios').upsert(
+          { user_id: user.id, allocations: allocs },
+          { onConflict: 'user_id' }
+        ).then(() => {})
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error")
     } finally {
       setLoading(false)
     }
-  }, [allocations])
+  }, [allocations, user])
 
   // Keep generateRef pointing to the latest handleGenerate on every render
   generateRef.current = handleGenerate
 
-  // Single auto-run: fires whenever allocations change.
-  // Uses pendingRun (a ref, not state) so it never causes stale-closure issues.
-  // generateRef always holds the latest handleGenerate with up-to-date allocations.
+  // Single auto-run: fires whenever allocations reference changes.
+  // Using allocations (not allocations.length) ensures the backtest re-runs even when
+  // the count stays the same — e.g. 5 saved funds replaced by 5 new questionnaire funds.
+  // pendingRun ref gates execution so only intentional triggers (questionnaire / load) run.
   useEffect(() => {
     if (!pendingRun.current || allocations.length === 0) return
     pendingRun.current = false
     generateRef.current()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allocations.length])   // fire when allocation count changes (0 → N after fund fetch)
+  }, [allocations])   // fire whenever allocation array reference changes
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
+    // Persist to Supabase if logged in; also clear any old saved portfolio so
+    // the new recommendations take effect (not the old saved allocation).
+    if (user) {
+      supabase.from('user_risk_profiles').upsert({
+        user_id:  user.id,
+        answers:  profile.answers,
+        score:    profile.score,
+        category: profile.category,
+        funds:    profile.funds,
+      }, { onConflict: 'user_id' }).then(() => {})
+      supabase.from('user_portfolios').delete().eq('user_id', user.id).then(() => {})
+    }
+    freshFromQuestionnaire.current = true  // skip stale Supabase portfolio in next effect run
     pendingRun.current = true    // backtest will run once new allocations arrive
     setResult(null)
     setAllocations([])           // clear stale allocations so old data never triggers the run
     setIsDefault(false)
     setRiskProfile(profile)
     setStep('portfolio')
-  }, [])
+  }, [user])
 
   const handleRetakeQuestionnaire = useCallback(() => {
     try { localStorage.removeItem('fl_risk_profile') } catch { /* ignore */ }
+    // Clear from Supabase if logged in
+    if (user) {
+      supabase.from('user_risk_profiles').delete().eq('user_id', user.id).then(() => {})
+      supabase.from('user_portfolios').delete().eq('user_id', user.id).then(() => {})
+    }
     pendingRun.current = false   // cancel any pending auto-run
     setRiskProfile(null)
     setResult(null)
     setAllocations([])
     setWhyOpen(false)
     setStep('questionnaire')
-  }, [])
+  }, [user])
 
   const handleAllocationsChange = useCallback((next: FundAllocation[]) => {
     setAllocations(next)
@@ -724,24 +821,127 @@ export default function DashboardPage() {
   // Show questionnaire if no profile yet
   if (step === 'questionnaire') {
     return (
-      <RiskQuestionnaire
-        onComplete={handleQuestionnaireComplete}
-        onSkip={() => { pendingRun.current = false; setResult(null); setAllocations([]); setIsDefault(false); setStep('portfolio') }}
-      />
+      <div style={{ minHeight: "100vh", background: "var(--background)" }}>
+        {/* Hero Banner */}
+        <div style={{
+          background: "oklch(0.085 0.015 255)",
+          position: "relative", overflow: "hidden",
+          padding: "64px 24px 56px", textAlign: "center",
+        }}>
+          <div style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(16,185,129,.18) 0%, transparent 70%)",
+          }} />
+          <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "5px 14px", borderRadius: 99,
+              background: "rgba(16,185,129,.18)", border: "1px solid rgba(16,185,129,.35)",
+              marginBottom: 20,
+            }}>
+              <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+                <path d="M8 1l2 4 5 .7-3.5 3.4.8 5L8 12l-4.3 2.1.8-5L1 5.7 6 5z" stroke="#6ee7b7" strokeWidth="1.5" strokeLinejoin="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#6ee7b7", letterSpacing: ".5px", textTransform: "uppercase" }}>
+                Model Portfolio
+              </span>
+            </div>
+            <h1 style={{
+              fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+              fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+              color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+            }}>
+              Your Personalised<br />Factor Portfolio
+            </h1>
+            <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: "0 0 24px" }}>
+              Answer 4 quick questions about your risk appetite. We'll recommend a data-backed
+              factor index portfolio and show you exactly how it would have performed over 20 years.
+            </p>
+            <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" as const }}>
+              {[
+                { icon: "🎯", label: "Risk-matched indices" },
+                { icon: "📊", label: "20-year backtest" },
+                { icon: "🏦", label: "Real MF trackers" },
+              ].map(item => (
+                <div key={item.label} style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  fontSize: 13, color: "rgba(255,255,255,.65)", fontWeight: 500,
+                }}>
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <RiskQuestionnaire
+          onComplete={handleQuestionnaireComplete}
+          onSkip={() => { pendingRun.current = false; setResult(null); setAllocations([]); setIsDefault(false); setStep('portfolio') }}
+        />
+      </div>
     )
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F5F5F3" }}>
+    <div style={{ minHeight: "100vh", background: "var(--background)" }}>
+
+      {/* ── Hero Banner ── */}
+      <div style={{
+        background: "oklch(0.085 0.015 255)",
+        position: "relative", overflow: "hidden",
+        padding: "64px 24px 56px", textAlign: "center",
+      }}>
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(79,128,255,.20) 0%, transparent 70%)",
+        }} />
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 640, margin: "0 auto" }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "5px 14px", borderRadius: 99,
+            background: "rgba(79,128,255,.18)", border: "1px solid rgba(79,128,255,.35)",
+            marginBottom: 20,
+          }}>
+            <svg viewBox="0 0 16 16" fill="none" style={{ width: 13, height: 13 }}>
+              <rect x="1" y="9" width="3" height="6" rx=".8" fill="#93c5fd" />
+              <rect x="6" y="5" width="3" height="10" rx=".8" fill="#93c5fd" />
+              <rect x="11" y="1" width="3" height="14" rx=".8" fill="#93c5fd" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#93c5fd", letterSpacing: ".5px", textTransform: "uppercase" }}>
+              Portfolio Builder
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
+            color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
+          }}>
+            Build Your Portfolio
+          </h1>
+          <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
+            Select factor index funds, set your allocation weights, and instantly see backtested
+            performance, risk metrics, and fiscal-year returns — all computed from real NSE data.
+          </p>
+        </div>
+      </div>
+
       {/* Desktop page header */}
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="hidden md:block">
-        <h1 style={{
-          fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-          fontSize: 30, fontWeight: 400, letterSpacing: "-.5px", marginBottom: 4,
-        }}>
-          Portfolio Builder
-        </h1>
-        <p style={{ fontSize: 13.5, color: "rgba(12,14,19,.5)" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "32px 32px 0" }} className="max-md:hidden">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+          <h1 style={{
+            fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+            fontSize: 30, fontWeight: 400, letterSpacing: "-.5px",
+            color: "var(--foreground)",
+          }}>
+            Portfolio Builder
+          </h1>
+          <span style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase" as const,
+            color: "#34D399", background: "rgba(16,185,129,0.10)", border: "1px solid rgba(16,185,129,0.20)",
+            padding: "2px 8px", borderRadius: 5,
+          }}>Live</span>
+        </div>
+        <p style={{ fontSize: 13.5, color: "var(--muted-foreground)" }}>
           Institutional-grade backtesting with 20+ years of NSE data.
         </p>
       </div>
@@ -762,7 +962,7 @@ export default function DashboardPage() {
         {/* Builder section — collapsed by default, at top */}
         <div style={{ marginBottom: 20 }} id="builder-section">
           <div style={{
-            background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
+            background: "var(--card)", border: "1px solid var(--border)",
             borderRadius: 20,
           }}>
             {/* Builder header — collapsible */}
@@ -772,15 +972,16 @@ export default function DashboardPage() {
                 padding: "18px 26px", cursor: "pointer", transition: "background .14s",
                 minHeight: 56,
               }}
-              className="hover:bg-[rgba(12,14,19,.03)]"
+              className="hover:bg-[rgba(255,255,255,.03)]"
               onClick={() => setBuilderOpen(o => !o)}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
-                  width: 32, height: 32, borderRadius: 9, background: "#0C0E13",
+                  width: 32, height: 32, borderRadius: 9,
+                  background: "rgba(79,128,255,0.12)", border: "1px solid rgba(79,128,255,0.20)",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
-                  <svg viewBox="0 0 17 17" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+                  <svg viewBox="0 0 17 17" fill="none" stroke="#6B9FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
                     <rect x="2" y="2" width="5.5" height="5.5" rx=".8" />
                     <rect x="9.5" y="2" width="5.5" height="5.5" rx=".8" />
                     <rect x="2" y="9.5" width="5.5" height="5.5" rx=".8" />
@@ -788,8 +989,8 @@ export default function DashboardPage() {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px" }}>Build Your Portfolio</div>
-                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 2 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Build Your Portfolio</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 2 }}>
                     {!builderOpen && allocations.length > 0
                       ? `${allocations.length} fund${allocations.length !== 1 ? "s" : ""} selected`
                       : "Select funds · Set weights · Generate"}
@@ -801,7 +1002,7 @@ export default function DashboardPage() {
                   <span style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-                    background: "#EBF0FF", color: "#1A56DB",
+                    background: "rgba(79,128,255,0.12)", color: "#6B9FFF",
                   }}>
                     {allocations.length} selected
                   </span>
@@ -821,10 +1022,10 @@ export default function DashboardPage() {
 
             {/* Builder body */}
             {builderOpen && (
-              <div style={{ borderTop: "1px solid rgba(12,14,19,.12)", padding: "22px 26px" }} className="bld-body-resp">
+              <div style={{ borderTop: "1px solid var(--border)", padding: "22px 26px" }} className="bld-body-resp">
                 {fundsLoading ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 0" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid rgba(12,14,19,.12)", borderTopColor: "#0C0E13", animation: "spin .75s linear infinite" }} />
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", border: "2.5px solid var(--border)", borderTopColor: "var(--foreground)", animation: "spin .75s linear infinite" }} />
                   </div>
                 ) : (
                   <PortfolioBuilder
@@ -840,27 +1041,93 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ── Auth Gate Modal ── */}
+        {showAuthGate && (
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 500,
+            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "20px",
+          }} onClick={() => setShowAuthGate(false)}>
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: "var(--bg)", borderRadius: 20,
+                border: "1px solid var(--border-mid)",
+                boxShadow: "0 24px 80px rgba(0,0,0,0.25)",
+                padding: "40px 36px", maxWidth: 420, width: "100%",
+                textAlign: "center",
+              }}
+            >
+              <div style={{
+                width: 56, height: 56, borderRadius: 14,
+                background: "rgba(79,128,255,0.10)", border: "1px solid rgba(79,128,255,0.18)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px",
+              }}>
+                <svg viewBox="0 0 24 24" fill="none" style={{ width: 26, height: 26 }}>
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke="#6B9FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.4px", marginBottom: 10, color: "var(--text-raw)" }}>
+                Sign in to see your backtest
+              </h2>
+              <p style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.65, marginBottom: 28 }}>
+                Your portfolio recommendations are ready. Sign in to unlock the full 20-year backtest, risk metrics, and save your portfolio.
+              </p>
+              <button
+                onClick={() => { setShowAuthGate(false); signInWithGoogle(typeof window !== 'undefined' ? window.location.pathname : '/dashboard') }}
+                style={{
+                  width: "100%", padding: "13px", borderRadius: 12,
+                  background: "var(--text-raw)", color: "#fff",
+                  fontSize: 15, fontWeight: 700, border: "none",
+                  cursor: "pointer", fontFamily: "inherit",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  marginBottom: 10,
+                }}
+              >
+                <svg viewBox="0 0 24 24" style={{ width: 18, height: 18 }} fill="none">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </button>
+              <button
+                onClick={() => setShowAuthGate(false)}
+                style={{
+                  width: "100%", padding: "11px", borderRadius: 12,
+                  background: "none", color: "var(--text-muted)",
+                  fontSize: 13, fontWeight: 500,
+                  border: "1px solid var(--border-mid)", cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Results section */}
         <div>
 
           {/* Empty state */}
           {!result && !loading && (
             <div style={{
-              background: "#ffffff", border: "1.5px dashed rgba(12,14,19,.12)",
+              background: "var(--card)", border: "1.5px dashed var(--border)",
               borderRadius: 20, padding: "68px 36px", textAlign: "center",
             }}>
               <div style={{
-                width: 50, height: 50, borderRadius: 15, background: "#F5F5F3",
+                width: 52, height: 52, borderRadius: 14,
+                background: "rgba(79,128,255,0.10)", border: "1px solid rgba(79,128,255,0.18)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                margin: "0 auto 16px",
+                margin: "0 auto 18px",
               }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 25, height: 25, color: "rgba(12,14,19,.3)" }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#6B9FFF" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
                   <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                 </svg>
               </div>
-              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>No Portfolio Yet</div>
-              <div style={{ fontSize: 14, color: "rgba(12,14,19,.5)", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>
-                Select funds below, adjust weights, then run the backtest to see 20 years of data.
+              <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 8, color: "var(--foreground)" }}>No Portfolio Yet</div>
+              <div style={{ fontSize: 14, color: "var(--muted-foreground)", maxWidth: 300, margin: "0 auto", lineHeight: 1.65 }}>
+                Select funds above, adjust weights, then run the backtest to see 20 years of historical data.
               </div>
             </div>
           )}
@@ -886,12 +1153,12 @@ export default function DashboardPage() {
 
               {/* Portfolio Composition — above Snapshot */}
               <div style={{
-                background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                borderRadius: 20, overflow: "hidden", marginBottom: 20,
+                background: "var(--card)", border: "1px solid var(--border)",
+                borderRadius: 20, overflow: "hidden", marginBottom: 16,
               }}>
-                <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)" }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Portfolio Composition</div>
-                  <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>Weight distribution</div>
+                <div style={{ padding: "20px 28px 16px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Portfolio Composition</div>
+                  <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>Weight distribution</div>
                 </div>
                 <div style={{ padding: "24px 28px 0" }} className="ccard-body-resp">
                   <AllocationPieChart
@@ -923,14 +1190,14 @@ export default function DashboardPage() {
               {/* FY Detail — expandable cards */}
               {result.fyTableData && (
                 <div style={{
-                  background: "#ffffff", border: "1px solid rgba(12,14,19,.12)",
-                  borderRadius: 20, overflow: "hidden", marginBottom: 20,
+                  background: "var(--card)", border: "1px solid var(--border)",
+                  borderRadius: 20, overflow: "hidden", marginBottom: 16,
                 }}>
                   <div style={{
-                    padding: "20px 28px 16px", borderBottom: "1px solid rgba(12,14,19,.12)",
+                    padding: "20px 28px 16px", borderBottom: "1px solid var(--border)",
                   }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px" }}>Fiscal Year Detail</div>
-                    <div style={{ fontSize: 12.5, color: "rgba(12,14,19,.5)", marginTop: 3 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-.2px", color: "var(--foreground)" }}>Fiscal Year Detail</div>
+                    <div style={{ fontSize: 12.5, color: "var(--muted-foreground)", marginTop: 3 }}>
                       Portfolio NAV at FY start/end vs NIFTY 50 · Tap row to expand fund breakdown
                     </div>
                   </div>
@@ -974,14 +1241,15 @@ export default function DashboardPage() {
 
               {/* Disclosure */}
               <div style={{
-                border: "1px dashed rgba(12,14,19,.3)", borderRadius: 16,
-                padding: "22px 24px", marginTop: 8, marginBottom: 20,
+                border: "1px dashed var(--border)", borderRadius: 16,
+                padding: "20px 22px", marginTop: 8, marginBottom: 16,
+                background: "var(--muted)",
               }}>
-                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "rgba(12,14,19,.3)", marginBottom: 9 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "1.5px", textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 8, opacity: 0.7 }}>
                   Disclosure
                 </div>
-                <p style={{ fontSize: 12, color: "rgba(12,14,19,.5)", lineHeight: 1.72 }}>
-                  Past performance is not indicative of future results. All computations use adjusted NSE index NAV data (2005–present). CAGR is annualised compounded growth. Volatility is annualised standard deviation of daily returns. Max Drawdown represents the deepest peak-to-trough decline. Comparison vs Nifty 50 is for benchmarking only. <strong style={{ color: "#0C0E13" }}>Data Source: NSE India | FactorLens Calculations.</strong> Not financial advice.
+                <p style={{ fontSize: 12, color: "var(--muted-foreground)", lineHeight: 1.72 }}>
+                  Past performance is not indicative of future results. All computations use adjusted NSE index NAV data (2005–present). CAGR is annualised compounded growth. Volatility is annualised standard deviation of daily returns. Max Drawdown represents the deepest peak-to-trough decline. Comparison vs Nifty 50 is for benchmarking only. <strong style={{ color: "var(--foreground)" }}>Data Source: NSE India | FactorLens Calculations.</strong> Not financial advice.
                 </p>
               </div>
 
@@ -994,15 +1262,17 @@ export default function DashboardPage() {
         {/* Error */}
         {error && (
           <div style={{
-            borderRadius: 12, border: "1px solid rgba(197,39,30,.4)",
-            background: "rgba(197,39,30,.05)", padding: "12px 16px", marginTop: 12,
+            borderRadius: 12, border: "1px solid rgba(239,68,68,.3)",
+            background: "rgba(239,68,68,.06)", padding: "12px 16px", marginTop: 12,
           }}>
-            <p style={{ fontSize: 14, color: "#C5271E" }}>{error}</p>
+            <p style={{ fontSize: 14, color: "#F87171" }}>{error}</p>
           </div>
         )}
 
 
       </div>
+
+      <SiteFooter />
 
       {/* Sticky FAB — mobile only, shows when results visible */}
       {result && (
@@ -1014,10 +1284,10 @@ export default function DashboardPage() {
             onClick={scrollToBuilder}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              padding: "12px 18px", borderRadius: 100,
-              background: "#0C0E13", color: "#ffffff",
+              padding: "12px 20px", borderRadius: 100,
+              background: "#4F80FF", color: "#ffffff",
               fontSize: 13.5, fontWeight: 700,
-              boxShadow: "0 4px 20px rgba(12,14,19,.28)",
+              boxShadow: "0 4px 24px rgba(79,128,255,.35)",
               transition: "all .2s", border: "none",
               fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" as const,
             }}
