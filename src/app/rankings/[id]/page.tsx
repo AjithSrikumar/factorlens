@@ -210,7 +210,7 @@ export default function FundDetailsPage({ params }: { params: Promise<{ id: stri
             <div className="flex gap-3 flex-shrink-0">
               <div className="rounded-2xl border border-border/60 bg-background px-5 py-3.5 text-center min-w-[100px]">
                 <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Score</p>
-                <p className="text-2xl font-bold metric-value text-primary tabular-nums">{fund.score?.toFixed(1)}</p>
+                <p className="text-2xl font-bold metric-value text-primary tabular-nums">{fund.score != null ? ((100 - fund.score) / 10).toFixed(1) : '—'}</p>
               </div>
               <div className={cn(
                 "rounded-2xl border px-5 py-3.5 text-center min-w-[110px]",

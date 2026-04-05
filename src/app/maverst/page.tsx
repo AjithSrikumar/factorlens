@@ -322,8 +322,33 @@ export default function MAVERSTPage() {
         {layer2 && (
           <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-            {/* Indicator contribution table */}
-            <IndicatorTable indicators={indicators} score={score} />
+            {/* Indicator contribution table — Coming Soon */}
+            <div style={{ position: 'relative' }}>
+              <div style={{ filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none', opacity: 0.5 }}>
+                <IndicatorTable indicators={indicators} score={score} />
+              </div>
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(var(--background-rgb, 255,255,255), 0.5)',
+                backdropFilter: 'blur(2px)',
+                borderRadius: 12,
+                gap: 10,
+              }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase',
+                  color: 'var(--muted-foreground)', opacity: 0.7,
+                }}>Coming Soon</div>
+                <div style={{
+                  fontSize: 22, fontWeight: 800, color: 'var(--foreground)', letterSpacing: '-.5px',
+                }}>Indicator Deep Dive</div>
+                <div style={{
+                  fontSize: 13, color: 'var(--muted-foreground)', textAlign: 'center', maxWidth: 340, lineHeight: 1.6,
+                }}>
+                  Detailed per-indicator breakdown with z-score trends, regime transitions, and signal attribution is being built.
+                </div>
+              </div>
+            </div>
 
             {/* Allocation logic */}
             <AllocationLogic score={score} regime={regime} allocation={allocation} />
