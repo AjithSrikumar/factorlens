@@ -539,7 +539,7 @@ function RiskBanner({
 }
 
 export default function DashboardPage() {
-  const { user, signInWithGoogle } = useAuth()
+  const { user, loading: authLoading, signInWithGoogle } = useAuth()
 
   const [step, setStep]           = useState<'questionnaire' | 'portfolio'>('questionnaire')
   const [riskProfile, setRiskProfile] = useState<RiskProfile | null>(null)
@@ -762,11 +762,13 @@ export default function DashboardPage() {
   // the count stays the same — e.g. 5 saved funds replaced by 5 new questionnaire funds.
   // pendingRun ref gates execution so only intentional triggers (questionnaire / load) run.
   useEffect(() => {
-    if (!pendingRun.current || allocations.length === 0) return
+    // Wait for auth state to resolve before running — prevents showing the auth gate
+    // to logged-in users whose Supabase session hasn't loaded yet.
+    if (authLoading || !pendingRun.current || allocations.length === 0) return
     pendingRun.current = false
     generateRef.current()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allocations])   // fire whenever allocation array reference changes
+  }, [allocations, authLoading])   // fire when allocations change OR when auth resolves
 
   const handleQuestionnaireComplete = useCallback((profile: RiskProfile) => {
     try { localStorage.setItem('fl_risk_profile', JSON.stringify(profile)) } catch { /* ignore */ }
