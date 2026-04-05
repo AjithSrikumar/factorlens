@@ -1,602 +1,229 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 300
 
 /**
- * GET /api/admin/mf-load?offset=0&limit=20&secret=<CRON_SECRET>
+ * GET /api/admin/mf-load?batch=N&secret=<CRON_SECRET>
  *
- * Initial data loader for mf_funds + mf_nav_data tables.
- * Fetches full NAV history since inception for each fund from mfapi.in.
+ * Loads full NAV history (since inception) for all tracked index MFs from AMFI.
+ * Uses SCHEME_ENTRIES as the definitive fund list — no mfapi.in dependency.
  *
- * Call in a loop (e.g. via scripts/trigger_mf_load.sh) until all 257 funds
- * are loaded.  Idempotent — safe to re-run.
+ * AMFI NAV History endpoint:
+ *   https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx
+ *   ?NavDate=01-Apr-2006&ToNav=<today>&SCode=<schemeCode>
+ *   Response: semicolon-delimited  SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date
+ *
+ * Usage (run each batch in sequence until done):
+ *   GET /api/admin/mf-load?batch=1&secret=<secret>
+ *   GET /api/admin/mf-load?batch=2&secret=<secret>
+ *   ...
+ *   Then run /api/cron/mf-eod to recompute 1Y/3Y/5Y returns.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { SCHEME_ENTRIES } from '@/lib/mf-funds'
 
-// Use service role key if available (preferred for admin ops), otherwise fall back
-// to anon key — works when RLS is disabled on mf_funds / mf_nav_data tables.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
   (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here')
     ? process.env.SUPABASE_SERVICE_ROLE_KEY
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key',
 )
 
-const MFAPI_BASE = 'https://api.mfapi.in/mf'
+const AMFI_HISTORY_BASE = 'https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx'
+const AMFI_INCEPTION    = '01-Apr-2006'
+const BATCH_SIZE        = 25   // funds per Vercel invocation (AMFI history can be slow)
+const CONCURRENCY       = 3    // parallel AMFI requests
 
-// ── Full fund list (257 funds) ────────────────────────────────────────────────
+// ── Date helpers ──────────────────────────────────────────────────────────────
 
-const FUND_NAMES: string[] = [
-  "UTI Nifty 50 Index Fund-Reg(G)",
-  "HDFC Nifty 50 Index Fund(G)(Post Addendum)",
-  "SBI Gold-Reg(G)",
-  "ICICI Pru Nifty 50 Index Fund-Reg(G)",
-  "SBI Nifty Index Fund-Reg(G)",
-  "HDFC Gold ETF FoF(G)",
-  "HDFC BSE Sensex Index Fund(G)(Post Addendum)",
-  "UTI Nifty200 Momentum 30 Index Fund-Reg(G)",
-  "ICICI Pru Nifty Next 50 Index Fund(G)",
-  "Nippon India Gold Savings Fund(G)",
-  "Kotak Gold Fund(G)",
-  "ICICI Pru Gold ETF FOF(G)",
-  "UTI Nifty Next 50 Index Fund-Reg(G)",
-  "HDFC Silver ETF FoF-Reg(G)",
-  "Motilal Oswal Nifty India Defence Index Fund-Reg(G)",
-  "Navi Nifty 50 Index Fund-Reg(G)",
-  "Nippon India Index Fund-Nifty 50 Plan(G)",
-  "Motilal Oswal Nifty Midcap 150 Index Fund-Reg(G)",
-  "Axis Gold Fund-Reg(G)",
-  "Motilal Oswal Nifty 500 Index Fund-Reg(G)",
-  "Nippon India Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Motilal Oswal Gold and Silver Passive FoF-Reg(G)",
-  "DSP Nifty 50 Equal Weight Index Fund-Reg(G)",
-  "Motilal Oswal Nifty Microcap 250 Index Fund-Reg(G)",
-  "HDFC NIFTY Next 50 Index Fund-Reg(G)",
-  "Bandhan Nifty 50 Index Fund-Reg(G)",
-  "Nippon India Nifty Midcap 150 Index Fund-Reg(G)",
-  "ICICI Pru PSU Equity Fund-Reg(G)",
-  "Axis Nifty 100 Index Fund-Reg(G)",
-  "SBI Nifty Next 50 Index Fund-Reg(G)",
-  "ICICI Pru BSE Sensex Index Fund(G)",
-  "Bandhan Nifty100 Low Volatility 30 Index Fund-Reg(G)",
-  "Aditya Birla SL Gold Fund-Reg(G)",
-  "Motilal Oswal BSE Enhanced Value Index Fund-Reg(G)",
-  "HDFC NIFTY50 Equal Weight Index Fund-Reg(G)",
-  "Tata NIFTY 50 Index Fund-Reg(G)",
-  "Edelweiss Nifty Midcap150 Momentum 50 Index Fund-Reg(G)",
-  "SBI Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Nippon India Nifty Alpha Low Volatility 30 Index Fund(G)",
-  "UTI Gold ETF FoF-Reg(G)",
-  "DSP Nifty Top 10 Equal Weight Index Fund-Reg(G)",
-  "Aditya Birla SL Nifty 50 Index Fund-Reg(G)",
-  "Axis Silver FoF-Reg(G)",
-  "DSP NIFTY Next 50 Index Fund-Reg(G)",
-  "Navi Nifty Next 50 Index Fund-Reg(G)",
-  "Nippon India Nifty 500 Momentum 50 Index Fund-Reg(G)",
-  "Kotak Gold Silver Passive FOF-Reg(G)",
-  "Tata Nifty Midcap 150 Momentum 50 Index Fund-Reg(G)",
-  "SBI Nifty50 Equal Weight Index Fund-Reg(G)",
-  "Kotak Nifty 50 Index Fund-Reg(G)",
-  "Nippon India Nifty 50 Value 20 Index Fund-Reg(G)",
-  "Motilal Oswal Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Kotak Silver ETF FoF-Reg(G)",
-  "DSP NIFTY 50 Index Fund-Reg(G)",
-  "Motilal Oswal Nifty 200 Momentum 30 Index Fund-Reg(G)",
-  "SBI Nifty Midcap 150 Index Fund-Reg(G)",
-  "ICICI Pru Nifty Midcap 150 Index Fund-Reg(G)",
-  "Nippon India Index Fund-BSE Sensex Plan(G)",
-  "Kotak Nifty Next 50 Index Fund-Reg(G)",
-  "Aditya Birla SL Nifty India Defence Index Fund-Reg(G)",
-  "Motilal Oswal Nifty 50 Index Fund-Reg(G)",
-  "Axis Nifty 50 Index Fund-Reg(G)",
-  "LIC MF Gold ETF FoF(G)",
-  "SBI Nifty 500 Index Fund-Reg(G)",
-  "Franklin India NSE Nifty 50 Index Fund(G)",
-  "Motilal Oswal Nifty 500 Momentum 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty Bank Index Fund-Reg(G)",
-  "Motilal Oswal Nifty Bank Index Fund-Reg(G)",
-  "Navi Nifty Bank Index Fund-Reg(G)",
-  "HDFC NIFTY200 Momentum 30 Index Fund-Reg(G)",
-  "UTI Nifty 500 Value 50 Index Fund-Reg(G)",
-  "UTI Nifty200 Quality 30 Index Fund-Reg(G)",
-  "Axis Nifty Midcap 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty Smallcap 250 Index Fund(G)",
-  "Axis Gold and Silver Passive FoF-Reg(G)",
-  "ICICI Pru Nifty 200 Momentum 30 Index Fund-Reg(G)",
-  "HDFC NIFTY Smallcap 250 Index Fund-Reg(G)",
-  "Axis Nifty Smallcap 50 Index Fund-Reg(G)",
-  "DSP Gold ETF FoF-Reg(G)",
-  "UTI BSE Low Volatility Index Fund-Reg(G)",
-  "Edelweiss Nifty500 Multicap Momentum Quality 50 Index Fund-Reg(G)",
-  "Bandhan Nifty Alpha 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty IT Index Fund-Reg(G)",
-  "Quantum Gold Saving Fund-Reg(G)",
-  "HDFC NIFTY Midcap 150 Index Fund-Reg(G)",
-  "Kotak Nifty 200 Momentum 30 Index Fund-Reg(G)",
-  "Tata Nifty Capital Markets Index Fund-Reg(G)",
-  "Invesco India Gold ETF FoF-Reg(G)",
-  "Aditya Birla SL Nifty 50 Equal Weight Index Fund-Reg(G)",
-  "DSP Nifty Midcap 150 Quality 50 Index Fund-Reg(G)",
-  "Axis Nifty Next 50 Index Fund-Reg(G)",
-  "HDFC Nifty500 Multicap 50:25:25 Index Fund-Reg(G)",
-  "Motilal Oswal Nifty Next 50 Index Fund-Reg(G)",
-  "Aditya Birla SL Nifty Midcap 150 Index Fund-Reg(G)",
-  "HDFC Nifty LargeMidcap 250 Index Fund-Reg(G)",
-  "HDFC NIFTY 100 Equal Weight Index Fund-Reg(G)",
-  "HDFC NIFTY 100 Index Fund-Reg(G)",
-  "Tata BSE Sensex Index Fund-Reg(G)",
-  "Nippon India Nifty 500 Equal Weight Index Fund-Reg(G)",
-  "HSBC Nifty 50 Index Fund-Reg(G)",
-  "Navi Nifty Midcap 150 Index Fund-Reg(G)",
-  "LIC MF Nifty 50 Index Fund(G)",
-  "Motilal Oswal Nifty Capital Market Index Fund-Reg(G)",
-  "Groww Nifty Total Market Index Fund-Reg(G)",
-  "Edelweiss NIFTY Large Mid Cap 250 Index Fund-Reg(G)",
-  "Kotak NIFTY Midcap 150 Momentum 50 Index Fund-Reg(G)",
-  "Axis Nifty 500 Index Fund-Reg(G)",
-  "SBI BSE Sensex Index Fund-Reg(G)",
-  "SBI Nifty200 Quality 30 Index Fund-Reg(G)",
-  "SBI BSE PSU Bank Index Fund-Reg(G)",
-  "DSP Nifty Smallcap250 Quality 50 Index Fund-Reg(G)",
-  "SBI Nifty India Consumption Index Fund-Reg(G)",
-  "HDFC BSE 500 Index Fund-Reg(G)",
-  "Edelweiss Nifty 50 Index Fund-Reg(G)",
-  "Tata Nifty India Tourism Index Fund-Reg(G)",
-  "HDFC NIFTY100 Low Volatility 30 Index Fund-Reg(G)",
-  "Aditya Birla SL Nifty Smallcap 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty LargeMidcap 250 Index Fund-Reg(G)",
-  "Aditya Birla SL Nifty Next 50 Index Fund-Reg(G)",
-  "UTI Nifty Midcap 150 Quality 50 Index Fund-Reg(G)",
-  "Bandhan Nifty 100 Index Fund-Reg(G)",
-  "Tata Nifty Midcap 150 Index Fund-Reg(G)",
-  "Tata BSE Select Business Groups Index Fund-Reg(G)",
-  "UTI Nifty Private Bank Index Fund-Reg(G)",
-  "Edelweiss Nifty Next 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty50 Equal Weight Index Fund-Reg(G)",
-  "UTI BSE Sensex Index Fund-Reg(G)",
-  "ICICI Pru Nifty200 Value 30 Index Fund-Reg(G)",
-  "Tata Nifty200 Alpha 30 Index Fund-Reg(G)",
-  "Edelweiss Nifty Smallcap 250 Index Fund-Reg(G)",
-  "HDFC BSE India Sector Leaders Index Fund-Reg(G)",
-  "Nippon India Nifty Bank Index Fund-Reg(G)",
-  "Nippon India Nifty IT Index Fund-Reg(G)",
-  "Kotak Nifty Smallcap 50 Index Fund-Reg(G)",
-  "Edelweiss MSCI India Domestic & World Healthcare 45 Index Fund-Reg(G)",
-  "Union Gold ETF FoF-Reg(G)",
-  "HDFC Nifty India Consumption Index Fund-Reg(G)",
-  "Tata Nifty MidSmall Healthcare Index Fund-Reg(G)",
-  "Bandhan Silver ETF FOF-Reg(G)",
-  "HDFC Nifty100 Quality 30 Index Fund-Reg(G)",
-  "Axis Nifty Bank Index Fund-Reg(G)",
-  "HSBC Nifty Next 50 Index Fund-Reg(G)",
-  "Axis Nifty500 Value 50 Index Fund-Reg(G)",
-  "SBI Nifty Bank Index Fund-Reg(G)",
-  "Edelweiss Nifty 100 Quality 30 Index Fund-Reg(G)",
-  "HDFC Nifty India Digital Index Fund-Reg(G)",
-  "Sundaram Nifty 100 Equal Weight Fund(G)",
-  "Bandhan Nifty200 Momentum 30 Index Fund-Reg(G)",
-  "Kotak NIFTY 100 Low Volatility 30 Index Fund-Reg(G)",
-  "DSP Nifty500 Flexicap Quality 30 Index Fund-Reg(G)",
-  "Bandhan Gold ETF FOF-Reg(G)",
-  "UTI NIFTY50 Equal Weight Index Fund-Reg(G)",
-  "Axis Nifty500 Momentum 50 Index Fund-Reg(G)",
-  "Tata Nifty500 Multicap India Manufacturing 50:30:20 Index Fund-Reg(G)",
-  "Edelweiss Silver ETF FoF-Reg(G)",
-  "Axis NIFTY IT Index Fund-Reg(G)",
-  "Edelweiss Nifty Alpha Low Volatility 30 Index Fund-Reg(G)",
-  "Groww Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Groww Gold ETF FOF-Reg(G)",
-  "SBI Nifty200 Momentum 30 Index Fund-Reg(G)",
-  "Tata Nifty Next 50 Index Fund-Reg(G)",
-  "Motilal Oswal BSE Low Volatility Index Fund-Reg(G)",
-  "ICICI Pru Nifty50 Value 20 Index Fund-Reg(G)",
-  "HDFC NIFTY Realty Index Fund-Reg(G)",
-  "LIC MF Nifty Next 50 Index Fund(G)",
-  "Kotak Nifty Financial Services Ex-Bank Index Fund-Reg(G)",
-  "UTI Nifty Midsmallcap 400 Momentum Quality 100 Index Fund-Reg(G)",
-  "Kotak BSE PSU Index Fund-Reg(G)",
-  "LIC MF BSE Sensex Index Fund-Reg(G)",
-  "HDFC Nifty Top 20 Equal Weight Index Fund-Reg(G)",
-  "Motilal Oswal Nifty MidSmall Financial Services Index Fund-Reg(G)",
-  "SBI Nifty IT Index Fund-Reg(G)",
-  "Nippon India BSE Sensex Next 30 Index Fund-Reg(G)",
-  "Tata Nifty Financial Services Index Fund-Reg(G)",
-  "Tata Nifty500 Multicap Infrastructure 50:30:20 Index Fund-Reg(G)",
-  "UTI Nifty Alpha Low-Volatility 30 Index Fund-Reg(G)",
-  "Axis Nifty500 Quality 50 Index Fund-Reg(G)",
-  "Navi Nifty India Manufacturing Index Fund-Reg(G)",
-  "ICICI Pru Nifty 500 Index Fund-Reg(G)",
-  "Aditya Birla SL BSE 500 Quality 50 Index Fund-Reg(G)",
-  "UTI Nifty500 Shariah Index Fund-Reg(G)",
-  "Kotak NIFTY Midcap 50 Index Fund-Reg(G)",
-  "Aditya Birla SL BSE 500 Momentum 50 Index Fund-Reg(G)",
-  "SBI Nifty100 Low Volatility 30 Index Fund-Reg(G)",
-  "Baroda BNP Paribas Nifty 50 Index Fund-Reg(G)",
-  "UTI Nifty Midcap 150 Index Fund-Reg(G)",
-  "Bandhan Nifty Smallcap 250 Index Fund-Reg(G)",
-  "DSP Nifty Private Bank Index Fund-Reg(G)",
-  "DSP Nifty Bank Index Fund-Reg(G)",
-  "Motilal Oswal BSE Quality Index Fund-Reg(G)",
-  "DSP Nifty IT Index Fund-Reg(G)",
-  "Motilal Oswal BSE 1000 Index Fund-Reg(G)",
-  "Angel One Nifty Total Market Index Fund-Reg(G)",
-  "Mirae Asset Nifty 50 Index Fund-Reg(G)",
-  "Tata BSE Quality Index Fund-Reg(G)",
-  "Kotak Nifty 50 Equal Weight Index Fund-Reg(G)",
-  "Axis BSE Sensex Index Fund-Reg(G)",
-  "Tata BSE Multicap Consumption 50:30:20 Index Fund-Reg(G)",
-  "Mirae Asset Nifty Total Market Index Fund-Reg(G)",
-  "Groww Nifty India Railways PSU Index Fund-Reg(G)",
-  "Tata Nifty Realty Index Fund-Reg(G)",
-  "Nippon India Nifty 500 Quality 50 Index Fund-Reg(G)",
-  "Bajaj Finserv Nifty 50 Index Fund-Reg(G)",
-  "Kotak Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Groww Nifty Non-Cyclical Consumer Index Fund-Reg(G)",
-  "Bandhan Nifty Total Market Index Fund-Reg(G)",
-  "Nippon India Nifty India Manufacturing Index Fund-Reg(G)",
-  "Kotak Nifty 100 Equal Weight Index Fund-Reg(G)",
-  "Axis BSE India Sector Leaders Index Fund-Reg(G)",
-  "Nippon India Nifty Realty Index Fund-Reg(G)",
-  "Mirae Asset Nifty LargeMidcap 250 Index Fund-Reg(G)",
-  "Kotak Nifty Top 10 Equal Weight Index Fund-Reg(G)",
-  "Motilal Oswal Nifty MidSmall IT and Telecom Index Fund-Reg(G)",
-  "Angel One Nifty Total Market Momentum Quality 50 Index Fund-Reg(G)",
-  "Kotak Nifty India Tourism Index Fund-Reg(G)",
-  "Bandhan Nifty Midcap 150 Index Fund-Reg(G)",
-  "Motilal Oswal BSE Financials ex Bank 30 Index Fund-Reg(G)",
-  "Angel One Nifty 50 Index Fund-Reg(G)",
-  "Angel One Gold ETF FOF-Reg(G)",
-  "Bandhan Nifty 500 Momentum 50 Index Fund-Reg(G)",
-  "ICICI Pru Nifty Top 15 Equal Weight Index Fund-Reg(G)",
-  "Bandhan Nifty 500 Value 50 Index Fund-Reg(G)",
-  "Motilal Oswal Nifty MidSmall Healthcare Index Fund-Reg(G)",
-  "Nippon India Nifty 500 Low Volatility 50 Index Fund-Reg(G)",
-  "Bandhan BSE India Sector Leaders Index Fund-Reg(G)",
-  "Bandhan Nifty IT Index Fund-Reg(G)",
-  "Bandhan Nifty Next 50 Index Fund-Reg(G)",
-  "Navi Nifty 500 Multicap 50:25:25 Index Fund-Reg(G)",
-  "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund-Reg(G)",
-  "Kotak Nifty Alpha 50 Index Fund-Reg(G)",
-  "UTI BSE Housing Index Fund-Reg(G)",
-  "Baroda BNP Paribas Nifty200 Momentum 30 Index Fund-Reg(G)",
-  "ICICI Pru Nifty200 Quality 30 Index Fund-Reg(G)",
-  "Motilal Oswal Nifty MidSmall India Consumption Index Fund-Reg(G)",
-  "Kotak Nifty Midcap 150 Index Fund-Reg(G)",
-  "Navi BSE Sensex Index Fund-Reg(G)",
-  "Groww Nifty 50 Index Fund-Reg(G)",
-  "Bandhan Nifty Bank Index Fund-Reg(G)",
-  "ICICI Pru Nifty Private Bank Index Fund-Reg(G)",
-  "Kotak Nifty500 Momentum 50 Index Fund-Reg(G)",
-  "Bandhan BSE Healthcare Index Fund-Reg(G)",
-  "Kotak BSE Sensex Index Fund-Reg(G)",
-  "DSP BSE Sensex Next 30 Index Fund-Reg(G)",
-  "Kotak Nifty 200 Quality 30 Index Fund-Reg(G)",
-  "Kotak BSE Housing Index Fund-Reg(G)",
-  "The Wealth Company Gold ETF FOF-Reg(G)",
-  "Groww Nifty Midcap 150 Index Fund-Reg(G)",
-  "Bandhan Nifty 200 Quality 30 Index Fund-Reg(G)",
-  "Bandhan Nifty Alpha Low Volatility 30 Index Fund-Reg(G)",
-  "DSP Nifty 500 Index Fund-Reg(G)",
-  "Kotak Nifty200 Value 30 Index Fund-Reg(G)",
-  "Navi Nifty MidSmallcap 400 Index Fund-Reg(G)",
-  "DSP Nifty Midcap 150 Index Fund-Reg(G)",
-  "DSP Nifty Smallcap 250 Index Fund-Reg(G)",
-  "Baroda BNP Paribas NIFTY Midcap 150 Index Fund-Reg(G)",
-  "Groww Nifty Next 50 Index Fund-Reg(G)",
-  "Taurus Nifty 50 Index Fund-Reg(G)",
-  "Groww Nifty PSU Bank Index Fund-Reg(G)",
-]
-
-// ── Manual overrides (hard-to-match funds) ────────────────────────────────────
-
-const MANUAL_OVERRIDES: Record<string, number> = {
-  "HDFC Gold ETF FoF(G)":                                    115934,
-  "UTI Nifty200 Momentum 30 Index Fund-Reg(G)":              148704,
-  "HDFC Silver ETF FoF-Reg(G)":                              150736,
-  "Nippon India Index Fund-Nifty 50 Plan(G)":                113296,
-  "UTI Gold ETF FoF-Reg(G)":                                 150715,
-  "Axis Silver FoF-Reg(G)":                                  150617,
-  "Kotak Silver ETF FoF-Reg(G)":                             151602,
-  "Nippon India Index Fund-BSE Sensex Plan(G)":              113269,
-  "LIC MF Gold ETF FoF(G)":                                  151973,
-  "UTI Nifty200 Quality 30 Index Fund-Reg(G)":               152858,
-  "DSP Gold ETF FoF-Reg(G)":                                 152182,
-  "Invesco India Gold ETF FoF-Reg(G)":                       116077,
-  "Edelweiss NIFTY Large Mid Cap 250 Index Fund-Reg(G)":     149341,
-  "Navi Nifty 500 Multicap 50:25:25 Index Fund-Reg(G)":      152750,
-  "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund-Reg(G)": 153363,
-  "Union Gold ETF FoF-Reg(G)":                               153338,
+/** Returns today in AMFI format: 'DD-Mon-YYYY' (e.g. '05-Apr-2026'), using IST */
+function todayAMFI(): string {
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const ist = new Date(Date.now() + 5.5 * 3600_000)
+  return `${String(ist.getUTCDate()).padStart(2,'0')}-${MONTHS[ist.getUTCMonth()]}-${ist.getUTCFullYear()}`
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Normalise for fuzzy comparison */
-function normalize(name: string): string {
-  return name.toLowerCase()
-    .replace(/\s*-\s*regular\s*(plan\s*)?-?\s*/g, ' ')
-    .replace(/\s*-\s*growth\s*(option)?\s*/g, ' ')
-    .replace(/\bgrowth\s+option\b/g, '')
-    .replace(/\(g\)/g, '')
-    .replace(/-reg\b/g, ' ')
-    .replace(/\(post addendum\)/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ')
-    .replace(/\s+/g, ' ').trim()
-}
-
-/** Dice-coefficient bigram similarity (equivalent to Python's difflib ratio) */
-function similarity(a: string, b: string): number {
-  const bigrams = (s: string) => {
-    const set = new Set<string>()
-    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2))
-    return set
-  }
-  const ba = bigrams(a), bb = bigrams(b)
-  let common = 0
-  for (const bg of ba) if (bb.has(bg)) common++
-  if (ba.size + bb.size === 0) return 0
-  return (2 * common) / (ba.size + bb.size)
-}
-
-function buildSearchQuery(name: string): string {
-  return name
-    .replace(/\s*\(Post Addendum\)\s*$/i, '')
-    .replace(/\s*\(G\)\s*$/i, '')
-    .replace(/\s*-\s*Reg\s*$/i, '')
-    .replace(/([a-zA-Z])(\d)/g, '$1 $2')
-    .replace(/\d+:\d+:\d+/g, '')
-    .replace(/\s+/g, ' ').trim()
-}
-
-function expandAbbr(name: string): string {
-  return name
-    .replace(/\bICICI Pru\b/gi, 'ICICI Prudential')
-    .replace(/\bAditya Birla SL\b/gi, 'Aditya Birla Sun Life')
-    .replace(/\bLIC MF\b/gi, 'LIC Mutual Fund')
-}
-
-async function searchMfapi(query: string): Promise<Array<{ schemeCode: number; schemeName: string }>> {
-  try {
-    const res = await fetch(`${MFAPI_BASE}/search?q=${encodeURIComponent(query)}`, {
-      signal: AbortSignal.timeout(8_000),
-    })
-    if (!res.ok) return []
-    return await res.json()
-  } catch {
-    return []
-  }
-}
-
-function bestMatch(
-  fundName: string,
-  results: Array<{ schemeCode: number; schemeName: string }>
-): { schemeCode: number; schemeName: string; ratio: number } | null {
-  const normTarget = normalize(fundName)
-  let best = { schemeCode: 0, schemeName: '', ratio: 0 }
-  for (const r of results) {
-    const ratio = similarity(normTarget, normalize(r.schemeName))
-    if (ratio > best.ratio) best = { schemeCode: r.schemeCode, schemeName: r.schemeName, ratio }
-  }
-  return best.ratio >= 0.65 ? best : null
-}
-
-async function resolveSchemeCode(
-  fundName: string
-): Promise<{ schemeCode: number; schemeName: string; via: string } | null> {
-  // 1. Manual override
-  if (MANUAL_OVERRIDES[fundName]) {
-    return { schemeCode: MANUAL_OVERRIDES[fundName], schemeName: fundName, via: 'override' }
-  }
-
-  // 2. Direct search
-  const q1 = buildSearchQuery(fundName)
-  let results = await searchMfapi(q1)
-  let match = bestMatch(fundName, results)
-  if (match) return { ...match, via: 'search' }
-
-  // 3. Expanded abbreviations
-  const q2 = buildSearchQuery(expandAbbr(fundName))
-  if (q2 !== q1) {
-    results = await searchMfapi(q2)
-    match = bestMatch(fundName, results)
-    if (match) return { ...match, via: 'search-expanded' }
-  }
-
-  // 4. Shorter query (first 5 words)
-  const q3 = expandAbbr(fundName).split(/\s+/).slice(0, 5).join(' ')
-  results = await searchMfapi(q3)
-  match = bestMatch(fundName, results)
-  if (match) return { ...match, via: 'search-short' }
-
-  return null
-}
-
-interface MfapiRow { date: string; nav: string }
-
-function mfapiDateToISO(s: string): string {
-  const p = s.trim().split('-')
-  if (p.length !== 3) return ''
-  const [dd, p2, yyyy] = p
-  // mfapi.in uses DD-MM-YYYY (numeric months: "22-03-2026")
-  if (/^\d{2}$/.test(dd) && /^\d{2}$/.test(p2) && /^\d{4}$/.test(yyyy)) {
-    return `${yyyy}-${p2}-${dd}`
-  }
-  // Fallback: DD-Mon-YYYY abbreviated month ("22-Mar-2026")
+/**
+ * AMFI date 'DD-Mon-YYYY' → ISO 'YYYY-MM-DD'.
+ * Returns '' on failure.
+ */
+function amfiDateToISO(s: string): string {
   const MONTHS: Record<string, string> = {
-    Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
-    Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12',
+    Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
+    Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12',
   }
-  const mm = MONTHS[p2]
-  if (!mm) return ''
+  const parts = s.trim().split('-')
+  if (parts.length !== 3) return ''
+  const [dd, mon, yyyy] = parts
+  const mm = MONTHS[mon]
+  if (!mm || !/^\d{4}$/.test(yyyy) || !/^\d{1,2}$/.test(dd)) return ''
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
 }
 
-async function fetchFullHistory(
-  schemeCode: number
-): Promise<Array<{ date: string; nav: number }>> {
-  try {
-    const res = await fetch(`${MFAPI_BASE}/${schemeCode}`, {
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!res.ok) return []
-    const json = await res.json() as { status: string; data: MfapiRow[]; meta: Record<string, string> }
-    if (json.status !== 'SUCCESS' || !json.data) return []
-    return json.data
-      .map((r) => ({ date: mfapiDateToISO(r.date), nav: parseFloat(r.nav) }))
-      .filter((r) => r.date.length === 10 && !isNaN(r.nav) && r.nav > 0)
-  } catch {
-    return []
+// ── AMFI NAV History fetcher ──────────────────────────────────────────────────
+
+async function fetchAmfiHistory(
+  schemeCode: number,
+  toDate: string,
+): Promise<{ date: string; nav: number }[]> {
+  const url =
+    `${AMFI_HISTORY_BASE}?NavDate=${AMFI_INCEPTION}&ToNav=${toDate}&SCode=${schemeCode}`
+
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(40_000),
+    headers: {
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Referer':         'https://www.amfiindia.com/net-asset-value/nav-history',
+      'Origin':          'https://www.amfiindia.com',
+    },
+  })
+
+  if (!res.ok) throw new Error(`AMFI HTTP ${res.status}`)
+
+  const text = await res.text()
+
+  // AMFI returns an HTML error page when it blocks the request
+  if (text.trimStart().startsWith('<') || text.toLowerCase().includes('<html')) {
+    throw new Error('AMFI portal blocked — HTML response received')
   }
+
+  const rows: { date: string; nav: number }[] = []
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split(';')
+    if (parts.length < 6) continue
+    const nav  = parseFloat(parts[4])
+    const date = amfiDateToISO(parts[5])
+    if (!date || isNaN(nav) || nav <= 0) continue
+    rows.push({ date, nav })
+  }
+
+  if (rows.length === 0) {
+    throw new Error('AMFI returned 0 valid rows (may be blocked or no data)')
+  }
+
+  return rows
+}
+
+// ── Concurrency helper ────────────────────────────────────────────────────────
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<Array<{ item: T; result?: R; error?: string }>> {
+  const results: Array<{ item: T; result?: R; error?: string }> = []
+  let idx = 0
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++
+      try { results[i] = { item: items[i], result: await fn(items[i]) } }
+      catch (e) { results[i] = { item: items[i], error: e instanceof Error ? e.message : String(e) } }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker))
+  return results
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-export const maxDuration = 300
-
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET
+  // Auth
+  const secret   = process.env.CRON_SECRET
   const provided = req.nextUrl.searchParams.get('secret') ??
     (req.headers.get('authorization') ?? '').replace('Bearer ', '')
   if (secret && provided !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const offset = parseInt(req.nextUrl.searchParams.get('offset') ?? '0', 10)
-  const limit  = parseInt(req.nextUrl.searchParams.get('limit')  ?? '20', 10)
+  // Deduplicate scheme codes — SCHEME_ENTRIES has one entry per fund×index
+  // mapping, so the same schemeCode can appear multiple times.
+  const seenCodes = new Set<number>()
+  const allEntries = SCHEME_ENTRIES.filter(e => {
+    if (seenCodes.has(e.schemeCode)) return false
+    seenCodes.add(e.schemeCode)
+    return true
+  })
 
-  const batch = FUND_NAMES.slice(offset, offset + limit)
-  if (batch.length === 0) {
-    return NextResponse.json({ ok: true, message: 'All funds processed', total: FUND_NAMES.length })
+  const batchParam  = parseInt(req.nextUrl.searchParams.get('batch') ?? '1', 10)
+  const batch       = isNaN(batchParam) || batchParam < 1 ? 1 : batchParam
+  const totalBatches = Math.ceil(allEntries.length / BATCH_SIZE)
+  const start        = (batch - 1) * BATCH_SIZE
+  const batchEntries = allEntries.slice(start, start + BATCH_SIZE)
+
+  const toDate = todayAMFI()
+  const log: string[] = [
+    `mf-load [AMFI] batch=${batch}/${totalBatches} | ${batchEntries.length} funds | up to ${toDate}`,
+    `Source: ${AMFI_HISTORY_BASE} (since ${AMFI_INCEPTION})`,
+  ]
+
+  if (batchEntries.length === 0) {
+    log.push('All batches complete.')
+    return NextResponse.json({ ok: true, batch, totalBatches, totalFetched: 0, totalInserted: 0, errors: [], log })
   }
 
-  const log: string[] = []
-  log.push(`[mf-load] offset=${offset} limit=${limit} — processing ${batch.length} funds (${offset+1}–${offset+batch.length} of ${FUND_NAMES.length})`)
+  // Seed mf_funds with scheme metadata (idempotent — won't overwrite existing rows)
+  const seedErr = (await supabase.from('mf_funds').upsert(
+    allEntries.map(e => ({ scheme_code: e.schemeCode, scheme_name: e.schemeName })),
+    { onConflict: 'scheme_code', ignoreDuplicates: true },
+  )).error
+  if (seedErr) log.push(`seed warning: ${seedErr.message}`)
 
-  // ── Ensure tables exist ────────────────────────────────────────────────────
-  // We rely on mfapi_loader.py having created them; if not, return an error.
-  const { error: tableCheck } = await supabase.from('mf_funds').select('scheme_code').limit(1)
-  if (tableCheck) {
-    return NextResponse.json({
-      error: 'mf_funds table not found. Run: python scripts/mfapi_loader.py --search-only first, or create tables via Supabase SQL editor.',
-      sql: `
-CREATE TABLE IF NOT EXISTS mf_funds (
-  scheme_code INTEGER PRIMARY KEY, scheme_name TEXT NOT NULL,
-  fund_house TEXT, scheme_type TEXT, scheme_category TEXT,
-  search_name TEXT, match_ratio NUMERIC(5,3), created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS mf_nav_data (
-  scheme_code INTEGER NOT NULL REFERENCES mf_funds(scheme_code) ON DELETE CASCADE,
-  date DATE NOT NULL, nav NUMERIC(20,4) NOT NULL, PRIMARY KEY (scheme_code, date)
-);
-CREATE INDEX IF NOT EXISTS idx_mf_nav_scheme_date ON mf_nav_data(scheme_code, date);`
-    }, { status: 500 })
-  }
-
-  // ── Get already-loaded search names to skip ────────────────────────────────
-  const { data: alreadyLoaded } = await supabase
-    .from('mf_funds')
-    .select('search_name, scheme_code')
-    .in('search_name', batch)
-
-  const loadedNames = new Set((alreadyLoaded ?? []).map((r) => r.search_name))
-  // Check which have NAV data
-  const loadedCodes = (alreadyLoaded ?? []).map((r) => r.scheme_code)
-  const { data: navCheck } = loadedCodes.length
-    ? await supabase.from('mf_nav_data').select('scheme_code').in('scheme_code', loadedCodes).limit(loadedCodes.length)
-    : { data: [] }
-  const codesWithNav = new Set((navCheck ?? []).map((r) => r.scheme_code))
-  const loadedNamesWithNav = new Set(
-    (alreadyLoaded ?? []).filter((r) => codesWithNav.has(r.scheme_code)).map((r) => r.search_name)
+  // Fetch history from AMFI for each fund in the batch
+  const fetchResults = await runWithConcurrency(
+    batchEntries,
+    CONCURRENCY,
+    (entry) => fetchAmfiHistory(entry.schemeCode, toDate),
   )
 
-  let inserted = 0
-  let skipped  = 0
-  let failed   = 0
+  let totalRows     = 0
+  let totalInserted = 0
+  const errors: string[] = []
+  const allRows: Array<{ scheme_code: number; date: string; nav: number }> = []
 
-  for (const fundName of batch) {
-    if (loadedNamesWithNav.has(fundName)) {
-      log.push(`  SKIP  ${fundName}`)
-      skipped++
-      continue
+  for (const r of fetchResults) {
+    const entry = r.item
+    if (r.error) {
+      errors.push(`[${entry.schemeCode}] ${entry.schemeName}: ${r.error}`)
+      log.push(`  FAIL  [${entry.schemeCode}] ${entry.schemeName}: ${r.error}`)
+    } else {
+      const rows = r.result!
+      log.push(`  OK    [${entry.schemeCode}] ${entry.schemeName} → ${rows.length} rows`)
+      allRows.push(...rows.map(r => ({ scheme_code: entry.schemeCode, date: r.date, nav: r.nav })))
+      totalRows += rows.length
     }
-
-    // ── Resolve scheme code ────────────────────────────────────────────────
-    const resolved = await resolveSchemeCode(fundName)
-    if (!resolved) {
-      log.push(`  FAIL  ${fundName} — not found on mfapi.in`)
-      failed++
-      continue
-    }
-
-    const { schemeCode, schemeName, via } = resolved
-    log.push(`  FOUND [${schemeCode}] ${schemeName} (${via})`)
-
-    // ── Fetch full history ─────────────────────────────────────────────────
-    const history = await fetchFullHistory(schemeCode)
-    if (!history.length) {
-      log.push(`        → no NAV data returned`)
-      failed++
-      continue
-    }
-
-    // ── Fetch meta for fund house / category ───────────────────────────────
-    let meta: Record<string, string> = {}
-    try {
-      const metaRes = await fetch(`${MFAPI_BASE}/${schemeCode}/latest`, { signal: AbortSignal.timeout(8_000) })
-      if (metaRes.ok) {
-        const metaJson = await metaRes.json() as { meta?: Record<string, string> }
-        meta = metaJson.meta ?? {}
-      }
-    } catch { /* ignore */ }
-
-    // ── Upsert fund metadata ───────────────────────────────────────────────
-    await supabase.from('mf_funds').upsert({
-      scheme_code:     schemeCode,
-      scheme_name:     schemeName,
-      fund_house:      meta['fund_house']      ?? '',
-      scheme_type:     meta['scheme_type']     ?? '',
-      scheme_category: meta['scheme_category'] ?? '',
-      search_name:     fundName,
-      match_ratio:     resolved.via === 'override' ? 1.0 : (resolved as any).ratio ?? null,
-    }, { onConflict: 'scheme_code' })
-
-    // ── Upsert NAV rows in 500-row chunks ──────────────────────────────────
-    const CHUNK = 500
-    let rows_inserted = 0
-    for (let i = 0; i < history.length; i += CHUNK) {
-      const chunk = history.slice(i, i + CHUNK).map((r) => ({
-        scheme_code: schemeCode,
-        date:        r.date,
-        nav:         r.nav,
-      }))
-      const { error } = await supabase
-        .from('mf_nav_data')
-        .upsert(chunk, { onConflict: 'scheme_code,date' })
-      if (!error) rows_inserted += chunk.length
-    }
-
-    const oldest = history[history.length - 1].date
-    const newest = history[0].date
-    log.push(`        → ${rows_inserted} rows  (${oldest} → ${newest})`)
-    inserted += rows_inserted
   }
 
-  const nextOffset = offset + limit
-  const hasMore    = nextOffset < FUND_NAMES.length
+  // Upsert in 500-row chunks
+  const CHUNK = 500
+  for (let i = 0; i < allRows.length; i += CHUNK) {
+    const { error } = await supabase
+      .from('mf_nav_data')
+      .upsert(allRows.slice(i, i + CHUNK), { onConflict: 'scheme_code,date' })
+    if (error) {
+      errors.push(`upsert @${i}: ${error.message}`)
+      log.push(`  UPSERT ERROR @${i}: ${error.message}`)
+    } else {
+      totalInserted += Math.min(CHUNK, allRows.length - i)
+    }
+  }
 
-  log.push(`\nBatch done — inserted ${inserted} rows | skipped ${skipped} | failed ${failed}`)
-  if (hasMore) log.push(`Next: ?offset=${nextOffset}&limit=${limit}&secret=<secret>`)
+  log.push(`Done — ${totalRows} rows fetched | ${totalInserted} upserted | ${errors.length} errors`)
+  if (batch < totalBatches) {
+    log.push(`Next: ?batch=${batch + 1}&secret=<secret>`)
+  } else {
+    log.push('All batches complete! Run /api/cron/mf-eod to recompute 1Y/3Y/5Y returns.')
+  }
 
   return NextResponse.json({
-    ok: true,
-    offset,
-    limit,
-    processed: batch.length,
-    inserted,
-    skipped,
-    failed,
-    hasMore,
-    nextOffset: hasMore ? nextOffset : null,
-    total: FUND_NAMES.length,
+    ok:           errors.length === 0,
+    batch,
+    totalBatches,
+    totalFetched:  totalRows,
+    totalInserted,
+    errors,
     log,
   })
 }

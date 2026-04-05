@@ -6,13 +6,9 @@ export const dynamic = 'force-dynamic'
  * Fetches the COMPLETE NAV history (since inception) for a batch of funds from
  * AMFI's NAV History download API and upserts into mf_nav_data.
  *
- * Primary source: AMFI NAV History
+ * Source: AMFI NAV History
  *   https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx
  *   ?NavDate=01-Apr-2006&ToNav={today}&SCode={schemeCode}
- *
- * Fallback: mfapi.in (public AMFI mirror)
- *   https://api.mfapi.in/mf/{schemeCode}
- *   Used automatically when AMFI returns an HTML error page (Vercel IP block).
  *
  * Batching — each call processes BATCH_SIZE funds to stay within Vercel's 300s limit.
  *   batch=1  → funds  1–30
@@ -81,22 +77,10 @@ function amfiDateToISO(s: string): string {
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
 }
 
-/**
- * 'DD-MM-YYYY' (mfapi.in format) → 'YYYY-MM-DD' (ISO).
- * Returns '' on parse failure.
- */
-function mfapiDateToISO(s: string): string {
-  const p = s.trim().split('-')
-  if (p.length !== 3) return ''
-  const [dd, mm, yyyy] = p
-  if (!/^\d{2}$/.test(dd) || !/^\d{2}$/.test(mm) || !/^\d{4}$/.test(yyyy)) return ''
-  return `${yyyy}-${mm}-${dd}`
-}
-
 // ── AMFI NAV History fetcher ──────────────────────────────────────────────────
 //
 // Downloads full NAV history for a single scheme from AMFI's portal.
-// Response is semicolon-delimited text identical to NAVAll.txt but for a date range:
+// Response is semicolon-delimited text:
 //   SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date
 //   100822;INF...;INF...;UTI Nifty 50 Index Fund;10.1234;22-Mar-2026
 //
@@ -106,76 +90,43 @@ function mfapiDateToISO(s: string): string {
 async function fetchAmfiHistory(
   schemeCode: number,
   toDate: string,
-): Promise<{ rows: Array<{ scheme_code: number; date: string; nav: number }>; source: 'amfi' | 'mfapi' }> {
+): Promise<{ rows: Array<{ scheme_code: number; date: string; nav: number }> }> {
   const url = `${AMFI_HISTORY_BASE}?NavDate=${AMFI_INCEPTION}&ToNav=${toDate}&SCode=${schemeCode}`
 
-  let amfiBlocked = false
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(30_000),
-      headers: {
-        'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer':         'https://www.amfiindia.com/net-asset-value/nav-history',
-        'Origin':          'https://www.amfiindia.com',
-      },
-    })
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(40_000),
+    headers: {
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Referer':         'https://www.amfiindia.com/net-asset-value/nav-history',
+      'Origin':          'https://www.amfiindia.com',
+    },
+  })
 
-    if (!res.ok) {
-      amfiBlocked = true
-    } else {
-      const text = await res.text()
+  if (!res.ok) throw new Error(`AMFI HTTP ${res.status}`)
 
-      // Detect HTML error page (portal returns HTML when blocking server IPs)
-      if (text.trimStart().startsWith('<') || text.toLowerCase().includes('<html')) {
-        amfiBlocked = true
-      } else {
-        // Parse semicolon-delimited NAV data
-        const rows: Array<{ scheme_code: number; date: string; nav: number }> = []
-        for (const line of text.split('\n')) {
-          const parts = line.trim().split(';')
-          if (parts.length < 6) continue
-          const code = parseInt(parts[0], 10)
-          if (isNaN(code)) continue
-          const nav  = parseFloat(parts[4])
-          const date = amfiDateToISO(parts[5])
-          if (!date || isNaN(nav) || nav <= 0) continue
-          rows.push({ scheme_code: code, date, nav })
-        }
+  const text = await res.text()
 
-        if (rows.length > 0) {
-          return { rows, source: 'amfi' }
-        }
-        // Empty response = blocked or no data; fall through to mfapi.in
-        amfiBlocked = true
-      }
-    }
-  } catch {
-    amfiBlocked = true
+  // AMFI returns an HTML page when blocking the request
+  if (text.trimStart().startsWith('<') || text.toLowerCase().includes('<html')) {
+    throw new Error('AMFI portal blocked — HTML response received')
   }
 
-  if (amfiBlocked) {
-    // ── Fallback: mfapi.in ─────────────────────────────────────────────────
-    const mfUrl = `https://api.mfapi.in/mf/${schemeCode}`
-    const mfRes = await fetch(mfUrl, { signal: AbortSignal.timeout(30_000) })
-    if (!mfRes.ok) throw new Error(`mfapi HTTP ${mfRes.status} for scheme ${schemeCode}`)
-
-    const json = await mfRes.json() as { data: Array<{ date: string; nav: string }> }
-    if (!Array.isArray(json.data)) throw new Error(`unexpected mfapi response for scheme ${schemeCode}`)
-
-    const rows: Array<{ scheme_code: number; date: string; nav: number }> = []
-    for (const entry of json.data) {
-      const date = mfapiDateToISO(entry.date)
-      const nav  = parseFloat(entry.nav)
-      if (!date || isNaN(nav) || nav <= 0) continue
-      rows.push({ scheme_code: schemeCode, date, nav })
-    }
-
-    return { rows, source: 'mfapi' }
+  const rows: Array<{ scheme_code: number; date: string; nav: number }> = []
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split(';')
+    if (parts.length < 6) continue
+    const code = parseInt(parts[0], 10)
+    if (isNaN(code)) continue
+    const nav  = parseFloat(parts[4])
+    const date = amfiDateToISO(parts[5])
+    if (!date || isNaN(nav) || nav <= 0) continue
+    rows.push({ scheme_code: code, date, nav })
   }
 
-  throw new Error(`No data for scheme ${schemeCode}`)
+  if (rows.length === 0) throw new Error('AMFI returned 0 valid rows')
+  return { rows }
 }
 
 // ── Concurrency helper ────────────────────────────────────────────────────────
@@ -222,7 +173,7 @@ export async function GET(req: NextRequest) {
   const toDate = todayAMFI()
   const log: string[] = [
     `mf-backfill batch=${batch} | fetching historical NAV since ${AMFI_INCEPTION} up to ${toDate}`,
-    `Primary source: AMFI NAV History (portal.amfiindia.com) | Fallback: mfapi.in`,
+    `Source: AMFI NAV History (portal.amfiindia.com)`,
   ]
 
   // 1. Load scheme codes from mf_funds
@@ -259,8 +210,6 @@ export async function GET(req: NextRequest) {
 
   let totalRows     = 0
   let totalInserted = 0
-  let amfiCount     = 0
-  let mfapiCount    = 0
   const fetchErrors: string[] = []
   const allRows: Array<{ scheme_code: number; date: string; nav: number }> = []
 
@@ -269,17 +218,15 @@ export async function GET(req: NextRequest) {
       fetchErrors.push(`scheme ${r.item}: ${r.error}`)
       log.push(`  SKIP scheme ${r.item}: ${r.error}`)
     } else {
-      const { rows, source } = r.result!
-      if (source === 'amfi') amfiCount++; else mfapiCount++
-      log.push(`  scheme ${r.item}: ${rows.length} nav entries [${source}]`)
+      const { rows } = r.result!
+      log.push(`  scheme ${r.item}: ${rows.length} nav entries`)
       allRows.push(...rows)
       totalRows += rows.length
     }
   }
 
   log.push(
-    `Fetched ${totalRows} rows across ${schemeCodes.length - fetchErrors.length} funds ` +
-    `(AMFI: ${amfiCount}, mfapi.in: ${mfapiCount})`
+    `Fetched ${totalRows} rows across ${schemeCodes.length - fetchErrors.length} funds`
   )
 
   // 3. Upsert in chunks of 500
@@ -313,8 +260,6 @@ export async function GET(req: NextRequest) {
     totalBatches,
     totalFetched:  totalRows,
     totalInserted,
-    amfiCount,
-    mfapiCount,
     errors:        fetchErrors,
     log,
   })
