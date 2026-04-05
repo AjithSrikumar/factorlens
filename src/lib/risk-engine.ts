@@ -126,7 +126,7 @@ export const MF_ELIGIBLE_CODES = new Set([
   'N50', 'NN50', 'N100', 'N200', 'N500',
   'NMC150', 'NMC100', 'NMC50',
   'NSC250', 'NSC100', 'NSC50',
-  'NLMC250', 'NMSC400', 'NMCSEL', 'NTM',
+  'NLMC250', 'NMSC400', 'NTM',
   'N500MC5025',
   // Momentum factor
   'N200M30', 'MC150M50', 'N500M50', 'N500MCQ50',

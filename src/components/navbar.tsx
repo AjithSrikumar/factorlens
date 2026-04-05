@@ -188,7 +188,7 @@ export function Navbar() {
           {/* Sign In button — desktop only, hidden on mobile */}
           {!authLoading && !user && (
             <button
-              onClick={signInWithGoogle}
+              onClick={() => signInWithGoogle(typeof window !== 'undefined' ? window.location.pathname : undefined)}
               className="nav-signin-desktop"
               style={{
                 background: "none",
@@ -314,7 +314,7 @@ export function Navbar() {
           {!authLoading && !user && (
             <li className="nav-signin-mobile">
               <button
-                onClick={() => { setDrawerOpen(false); signInWithGoogle() }}
+                onClick={() => { setDrawerOpen(false); signInWithGoogle(typeof window !== 'undefined' ? window.location.pathname : undefined) }}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   width: "100%", padding: "11px 14px",

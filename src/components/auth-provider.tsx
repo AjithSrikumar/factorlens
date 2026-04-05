@@ -11,7 +11,7 @@ interface AuthContextType {
   user:              User | null
   session:           Session | null
   loading:           boolean
-  signInWithGoogle:  () => Promise<void>
+  signInWithGoogle:  (next?: string) => Promise<void>
   signOut:           () => Promise<void>
 }
 
@@ -49,11 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (next?: string) => {
+    const callbackUrl = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl,
         queryParams: { access_type: "offline", prompt: "consent" },
       },
     })
