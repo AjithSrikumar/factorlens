@@ -94,26 +94,41 @@ export async function POST(req: NextRequest) {
         console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
       }
 
-      // Detect stale funds: data ending more than 180 days before today.
-      // This happens when a fund (e.g. GOLD) was imported only for a historical period
-      // and not kept current — its NAV series cuts off years ago, which would shrink the
-      // entire portfolio's common-date range to that stale window.
+      // Detect lagging funds: compare each fund's last data date against the
+      // freshest data available (including the N50 benchmark).
+      // If a fund's data trails the freshest by more than 365 days it is "lagging" —
+      // it will silently truncate the entire portfolio to its old date range.
+      // N50 is already in navByFund; include it in the freshness check.
       const today = new Date().toISOString().slice(0, 10)
-      const staleThreshold = new Date(Date.now() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-      const staleFunds = validFundNavs.filter(f => {
-        const lastDate = f.navSeries[f.navSeries.length - 1]?.date ?? ''
-        return lastDate < staleThreshold
-      })
-      if (staleFunds.length > 0 && staleFunds.length < validFundNavs.length) {
-        // Only exclude stale funds if at least one fresh fund remains
-        console.warn(`Backtest: excluding stale fund IDs [${staleFunds.map(f => f.fundId).join(', ')}] — data ends before ${staleThreshold}`)
-        validFundNavs = validFundNavs.filter(f => {
+      const allNavForFreshness = [...validFundNavs.map(f => f.navSeries)]
+      if (niftyId !== null) {
+        const n50Nav = navByFund.get(niftyId)
+        if (n50Nav?.length) allNavForFreshness.push(n50Nav)
+      }
+      const maxLastDate = allNavForFreshness.reduce((max, series) => {
+        const last = series[series.length - 1]?.date ?? ''
+        return last > max ? last : max
+      }, '')
+
+      if (maxLastDate) {
+        // Cut-off: any fund whose data ends more than 365 days before the freshest is lagging
+        const cutoff = new Date(new Date(maxLastDate).getTime() - 365 * 24 * 3600 * 1000)
+          .toISOString().slice(0, 10)
+        const laggingFunds = validFundNavs.filter(f => {
           const lastDate = f.navSeries[f.navSeries.length - 1]?.date ?? ''
-          return lastDate >= staleThreshold
+          return lastDate < cutoff
         })
-        const freshTotal = validFundNavs.reduce((s, f) => s + f.weight, 0)
-        validFundNavs.forEach(f => { f.weight = (f.weight / freshTotal) * 100 })
-        missingFunds.push(...staleFunds)
+        const freshFunds = validFundNavs.filter(f => {
+          const lastDate = f.navSeries[f.navSeries.length - 1]?.date ?? ''
+          return lastDate >= cutoff
+        })
+        if (laggingFunds.length > 0 && freshFunds.length > 0) {
+          console.warn(`Backtest: excluding lagging fund IDs [${laggingFunds.map(f => f.fundId).join(', ')}] — their data ends before ${cutoff} while freshest data reaches ${maxLastDate}`)
+          validFundNavs = freshFunds
+          const freshTotal = validFundNavs.reduce((s, f) => s + f.weight, 0)
+          validFundNavs.forEach(f => { f.weight = (f.weight / freshTotal) * 100 })
+          missingFunds.push(...laggingFunds)
+        }
       }
 
     const portfolioNav = computePortfolioNav(validFundNavs)
