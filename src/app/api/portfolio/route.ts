@@ -34,14 +34,18 @@ export async function POST(req: NextRequest) {
       allocations.forEach(a => { a.weight = (a.weight / rawTotal) * 100 })
     }
 
-    // Look up Nifty 50 (N50) by code to avoid hardcoding ID
-    const { data: n50Fund } = await supabase.from('funds').select('id').eq('code', 'N50').single()
-    const niftyId = n50Fund?.id ?? 1
+    // Look up Nifty 50 (N50) — use limit(1) instead of .single() so it never throws
+    // when there are 0 or 2+ rows (both cases make .single() return an error).
+    const { data: n50Rows } = await supabase.from('funds').select('id').eq('code', 'N50').limit(1)
+    const niftyId: number | null = n50Rows?.[0]?.id ?? null
 
       // Fetch NAV data for each fund independently in parallel.
     // A single combined .in() query with large offsets is fragile for 30k+ rows —
     // per-fund parallel fetches are faster and guarantee all rows for every fund.
-    const fundIds = Array.from(new Set([...allocations.map((a) => a.fundId), niftyId]))
+    const fundIds = Array.from(new Set([
+      ...allocations.map((a) => a.fundId),
+      ...(niftyId !== null ? [niftyId] : []),
+    ]))
 
     const fetchFundNav = async (id: number): Promise<{ id: number; rows: { date: string; value: number }[] }> => {
       const rows: { date: string; value: number }[] = []
@@ -118,7 +122,7 @@ export async function POST(req: NextRequest) {
     const rollingReturns = computeRolling3YCAGR(portfolioNav)
 
     // Compute Nifty 50 metrics and NAV for comparison
-    const nifty50NavRaw = navByFund.get(niftyId) ?? []
+    const nifty50NavRaw = niftyId !== null ? (navByFund.get(niftyId) ?? []) : []
     let benchmarkNav: { date: string; value: number }[] = []
     let benchmarkMetrics = null
     let benchmarkDrawdown: { date: string; value: number }[] = []

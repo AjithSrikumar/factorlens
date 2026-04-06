@@ -324,3 +324,9 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, summary, details: results })
 }
+
+// GET handler — same as POST, lets you trigger from a browser tab.
+// ?code=N50 to scrape a single index; no params to run all.
+export async function GET(req: NextRequest) {
+  return POST(req)
+}
