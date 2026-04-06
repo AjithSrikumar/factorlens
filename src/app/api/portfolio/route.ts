@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
 
       // Separate funds with and without NAV data
       const missingFunds = fundNavs.filter((f) => f.navSeries.length === 0)
-      const validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
+      let validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
 
       if (validFundNavs.length === 0) {
         return NextResponse.json({ error: 'No NAV data found for any selected funds' }, { status: 400 })
@@ -88,6 +88,28 @@ export async function POST(req: NextRequest) {
         const validTotalWeight = validFundNavs.reduce((s, f) => s + f.weight, 0)
         validFundNavs.forEach(f => { f.weight = (f.weight / validTotalWeight) * 100 })
         console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
+      }
+
+      // Detect stale funds: data ending more than 180 days before today.
+      // This happens when a fund (e.g. GOLD) was imported only for a historical period
+      // and not kept current — its NAV series cuts off years ago, which would shrink the
+      // entire portfolio's common-date range to that stale window.
+      const today = new Date().toISOString().slice(0, 10)
+      const staleThreshold = new Date(Date.now() - 180 * 24 * 3600 * 1000).toISOString().slice(0, 10)
+      const staleFunds = validFundNavs.filter(f => {
+        const lastDate = f.navSeries[f.navSeries.length - 1]?.date ?? ''
+        return lastDate < staleThreshold
+      })
+      if (staleFunds.length > 0 && staleFunds.length < validFundNavs.length) {
+        // Only exclude stale funds if at least one fresh fund remains
+        console.warn(`Backtest: excluding stale fund IDs [${staleFunds.map(f => f.fundId).join(', ')}] — data ends before ${staleThreshold}`)
+        validFundNavs = validFundNavs.filter(f => {
+          const lastDate = f.navSeries[f.navSeries.length - 1]?.date ?? ''
+          return lastDate >= staleThreshold
+        })
+        const freshTotal = validFundNavs.reduce((s, f) => s + f.weight, 0)
+        validFundNavs.forEach(f => { f.weight = (f.weight / freshTotal) * 100 })
+        missingFunds.push(...staleFunds)
       }
 
     const portfolioNav = computePortfolioNav(validFundNavs)
@@ -115,7 +137,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Compute FY raw data for the detail table — use validFundNavs so missing funds are excluded
-    const today = new Date().toISOString().slice(0, 10)
     const fyTableFunds: Record<number, FYRawRow[]> = {}
     for (const alloc of validFundNavs) {
       const raw = navByFund.get(alloc.fundId) ?? []
