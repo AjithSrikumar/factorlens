@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 import {
   computePortfolioNav,
   computeAllMetrics,
@@ -11,12 +12,11 @@ import {
   type FYRawRow,
 } from '@/lib/calculations'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key'
-)
-
 export async function POST(req: NextRequest) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: 'Database not configured' }, { status: 503 })
+  }
+
   try {
     const body = await req.json()
     const allocations: { fundId: number; weight: number }[] = body.allocations
@@ -35,29 +35,53 @@ export async function POST(req: NextRequest) {
     }
 
     // Look up Nifty 50 (N50) by code to avoid hardcoding ID
-    const { data: n50Fund } = await supabase.from('funds').select('id').eq('code', 'N50').single()
-    const niftyId = n50Fund?.id ?? 1
+    const { data: n50Fund, error: n50Err } = await supabaseAdmin
+      .from('funds')
+      .select('id')
+      .eq('code', 'N50')
+      .maybeSingle()
 
-      // Fetch NAV data for all selected funds (paginate to get all rows)
-      // Supabase returns max 1000 rows per request by default
-      const fundIds = Array.from(new Set([...allocations.map((a) => a.fundId), niftyId])) // Always include Nifty 50
-      const PAGE = 1000
-      let navRows: { fund_id: number; date: string; nav_value: number }[] = []
-      let from = 0
-      while (true) {
-        const { data, error } = await supabase
-          .from('nav_data')
-          .select('fund_id, date, nav_value')
-          .in('fund_id', fundIds)
-          .order('fund_id', { ascending: true })
-          .order('date', { ascending: true })
-          .range(from, from + PAGE - 1)
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-        if (!data || data.length === 0) break
-        navRows = navRows.concat(data)
-        if (data.length < PAGE) break
-        from += PAGE
-      }
+    // Fall back to querying by name if code lookup fails
+    let niftyId: number | null = n50Fund?.id ?? null
+    if (!niftyId && !n50Err) {
+      const { data: n50ByName } = await supabaseAdmin
+        .from('funds')
+        .select('id')
+        .ilike('name', '%NIFTY 50%')
+        .not('name', 'ilike', '%NIFTY 500%')
+        .not('name', 'ilike', '%NIFTY 50 VALUE%')
+        .not('name', 'ilike', '%NIFTY 50 EQUAL%')
+        .not('name', 'ilike', '%NIFTY 50 USD%')
+        .not('name', 'ilike', '%NIFTY 50 TR%')
+        .limit(1)
+        .maybeSingle()
+      niftyId = n50ByName?.id ?? null
+    }
+
+    // Fetch NAV data for all selected funds (paginate to get all rows)
+    // Supabase returns max 1000 rows per request by default
+    const portfolioFundIds = allocations.map((a) => a.fundId)
+    const allFundIds = niftyId
+      ? Array.from(new Set([...portfolioFundIds, niftyId]))
+      : Array.from(new Set(portfolioFundIds))
+
+    const PAGE = 1000
+    let navRows: { fund_id: number; date: string; nav_value: number }[] = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabaseAdmin
+        .from('nav_data')
+        .select('fund_id, date, nav_value')
+        .in('fund_id', allFundIds)
+        .order('fund_id', { ascending: true })
+        .order('date', { ascending: true })
+        .range(from, from + PAGE - 1)
+      if (error) return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 })
+      if (!data || data.length === 0) break
+      navRows = navRows.concat(data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
 
     // Group by fund
     const navByFund = new Map<number, { date: string; value: number }[]>()
@@ -66,35 +90,43 @@ export async function POST(req: NextRequest) {
       navByFund.get(row.fund_id)!.push({ date: row.date, value: Number(row.nav_value) })
     }
 
-      // Build input for portfolio computation
-      const fundNavs = allocations.map((a) => ({
-        fundId: a.fundId,
-        weight: a.weight,
-        navSeries: navByFund.get(a.fundId) ?? [],
-      }))
+    // Build input for portfolio computation
+    const fundNavs = allocations.map((a) => ({
+      fundId: a.fundId,
+      weight: a.weight,
+      navSeries: navByFund.get(a.fundId) ?? [],
+    }))
 
-      // Separate funds with and without NAV data
-      const missingFunds = fundNavs.filter((f) => f.navSeries.length === 0)
-      const validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
+    // Separate funds with and without NAV data
+    const missingFunds = fundNavs.filter((f) => f.navSeries.length === 0)
+    const validFundNavs = fundNavs.filter((f) => f.navSeries.length > 0)
 
-      if (validFundNavs.length === 0) {
-        return NextResponse.json({ error: 'No NAV data found for any selected funds' }, { status: 400 })
-      }
+    if (validFundNavs.length === 0) {
+      // Look up fund codes for a better error message
+      const { data: fundMeta } = await supabaseAdmin
+        .from('funds')
+        .select('id, code, name')
+        .in('id', allocations.map(a => a.fundId))
+      const missing = fundMeta?.map((f: { id: number; code: string; name: string }) => f.code).join(', ') ?? allocations.map(a => a.fundId).join(', ')
+      return NextResponse.json({
+        error: `No historical NAV data found for selected funds (${missing}). Please ensure the data pipeline has run for these indices.`
+      }, { status: 400 })
+    }
 
-      // If some funds have no NAV data, redistribute their weights proportionally among valid funds
-      if (missingFunds.length > 0) {
-        const validTotalWeight = validFundNavs.reduce((s, f) => s + f.weight, 0)
-        validFundNavs.forEach(f => { f.weight = (f.weight / validTotalWeight) * 100 })
-        console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
-      }
+    // If some funds have no NAV data, redistribute their weights proportionally among valid funds
+    if (missingFunds.length > 0) {
+      const validTotalWeight = validFundNavs.reduce((s, f) => s + f.weight, 0)
+      validFundNavs.forEach(f => { f.weight = (f.weight / validTotalWeight) * 100 })
+      console.warn(`Backtest: skipping fund IDs [${missingFunds.map(f => f.fundId).join(', ')}] — no NAV data`)
+    }
 
     const portfolioNav = computePortfolioNav(validFundNavs)
     const metrics = computeAllMetrics(portfolioNav)
     const drawdownSeries = computeDrawdownSeries(portfolioNav)
     const rollingReturns = computeRolling3YCAGR(portfolioNav)
 
-    // Compute Nifty 50 metrics and NAV for comparison
-    const nifty50NavRaw = navByFund.get(niftyId) ?? []
+    // Compute Nifty 50 benchmark metrics and NAV for comparison
+    const nifty50NavRaw = niftyId ? (navByFund.get(niftyId) ?? []) : []
     let benchmarkNav: { date: string; value: number }[] = []
     let benchmarkMetrics = null
     let benchmarkDrawdown: { date: string; value: number }[] = []
@@ -112,7 +144,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Compute FY raw data for the detail table — use validFundNavs so missing funds are excluded
+    // Compute FY raw data for the detail table — use raw nav series for funds
     const today = new Date().toISOString().slice(0, 10)
     const fyTableFunds: Record<number, FYRawRow[]> = {}
     for (const alloc of validFundNavs) {
@@ -137,11 +169,13 @@ export async function POST(req: NextRequest) {
         funds:      fyTableFunds,
         benchmark:  fyTableBenchmark,
       },
-      // Funds excluded from backtest due to no NAV data (e.g. not yet scraped)
+      // Funds excluded from backtest due to no NAV data
       skippedFundIds: missingFunds.map(f => f.fundId),
+      // Debug: let the client know if benchmark was found
+      benchmarkFound: niftyId !== null && nifty50NavRaw.length > 0,
     }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
-    console.error(e)
+    console.error('[portfolio] error:', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -169,7 +169,10 @@ function PortfolioSnapshot({
         className="snap-3-grid">
         {[
           {
-            label: "10Y CAGR", info: "Compound Annual Growth Rate over the last 10 years. The key long-term performance metric.",
+            label: metrics.cagr_10y != null ? "10Y CAGR" : "Since-Inception CAGR",
+            info: metrics.cagr_10y != null
+              ? "Compound Annual Growth Rate over the last 10 years. The key long-term performance metric."
+              : "Compound Annual Growth Rate from portfolio inception to today (less than 10 years of data available).",
             value: metrics.cagr_10y != null ? pct(metrics.cagr_10y) : pct(metrics.cagr),
             cls: "pos",
             benchV: benchmark ? (benchmark.cagr_10y != null ? pct(benchmark.cagr_10y) : pct(benchmark.cagr)) : null,
@@ -1138,13 +1141,26 @@ export default function DashboardPage() {
           {result && !loading && (
             <div ref={resultsRef}>
 
+              {/* Skipped funds warning */}
+              {result.skippedFundIds && result.skippedFundIds.length > 0 && (
+                <div style={{
+                  borderRadius: 12, border: "1px solid rgba(245,158,11,.3)",
+                  background: "rgba(245,158,11,.06)", padding: "10px 16px", marginBottom: 14,
+                  fontSize: 13, color: "var(--muted-foreground)",
+                }}>
+                  ⚠️ {result.skippedFundIds.length} fund{result.skippedFundIds.length > 1 ? "s" : ""} had no historical data and {result.skippedFundIds.length > 1 ? "were" : "was"} excluded. Weights redistributed among remaining funds.
+                </div>
+              )}
+
               {/* Performance vs NIFTY — first, right below builder */}
               <CCard
                 title="Performance vs NIFTY 50"
                 sub="Normalised to ₹100 at common start date"
                 legend={<ChartLegend items={[
                   { color: "#1A56DB", label: "Portfolio" },
-                  { color: "#94a3b8", label: "Nifty 50", dashed: true },
+                  ...(result.benchmarkNav && result.benchmarkNav.length > 0
+                    ? [{ color: "#94a3b8", label: "Nifty 50", dashed: true }]
+                    : []),
                 ]} />}
               >
                 <NavChart data={result.portfolioNav} benchmarkData={result.benchmarkNav} />
@@ -1218,7 +1234,9 @@ export default function DashboardPage() {
                 sub="% decline from previous peak"
                 legend={<ChartLegend items={[
                   { color: "#C5271E", label: "Portfolio" },
-                  { color: "#94a3b8", label: "Nifty 50", dashed: true },
+                  ...(result.benchmarkDrawdown && result.benchmarkDrawdown.length > 0
+                    ? [{ color: "#94a3b8", label: "Nifty 50", dashed: true }]
+                    : []),
                 ]} />}
               >
                 <DrawdownChart data={result.drawdownSeries} benchmarkData={result.benchmarkDrawdown} />
@@ -1231,7 +1249,9 @@ export default function DashboardPage() {
                   sub="Annualised returns over any 756-day window"
                   legend={<ChartLegend items={[
                     { color: "#0d9488", label: "Portfolio" },
-                    { color: "#94a3b8", label: "Nifty 50", dashed: true },
+                    ...(result.benchmarkRolling && result.benchmarkRolling.length > 0
+                      ? [{ color: "#94a3b8", label: "Nifty 50", dashed: true }]
+                      : []),
                   ]} />}
                 >
                   <RollingReturnChart data={result.rollingReturns} benchmarkData={result.benchmarkRolling} />

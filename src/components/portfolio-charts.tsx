@@ -680,12 +680,13 @@ export function FiscalYearDetailCards({
   Object.values(fyTableData.funds).forEach(rows => rows.forEach(r => allFYs.add(r.fy)))
   const sortedFYs = Array.from(allFYs).sort().reverse()
 
-  // Show FY20 and newer by default; older behind "Load more"
-  const CUTOFF = 20
-  const visibleFYs = showAll
+  // Show the most recent 7 fiscal years by default; rest behind "Load more".
+  // If the entire dataset is ≤ 7 years, show all immediately.
+  const DEFAULT_SHOW = 7
+  const visibleFYs = showAll || sortedFYs.length <= DEFAULT_SHOW
     ? sortedFYs
-    : sortedFYs.filter(fy => parseInt(fy.slice(2)) >= CUTOFF)
-  const hiddenFYs = sortedFYs.filter(fy => parseInt(fy.slice(2)) < CUTOFF)
+    : sortedFYs.slice(0, DEFAULT_SHOW)
+  const hiddenFYs = sortedFYs.length > DEFAULT_SHOW ? sortedFYs.slice(DEFAULT_SHOW) : []
 
   const hasSubFunds = funds.length > 0
 

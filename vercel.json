@@ -14,6 +14,9 @@
     }
   ],
   "functions": {
+    "src/app/api/portfolio/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/cron/eod/route.ts": {
       "maxDuration": 300
     },
