@@ -222,12 +222,27 @@ export async function GET(
               .eq('scheme_code', schemeCode)
               .single()
               .then(r => ({ data: r.data })),
-        supabaseAdmin
-          .from('mf_nav_data')
-          .select('date, nav')
-          .eq('scheme_code', schemeCode)
-          .order('date', { ascending: true })
-          .limit(10_000),
+        // Paginate to work around Supabase PostgREST's default 1000-row cap.
+        // A fund with 20 years of history has ~5,000 rows; without pagination
+        // only the first 1,000 (up to ~2010) are returned, triggering a false
+        // "stale" result and causing the route to fall through to AMFI.
+        (async () => {
+          const PAGE = 1000
+          const allRows: Array<{ date: string; nav: number }> = []
+          for (let page = 0; ; page++) {
+            const { data, error } = await supabaseAdmin
+              .from('mf_nav_data')
+              .select('date, nav')
+              .eq('scheme_code', schemeCode)
+              .order('date', { ascending: true })
+              .range(page * PAGE, page * PAGE + PAGE - 1)
+            if (error)  return { data: null,     error }
+            if (!data?.length) break
+            allRows.push(...(data as Array<{ date: string; nav: number }>))
+            if (data.length < PAGE) break   // last page
+          }
+          return { data: allRows, error: null }
+        })(),
       ])
 
       // Always preserve metadata for use in Path B
