@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import postgres from 'postgres'
-import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import {
   detectSplits,
   normalizeHistory,
@@ -31,6 +31,31 @@ import {
   computeFiscalYears,
   type NavRow,
 } from '@/lib/nav-normalize'
+
+// Use service role key when available, fall back to anon key.
+// mf_funds and mf_nav_data have RLS disabled so anon key is sufficient for reads.
+// This mirrors the pattern in mf-backfill/route.ts so both routes work even when
+// only NEXT_PUBLIC_SUPABASE_ANON_KEY is set (SUPABASE_SERVICE_ROLE_KEY optional).
+const _supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const _supabaseKey =
+  (process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY !== 'your-service-role-key-here')
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY
+    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+function isSupabaseConfigured(): boolean {
+  return Boolean(
+    _supabaseUrl &&
+    _supabaseUrl !== 'https://placeholder.supabase.co' &&
+    _supabaseKey,
+  )
+}
+
+const supabaseAdmin = createClient(
+  _supabaseUrl || 'https://placeholder.supabase.co',
+  _supabaseKey || 'placeholder-key',
+  { auth: { persistSession: false, autoRefreshToken: false } },
+)
 
 // ── AMFI constants ────────────────────────────────────────────────────────────
 
