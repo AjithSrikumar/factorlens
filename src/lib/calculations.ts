@@ -7,6 +7,9 @@ export interface NavPoint {
 
 export interface PortfolioMetrics {
   cagr: number
+  cagr_1y:  number | null   // CAGR over last 1 year  (null if < 1Y of data)
+  cagr_3y:  number | null   // CAGR over last 3 years (null if < 3Y of data)
+  cagr_5y:  number | null   // CAGR over last 5 years (null if < 5Y of data)
   cagr_10y: number | null   // CAGR over last 10 years (null if < 10Y of data)
   volatility: number
   sharpe: number
@@ -246,19 +249,34 @@ export function computeAllMetrics(navSeries: NavPoint[]): PortfolioMetrics {
     ? (navSeries[navSeries.length - 1].value / navSeries[0].value - 1) * 100
     : 0
 
-  // 10-year CAGR: slice the last 10 calendar years
+  // Period CAGRs: slice the last N calendar years from the end date
+  let cagr_1y:  number | null = null
+  let cagr_3y:  number | null = null
+  let cagr_5y:  number | null = null
   let cagr_10y: number | null = null
   if (navSeries.length > 1) {
     const endDate = navSeries[navSeries.length - 1].date
-    const tenYAgo = endDate.slice(0, 4).replace(/\d{4}/, y => String(parseInt(y) - 10)) + endDate.slice(4)
-    const from10y = navSeries.filter(n => n.date >= tenYAgo)
-    if (from10y.length >= 200) {   // at least ~200 trading days of 10Y window
-      cagr_10y = computeCAGR(from10y)
-    }
+    const yAgo = (n: number) =>
+      String(parseInt(endDate.slice(0, 4)) - n) + endDate.slice(4)
+
+    const from1y  = navSeries.filter(n => n.date >= yAgo(1))
+    if (from1y.length  >= 50)  cagr_1y  = computeCAGR(from1y)
+
+    const from3y  = navSeries.filter(n => n.date >= yAgo(3))
+    if (from3y.length  >= 150) cagr_3y  = computeCAGR(from3y)
+
+    const from5y  = navSeries.filter(n => n.date >= yAgo(5))
+    if (from5y.length  >= 200) cagr_5y  = computeCAGR(from5y)
+
+    const from10y = navSeries.filter(n => n.date >= yAgo(10))
+    if (from10y.length >= 200) cagr_10y = computeCAGR(from10y)
   }
 
   return {
     cagr,
+    cagr_1y,
+    cagr_3y,
+    cagr_5y,
     cagr_10y,
     volatility: vol,
     sharpe,

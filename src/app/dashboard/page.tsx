@@ -34,6 +34,9 @@ interface FundAllocation {
 
 interface PortfolioMetrics {
   cagr: number
+  cagr_1y:  number | null
+  cagr_3y:  number | null
+  cagr_5y:  number | null
   cagr_10y: number | null
   volatility: number
   sharpe: number
@@ -114,204 +117,304 @@ function PortfolioSnapshot({
   allocations: FundAllocation[]
   rollingReturns?: { date: string; value: number }[]
 }) {
-  const pct = (v: number) => `${(v * 100).toFixed(1)}%`
+  const pct   = (v: number) => `${(v * 100).toFixed(1)}%`
   const fixed = (v: number, d = 2) => v.toFixed(d)
-  const r100 = (100 * (1 + metrics.totalReturn / 100)).toFixed(0)
+  const r100  = Math.round(100 * (1 + metrics.totalReturn / 100))
   const outperf = benchmark ? (metrics.cagr - benchmark.cagr) * 100 : null
   const avgRolling = rollingReturns?.length
     ? rollingReturns.reduce((s, r) => s + r.value, 0) / rollingReturns.length
     : null
-
   const startYear = metrics.startDate.slice(0, 4)
-  const endYear = metrics.endDate.slice(0, 4)
+  const endYear   = metrics.endDate.slice(0, 4)
+
+  /* Coloured delta badge — positive delta = green unless `invert` */
+  const Delta = ({ delta, invert = false, raw = false }: {
+    delta: number | null; invert?: boolean; raw?: boolean
+  }) => {
+    if (delta == null) return null
+    const good = invert ? delta < 0 : delta > 0
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center",
+        padding: "2px 7px", borderRadius: 100,
+        fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-mono)",
+        background: good ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+        color: good ? "#34D399" : "#F87171",
+      }}>
+        {delta > 0 ? "+" : ""}
+        {raw ? delta.toFixed(2) : `${delta.toFixed(1)}%`}
+      </span>
+    )
+  }
+
+  /* ── CAGR tiles: 1Y · 3Y · 5Y · 10Y ─────────────────────────────────── */
+  const cagrTiles = [
+    {
+      label: "1Y Return",
+      info: "Total return over the past 1 calendar year.",
+      value: metrics.cagr_1y  != null ? pct(metrics.cagr_1y)  : "—",
+      benchV: benchmark?.cagr_1y  != null ? pct(benchmark.cagr_1y)  : null,
+      delta:  metrics.cagr_1y  != null && benchmark?.cagr_1y  != null
+        ? (metrics.cagr_1y  - benchmark.cagr_1y)  * 100 : null,
+      green: metrics.cagr_1y != null && metrics.cagr_1y > 0,
+    },
+    {
+      label: "3Y CAGR",
+      info: "Compound Annual Growth Rate over the last 3 years.",
+      value: metrics.cagr_3y  != null ? pct(metrics.cagr_3y)  : "—",
+      benchV: benchmark?.cagr_3y  != null ? pct(benchmark.cagr_3y)  : null,
+      delta:  metrics.cagr_3y  != null && benchmark?.cagr_3y  != null
+        ? (metrics.cagr_3y  - benchmark.cagr_3y)  * 100 : null,
+      green: metrics.cagr_3y != null && metrics.cagr_3y > 0,
+    },
+    {
+      label: "5Y CAGR",
+      info: "Compound Annual Growth Rate over the last 5 years.",
+      value: metrics.cagr_5y  != null ? pct(metrics.cagr_5y)  : "—",
+      benchV: benchmark?.cagr_5y  != null ? pct(benchmark.cagr_5y)  : null,
+      delta:  metrics.cagr_5y  != null && benchmark?.cagr_5y  != null
+        ? (metrics.cagr_5y  - benchmark.cagr_5y)  * 100 : null,
+      green: metrics.cagr_5y != null && metrics.cagr_5y > 0,
+    },
+    {
+      label: metrics.cagr_10y != null ? "10Y CAGR" : "Since-Inception CAGR",
+      info: metrics.cagr_10y != null
+        ? "Compound Annual Growth Rate over the last 10 years."
+        : "Compound Annual Growth Rate from portfolio inception (< 10 years of data).",
+      value: metrics.cagr_10y != null ? pct(metrics.cagr_10y) : pct(metrics.cagr),
+      benchV: benchmark
+        ? (benchmark.cagr_10y != null ? pct(benchmark.cagr_10y) : pct(benchmark.cagr))
+        : null,
+      delta: benchmark
+        ? ((metrics.cagr_10y ?? metrics.cagr) - (benchmark.cagr_10y ?? benchmark.cagr)) * 100
+        : null,
+      green: true,
+    },
+  ]
+
+  /* ── Risk tiles ───────────────────────────────────────────────────────── */
+  const riskTiles = [
+    {
+      label: "Sharpe Ratio",
+      info: "Risk-adjusted return per unit of total volatility. Higher = better.",
+      value: fixed(metrics.sharpe),
+      benchV: benchmark ? fixed(benchmark.sharpe) : null,
+      // positive delta = portfolio higher sharpe = good
+      delta: benchmark ? (metrics.sharpe - benchmark.sharpe) : null,
+      raw: true, invert: false,
+    },
+    {
+      label: "Max Drawdown",
+      info: "Largest peak-to-trough decline. Less negative = better capital protection.",
+      value: pct(metrics.maxDrawdown),
+      benchV: benchmark ? pct(benchmark.maxDrawdown) : null,
+      // benchmark.maxDrawdown - metrics.maxDrawdown: positive = benchmark fell more = portfolio better
+      delta: benchmark ? (benchmark.maxDrawdown - metrics.maxDrawdown) * 100 : null,
+      raw: false, invert: false,
+    },
+    {
+      label: "Volatility",
+      info: "Annualised standard deviation of daily returns. Lower = more stable.",
+      value: pct(metrics.volatility),
+      benchV: benchmark ? pct(benchmark.volatility) : null,
+      // negative delta = portfolio has lower vol = better → invert coloring
+      delta: benchmark ? (metrics.volatility - benchmark.volatility) * 100 : null,
+      raw: false, invert: true,
+    },
+    {
+      label: "Sortino Ratio",
+      info: "Like Sharpe but only penalises downside volatility — more relevant for equity.",
+      value: fixed(metrics.sortino),
+      benchV: benchmark ? fixed(benchmark.sortino) : null,
+      delta: benchmark ? (metrics.sortino - benchmark.sortino) : null,
+      raw: true, invert: false,
+    },
+  ]
+
+  const TileLabel = ({ text, info }: { text: string; info: string }) => (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 5,
+      fontSize: 10, fontWeight: 700, letterSpacing: ".9px",
+      textTransform: "uppercase" as const,
+      color: "var(--muted-foreground)", marginBottom: 9, opacity: 0.65,
+    }}>
+      {text} <InfoTip text={info} />
+    </div>
+  )
 
   return (
     <div style={{
       background: "var(--card)", border: "1px solid var(--border)",
       borderRadius: 20, overflow: "hidden", marginBottom: 16,
     }}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div style={{
-        padding: "22px 28px 16px", borderBottom: "1px solid var(--border)",
+        padding: "18px 28px 14px", borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        flexWrap: "wrap" as const, gap: 12,
+        flexWrap: "wrap" as const, gap: 10,
       }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px", color: "var(--foreground)" }}>Portfolio Snapshot</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const, marginTop: 6 }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(79,128,255,0.12)", color: "#6B9FFF",
-            }}>
-              {allocations.length} asset{allocations.length !== 1 ? "s" : ""}
-            </span>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
-            }}>
-              {startYear} – {endYear}
-            </span>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
-              background: "rgba(148,163,184,0.10)", color: "var(--muted-foreground)",
-            }}>
-              vs NIFTY 50
-            </span>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "-.1px", color: "var(--foreground)" }}>
+            Portfolio Snapshot
+          </div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" as const, marginTop: 6 }}>
+            {[
+              { text: `${allocations.length} asset${allocations.length !== 1 ? "s" : ""}`, blue: true },
+              { text: `${startYear} – ${endYear}` },
+              { text: "vs NIFTY 50" },
+            ].map(b => (
+              <span key={b.text} style={{
+                padding: "3px 9px", borderRadius: 100, fontSize: 11, fontWeight: 600,
+                background: b.blue ? "rgba(79,128,255,0.12)" : "rgba(148,163,184,0.10)",
+                color: b.blue ? "#6B9FFF" : "var(--muted-foreground)",
+              }}>{b.text}</span>
+            ))}
           </div>
         </div>
-      </div>
-
-      {/* Big 3 tiles — 10Y CAGR | Sharpe | Max Drawdown */}
-      <div style={{ borderBottom: "1px solid var(--border)" }}
-        className="snap-3-grid">
-        {[
-          {
-            label: metrics.cagr_10y != null ? "10Y CAGR" : "Since-Inception CAGR",
-            info: metrics.cagr_10y != null
-              ? "Compound Annual Growth Rate over the last 10 years. The key long-term performance metric."
-              : "Compound Annual Growth Rate from portfolio inception to today (less than 10 years of data available).",
-            value: metrics.cagr_10y != null ? pct(metrics.cagr_10y) : pct(metrics.cagr),
-            cls: "pos",
-            benchV: benchmark ? (benchmark.cagr_10y != null ? pct(benchmark.cagr_10y) : pct(benchmark.cagr)) : null,
-            delta: benchmark
-              ? ((metrics.cagr_10y ?? metrics.cagr) - (benchmark.cagr_10y ?? benchmark.cagr)) * 100
-              : null,
-          },
-          {
-            label: "Sharpe Ratio", info: "Risk-adjusted return. Higher = better. Measures excess return per unit of volatility.",
-            value: fixed(metrics.sharpe), cls: "",
-            benchV: benchmark ? fixed(benchmark.sharpe) : null,
-            delta: benchmark ? (metrics.sharpe - benchmark.sharpe) : null,
-            deltaRaw: true,
-          },
-          {
-            label: "Max Drawdown", info: "Largest peak-to-trough decline. Lower absolute value = better protection.",
-            value: pct(metrics.maxDrawdown), cls: "neg",
-            benchV: benchmark ? pct(benchmark.maxDrawdown) : null,
-            delta: benchmark ? ((metrics.maxDrawdown - benchmark.maxDrawdown) * 100) : null,
-            invertDelta: true,
-          },
-        ].map((tile, i) => {
-          const isPos = tile.delta != null
-            ? (tile.invertDelta ? tile.delta < 0 : tile.delta > 0)
-            : false
-          return (
-            <div
-              key={tile.label}
-              style={{
-                padding: "24px 28px",
-                borderRight: i < 2 ? "1px solid var(--border)" : "none",
-                position: "relative",
-              }}
-              className="snap-tile-resp"
-            >
-              <div style={{
-                display: "flex", alignItems: "center", gap: 6,
-                fontSize: 10.5, fontWeight: 700, letterSpacing: ".9px",
-                textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 10, opacity: 0.7,
-              }}>
-                {tile.label} <InfoTip text={tile.info} />
-              </div>
-              <div style={{
-                fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-                fontSize: "clamp(28px, 3.5vw, 36px)", fontWeight: 400, lineHeight: 1.0,
-                letterSpacing: "-1px",
-                color: tile.cls === "pos" ? "#34D399" : tile.cls === "neg" ? "#F87171" : "var(--foreground)",
-              }}>
-                {tile.value}
-              </div>
-              {tile.benchV && (
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" as const }}>
-                  <span style={{ fontSize: 12, color: "var(--muted-foreground)", opacity: 0.7 }}>vs Nifty 50</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600, color: "var(--muted-foreground)" }}>
-                    {tile.benchV}
-                  </span>
-                  {tile.delta != null && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center",
-                      padding: "2px 8px", borderRadius: 100,
-                      fontSize: 11, fontWeight: 700,
-                      fontFamily: "var(--font-mono)",
-                      background: isPos ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
-                      color: isPos ? "#34D399" : "#F87171",
-                    }}>
-                      {tile.deltaRaw
-                        ? `${tile.delta > 0 ? "+" : ""}${tile.delta.toFixed(2)}`
-                        : `${tile.delta > 0 ? "+" : ""}${tile.delta.toFixed(1)}%`}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {/* 6 mini metrics */}
-      <div style={{ borderBottom: "1px solid var(--border)" }}
-        className="snap-6-grid">
-        {[
-          { label: "Since-Inception CAGR", info: "Compound Annual Growth Rate since the portfolio's earliest common start date.", value: pct(metrics.cagr), benchV: benchmark ? pct(benchmark.cagr) : null, pos: true },
-          { label: "Volatility", info: "Annualised standard deviation of daily returns.", value: pct(metrics.volatility), benchV: benchmark ? pct(benchmark.volatility) : null },
-          { label: "Sortino", info: "Like Sharpe, but only penalises downside volatility. More relevant for equity portfolios.", value: fixed(metrics.sortino), benchV: benchmark ? fixed(benchmark.sortino) : null },
-          { label: "Calmar", info: "CAGR ÷ Max Drawdown. Higher means better risk-adjusted compounding.", value: fixed(metrics.calmar), benchV: benchmark ? fixed(benchmark.calmar) : null },
-          { label: "Avg 3Y Rolling", info: "Average of all rolling 3-year CAGR windows.", value: avgRolling != null ? `${avgRolling.toFixed(1)}%` : "—", benchV: null },
-          { label: "₹100 Became", info: "What ₹100 invested at inception grew to.", value: `₹${r100}`, benchV: null, pos: true },
-        ].map((m, i) => (
-          <div
-            key={m.label}
-            style={{
-              padding: "16px 20px",
-              borderRight: i < 5 ? "1px solid var(--border)" : "none",
-              textAlign: "center",
-            }}
-            className="snap-mini-resp"
-          >
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-              fontSize: 10, fontWeight: 700, letterSpacing: ".8px",
-              textTransform: "uppercase" as const, color: "var(--muted-foreground)", marginBottom: 7, opacity: 0.7,
+        {outperf != null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11.5, color: "var(--muted-foreground)", opacity: 0.7 }}>
+              Annualised alpha
+            </span>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
+              padding: "4px 12px", borderRadius: 100,
+              background: outperf >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
+              color: outperf >= 0 ? "#34D399" : "#F87171",
             }}>
-              {m.label} {m.info && <InfoTip text={m.info} />}
-            </div>
+              {outperf >= 0 ? "+" : ""}{outperf.toFixed(2)}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Section label: Returns ── */}
+      <div style={{
+        padding: "10px 28px 0", display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span style={{
+          fontSize: 9.5, fontWeight: 800, letterSpacing: "1.2px",
+          textTransform: "uppercase" as const,
+          color: "var(--muted-foreground)", opacity: 0.5,
+        }}>Returns</span>
+        <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+      </div>
+
+      {/* ── CAGR 4-tile row ── */}
+      <div className="snap-4-grid" style={{ borderBottom: "1px solid var(--border)" }}>
+        {cagrTiles.map((tile, i) => (
+          <div key={tile.label} style={{
+            padding: "14px 22px 18px",
+            borderRight: i < 3 ? "1px solid var(--border)" : "none",
+          }} className="snap-4-tile-resp">
+            <TileLabel text={tile.label} info={tile.info} />
             <div style={{
               fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
-              fontSize: 20, fontWeight: 400, letterSpacing: "-.3px", lineHeight: 1.1,
-              color: m.pos ? "#34D399" : "var(--foreground)",
+              fontSize: "clamp(22px, 2.8vw, 30px)", fontWeight: 400,
+              letterSpacing: "-.8px", lineHeight: 1.05,
+              color: tile.value === "—" ? "var(--muted-foreground)" : tile.green ? "#34D399" : "#F87171",
             }}>
-              {m.value}
+              {tile.value}
             </div>
-            {m.benchV && (
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--muted-foreground)", marginTop: 3, opacity: 0.6 }}>
-                N50 {m.benchV}
+            {tile.benchV && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6, marginTop: 7,
+                flexWrap: "wrap" as const,
+              }}>
+                <span style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.65 }}>
+                  N50 <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{tile.benchV}</span>
+                </span>
+                <Delta delta={tile.delta} />
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Outperformance bar */}
-      {outperf != null && (
-        <div style={{
-          padding: "13px 28px", display: "flex", alignItems: "center",
-          justifyContent: "space-between", gap: 12, flexWrap: "wrap" as const,
-        }}>
-          <span style={{ fontSize: 12.5, color: "var(--muted-foreground)" }}>
-            Annualised outperformance vs Nifty 50
-          </span>
-          <span style={{
-            fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700,
-            padding: "4px 12px", borderRadius: 100,
-            background: outperf >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)",
-            color: outperf >= 0 ? "#34D399" : "#F87171",
+      {/* ── Section label: Risk & Ratios ── */}
+      <div style={{ padding: "10px 28px 0", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{
+          fontSize: 9.5, fontWeight: 800, letterSpacing: "1.2px",
+          textTransform: "uppercase" as const,
+          color: "var(--muted-foreground)", opacity: 0.5,
+        }}>Risk &amp; Ratios</span>
+        <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+      </div>
+
+      {/* ── Risk 4-tile row ── */}
+      <div className="snap-4-grid" style={{ borderBottom: "1px solid var(--border)" }}>
+        {riskTiles.map((tile, i) => (
+          <div key={tile.label} style={{
+            padding: "14px 22px 18px",
+            borderRight: i < 3 ? "1px solid var(--border)" : "none",
+          }} className="snap-4-tile-resp">
+            <TileLabel text={tile.label} info={tile.info} />
+            <div style={{
+              fontFamily: "var(--font-serif, 'Instrument Serif', Georgia, serif)",
+              fontSize: "clamp(20px, 2.5vw, 26px)", fontWeight: 400,
+              letterSpacing: "-.5px", lineHeight: 1.05,
+              color: tile.label === "Max Drawdown" ? "#F87171" : "var(--foreground)",
+            }}>
+              {tile.value}
+            </div>
+            {tile.benchV && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 7, flexWrap: "wrap" as const }}>
+                <span style={{ fontSize: 11, color: "var(--muted-foreground)", opacity: 0.65 }}>
+                  N50 <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{tile.benchV}</span>
+                </span>
+                <Delta delta={tile.delta} invert={tile.invert} raw={tile.raw} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Footer summary bar ── */}
+      <div style={{
+        padding: "12px 28px",
+        display: "flex", alignItems: "center", gap: 0,
+        flexWrap: "wrap" as const,
+      }} className="snap-footer-resp">
+        {[
+          {
+            label: "Avg 3Y Rolling",
+            value: avgRolling != null ? `${avgRolling.toFixed(1)}%` : "—",
+            info: "Average of all rolling 3-year CAGR windows.",
+          },
+          {
+            label: "₹100 Became",
+            value: `₹${r100.toLocaleString('en-IN')}`,
+            info: "Terminal value of ₹100 invested at portfolio inception.",
+          },
+          {
+            label: "Calmar",
+            value: fixed(metrics.calmar),
+            info: "CAGR ÷ Max Drawdown. Higher = better risk-adjusted compounding.",
+          },
+          {
+            label: "Since-Inception CAGR",
+            value: pct(metrics.cagr),
+            info: "Compound Annual Growth Rate from the portfolio's earliest common start date.",
+          },
+        ].map((item, i, arr) => (
+          <div key={item.label} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            paddingRight: i < arr.length - 1 ? 20 : 0,
+            marginRight: i < arr.length - 1 ? 20 : 0,
+            borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none",
           }}>
-            {outperf >= 0 ? "+" : ""}{outperf.toFixed(2)}%
-          </span>
-        </div>
-      )}
+            <span style={{
+              fontSize: 10.5, fontWeight: 600, color: "var(--muted-foreground)", opacity: 0.7,
+            }}>{item.label}</span>
+            <InfoTip text={item.info} />
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700,
+              color: "var(--foreground)",
+            }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -811,6 +914,7 @@ export default function DashboardPage() {
   const handleAllocationsChange = useCallback((next: FundAllocation[]) => {
     setAllocations(next)
     setIsDefault(false)
+    setResult(null)   // clear stale results whenever user changes allocations
   }, [])
 
   const scrollToBuilder = () => {
