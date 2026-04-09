@@ -1,23 +1,61 @@
 export const dynamic = 'force-dynamic'
 
+/**
+ * GET /api/mffunds/[id]
+ *
+ * Returns full NAV history + metrics for a single mutual fund scheme.
+ *
+ * Data priority:
+ *   1. Supabase mf_nav_data  — pre-normalised, fast (<100 ms)
+ *   2. AMFI NAV History portal — canonical source, fetched live when Supabase
+ *      is stale (>7 days) or not yet populated for this scheme.
+ *
+ * AMFI endpoint:
+ *   https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx
+ *     ?NavDate=01-Apr-2006&ToNav=<DD-Mon-YYYY>&SCode=<schemeCode>
+ *
+ * Response format (semicolon-delimited, one row per NAV date):
+ *   SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date
+ *   e.g. 120503;INF174K...;INF174K...;Kotak Banking PSU Debt;10.2958;22-Mar-2026
+ *
+ * NOTE: mfapi.in is NOT used. All historical data comes directly from AMFI.
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import postgres from 'postgres'
-import { fetchViaProxy } from '@/lib/fetch-proxy'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 import {
   detectSplits,
   normalizeHistory,
   computeMetrics,
   computeFiscalYears,
-  cagrPct,
   type NavRow,
 } from '@/lib/nav-normalize'
 
-const MFAPI_BASE = 'https://api.mfapi.in/mf'
+// ── AMFI constants ────────────────────────────────────────────────────────────
 
-// ── Date helpers (used in mfapi.in fallback only) ─────────────────────────────
+const AMFI_HISTORY_URL = 'https://portal.amfiindia.com/DownloadNAVHistoryReport_Po.aspx'
+const AMFI_INCEPTION   = '01-Apr-2006'   // earliest date AMFI provides data for
 
-function mfapiDateToISO(s: string): string {
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+/** Returns today in AMFI query format: 'DD-Mon-YYYY' (IST) */
+function todayAMFI(): string {
+  const now = new Date()
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const dd   = String(ist.getDate()).padStart(2, '0')
+  const mon  = MONTHS[ist.getMonth()]
+  const yyyy = ist.getFullYear()
+  return `${dd}-${mon}-${yyyy}`
+}
+
+/**
+ * Parse AMFI date strings → ISO 'YYYY-MM-DD'.
+ * Handles both 'DD-Mon-YYYY' (alphabetic month) and 'DD-MM-YYYY' (numeric month).
+ * Returns '' on failure.
+ */
+function amfiDateToISO(s: string): string {
   const MONTHS: Record<string, string> = {
     Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06',
     Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12',
@@ -25,32 +63,100 @@ function mfapiDateToISO(s: string): string {
   const parts = s.trim().split('-')
   if (parts.length !== 3) return ''
   const [dd, mon, yyyy] = parts
-  if (/^\d+$/.test(mon)) return `${yyyy}-${mon.padStart(2, '0')}-${dd.padStart(2, '0')}`
-  const mm = MONTHS[mon]
+  if (!/^\d{4}$/.test(yyyy) || !/^\d{1,2}$/.test(dd)) return ''
+  const mm = /^\d+$/.test(mon) ? mon.padStart(2, '0') : MONTHS[mon]
   if (!mm) return ''
   return `${yyyy}-${mm}-${dd.padStart(2, '0')}`
 }
 
-function dateMinusYears(isoDate: string, years: number): string {
-  const d = new Date(isoDate)
-  d.setFullYear(d.getFullYear() - years)
-  return d.toISOString().slice(0, 10)
-}
+// ── AMFI history fetcher ──────────────────────────────────────────────────────
 
-function findNavAround(history: NavRow[], targetDate: string): NavRow | null {
-  const targetMs = new Date(targetDate).getTime()
-  let closest: NavRow | null = null
-  let minDiff = Infinity
-  for (const row of history) {
-    const diff = Math.abs(new Date(row.date).getTime() - targetMs)
-    if (diff < minDiff) { minDiff = diff; closest = row }
+/**
+ * Fetch complete NAV history for a scheme directly from AMFI's portal.
+ *
+ * Browser-like headers are sent to bypass the Vercel IP block that
+ * portal.amfiindia.com applies to plain server/bot requests.
+ *
+ * Throws if AMFI is unreachable, returns an HTTP error, or returns an HTML
+ * block page — the caller surfaces the error to the client rather than
+ * silently falling back to mfapi.in.
+ */
+async function fetchAmfiHistory(schemeCode: number): Promise<{
+  rows: NavRow[]
+  schemeName: string
+}> {
+  const url =
+    `${AMFI_HISTORY_URL}` +
+    `?NavDate=${AMFI_INCEPTION}` +
+    `&ToNav=${todayAMFI()}` +
+    `&SCode=${schemeCode}`
+
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(60_000),
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+        '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept':
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection':      'keep-alive',
+      'Referer':         'https://www.amfiindia.com/net-asset-value/nav-history',
+      'Origin':          'https://www.amfiindia.com',
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(`AMFI portal returned HTTP ${res.status} for scheme ${schemeCode}`)
   }
-  return minDiff <= 25 * 86_400_000 ? closest : null
+
+  const text = await res.text()
+
+  // AMFI returns an HTML page when it blocks server IPs
+  if (text.trimStart().startsWith('<') || text.toLowerCase().includes('<html')) {
+    throw new Error(
+      `AMFI portal blocked this server IP for scheme ${schemeCode}. ` +
+      `Run the /api/cron/mf-backfill cron to pre-populate Supabase.`
+    )
+  }
+
+  const rows: NavRow[] = []
+  let schemeName = ''
+
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split(';')
+    if (parts.length < 6) continue
+    const code = parseInt(parts[0], 10)
+    // SCode parameter filters to our scheme, but still validate
+    if (isNaN(code) || code !== schemeCode) continue
+    // Capture the scheme name from the first matching row
+    if (!schemeName && parts[3]?.trim()) schemeName = parts[3].trim()
+    const nav  = parseFloat(parts[4])
+    const date = amfiDateToISO(parts[5])
+    if (!date || isNaN(nav) || nav <= 0) continue
+    rows.push({ date, nav })
+  }
+
+  // AMFI portal returns rows newest-first — sort chronologically
+  rows.sort((a, b) => a.date.localeCompare(b.date))
+
+  if (!rows.length) {
+    throw new Error(
+      `AMFI returned no NAV data for scheme ${schemeCode}. ` +
+      `The scheme code may be invalid or the fund may be too new.`
+    )
+  }
+
+  return { rows, schemeName }
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const { id } = await params
   const schemeCode = parseInt(id, 10)
 
@@ -59,17 +165,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   try {
-    // ── Path A: Supabase — normalized NAV, pre-computed metrics ───────────────
+    // ── Path A: Supabase — normalised NAV, pre-computed metrics ───────────────
+    //
+    // Metadata (scheme_name, fund_house, etc.) is fetched regardless of whether
+    // NAV history is fresh, so it can be used in Path B if we fall through.
+    let savedMeta: Record<string, unknown> | null = null
+
     if (isSupabaseConfigured()) {
-      // Fetch NAV history via PostgREST (mf_nav_data columns are in cache)
-      // and fund metadata via direct SQL (bypasses stale PostgREST schema cache
-      // which can't see fund_house, scheme_category etc after ALTER TABLE).
       const dbUrl = process.env.SUPABASE_DB_URL
 
       const [metaResult, { data: rawHistory, error: histErr }] = await Promise.all([
         dbUrl
           ? (async () => {
-              const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+              const sql = postgres(dbUrl, {
+                ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10,
+              })
               try {
                 const rows = await sql`
                   SELECT scheme_name, fund_house, scheme_type, scheme_category
@@ -78,8 +188,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
                 return { data: rows[0] ?? null }
               } finally { await sql.end() }
             })()
-          : supabaseAdmin.from('mf_funds').select('*').eq('scheme_code', schemeCode).single()
-            .then(r => ({ data: r.data })),
+          : supabaseAdmin
+              .from('mf_funds')
+              .select('scheme_name, fund_house, scheme_type, scheme_category')
+              .eq('scheme_code', schemeCode)
+              .single()
+              .then(r => ({ data: r.data })),
         supabaseAdmin
           .from('mf_nav_data')
           .select('date, nav')
@@ -88,28 +202,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           .limit(10_000),
       ])
 
+      // Always preserve metadata for use in Path B
+      savedMeta = (metaResult.data ?? null) as Record<string, unknown> | null
+
       if (!histErr && rawHistory?.length) {
         const latestHistDate = rawHistory[rawHistory.length - 1].date as string
         const cutoff = new Date()
-        cutoff.setDate(cutoff.getDate() - 7)   // 7 days: tolerates weekends + public holidays
+        cutoff.setDate(cutoff.getDate() - 7)  // 7 days: covers weekends + public holidays
         const isStale = latestHistDate < cutoff.toISOString().slice(0, 10)
 
         if (!isStale) {
+          // Supabase data is fresh — normalise splits and return
           const rawNavs: NavRow[] = rawHistory.map(r => ({
             date: r.date as string,
             nav:  Number(r.nav),
           }))
-
-          // Apply split normalization so returns across NAV splits are correct.
-          // e.g. SBI Gold ETF had a split in FY22 (₹4008 → ₹46); without this
-          // the 5Y CAGR computes as -50% instead of the correct ~+12%.
           const splits  = detectSplits(rawNavs, schemeCode)
           const adjNavs = normalizeHistory(rawNavs, splits)
-          const history: NavRow[] = rawNavs.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
-
+          const history = rawNavs.map((h, i) => ({ date: h.date, nav: adjNavs[i] }))
           const metrics = computeMetrics(history)
           const fy_data = computeFiscalYears(history)
-          const meta = (metaResult.data ?? {}) as Record<string, unknown>
+          const meta    = savedMeta ?? {}
 
           return NextResponse.json({
             fund: {
@@ -125,128 +238,53 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             metrics,
             fy_data,
             nav_history: history,
-          }, {
-            headers: { 'Cache-Control': 'no-store' },
-          })
+          }, { headers: { 'Cache-Control': 'no-store' } })
         }
-        // History is stale — fall through to live mfapi.in fetch
+        // Supabase history is stale — fall through to AMFI live fetch
       }
     }
 
-    // ── Path B: mfapi.in fallback (Supabase stale or not configured) ─────────
-    // cache: 'no-store' disables Next.js Data Cache so every request is live.
-    const res = await fetchViaProxy(`${MFAPI_BASE}/${schemeCode}`, {
-      signal: AbortSignal.timeout(30_000),
-      cache: 'no-store',
-    })
+    // ── Path B: AMFI portal (Supabase stale, missing, or not configured) ─────
+    //
+    // Fetches complete NAV history directly from AMFI's official portal —
+    // the same canonical source that populates mf_nav_data via the mf-backfill
+    // cron. No mfapi.in involved.
+    const { rows: amfiRows, schemeName: amfiSchemeName } =
+      await fetchAmfiHistory(schemeCode)
 
-    if (!res.ok) {
-      return NextResponse.json({ error: `mfapi.in returned ${res.status}` }, { status: 404 })
-    }
+    // Apply split normalisation (same logic as Supabase path)
+    const splits  = detectSplits(amfiRows, schemeCode)
+    const adjNavs = normalizeHistory(amfiRows, splits)
+    const history = amfiRows.map((r, i) => ({ date: r.date, nav: adjNavs[i] }))
 
-    const json = await res.json() as {
-      status: string
-      data:   Array<{ date: string; nav: string }>
-      meta:   Record<string, string | number>
-    }
-
-    if (json.status !== 'SUCCESS' || !json.data?.length) {
-      return NextResponse.json({ error: 'No NAV data available for this fund' }, { status: 404 })
-    }
-
-    const meta = json.meta
-
-    // mfapi.in returns newest-first → reverse to chronological
-    const rawHistory: NavRow[] = json.data
-      .map(r => ({ date: mfapiDateToISO(r.date), nav: parseFloat(r.nav) }))
-      .filter(r => r.date.length === 10 && !isNaN(r.nav) && r.nav > 0)
-      .reverse()
-
-    if (!rawHistory.length) {
-      return NextResponse.json({ error: 'No valid NAV data found' }, { status: 404 })
-    }
-
-    // ── Apply split normalization to raw mfapi.in data ────────────────────────
-    // mfapi.in returns raw (un-adjusted) NAVs. ETFs like SBI Gold ETF had
-    // splits (e.g. ₹4008 → ₹46 in FY22) that cause false spikes in charts and
-    // completely wrong return metrics. Detect splits and adjust on-the-fly so
-    // charts and all metrics are always on a consistent scale.
-    const splits  = detectSplits(rawHistory, schemeCode)
-    const adjNavs = normalizeHistory(rawHistory, splits)
-    const history: NavRow[] = rawHistory.map((r, i) => ({ date: r.date, nav: adjNavs[i] }))
-
-    const latestNav     = history[history.length - 1].nav
-    const latestDate    = history[history.length - 1].date
-    const inceptionDate = history[0].date
-    const inceptionNav  = history[0].nav
-    const yearsTotal    = (new Date(latestDate).getTime() - new Date(inceptionDate).getTime()) / (365.25 * 86_400_000)
-
-    const nav1y = findNavAround(history, dateMinusYears(latestDate, 1))
-    const nav3y = findNavAround(history, dateMinusYears(latestDate, 3))
-    const nav5y = findNavAround(history, dateMinusYears(latestDate, 5))
-
-    // Volatility
-    const dailyReturns: number[] = []
-    for (let i = 1; i < history.length; i++) {
-      const prev = history[i - 1].nav
-      const curr = history[i].nav
-      if (prev > 0) dailyReturns.push((curr - prev) / prev)
-    }
-    let volatility: number | null = null
-    if (dailyReturns.length > 30) {
-      const mean     = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length
-      const variance = dailyReturns.reduce((a, b) => a + (b - mean) ** 2, 0) / dailyReturns.length
-      volatility = Math.sqrt(variance) * Math.sqrt(252) * 100
-    }
-
-    // Max drawdown
-    let maxDrawdown: number | null = null
-    if (history.length > 30) {
-      let peak = history[0].nav
-      let maxDD = 0
-      for (const row of history) {
-        if (row.nav > peak) peak = row.nav
-        const dd = (row.nav - peak) / peak
-        if (dd < maxDD) maxDD = dd
-      }
-      maxDrawdown = maxDD * 100
-    }
-
-    const cagr_inception = yearsTotal >= 0.5 ? cagrPct(inceptionNav, latestNav, yearsTotal) : null
-    const sharpe = (volatility !== null && cagr_inception !== null)
-      ? (cagr_inception - 6) / volatility : null
-
+    const metrics = computeMetrics(history)
     const fy_data = computeFiscalYears(history)
+
+    // Prefer Supabase metadata (richer: fund_house, category), fall back to
+    // the scheme name embedded in the AMFI response
+    const meta = savedMeta ?? {}
 
     return NextResponse.json({
       fund: {
         scheme_code:     schemeCode,
-        scheme_name:     String(meta['scheme_name']     ?? ''),
-        fund_house:      String(meta['fund_house']      ?? ''),
-        scheme_type:     String(meta['scheme_type']     ?? ''),
-        scheme_category: String(meta['scheme_category'] ?? ''),
-        nav:             latestNav,
-        nav_date:        latestDate,
-        inception_date:  inceptionDate,
+        scheme_name:     (meta.scheme_name     as string) || amfiSchemeName,
+        fund_house:      (meta.fund_house      as string) ?? '',
+        scheme_type:     (meta.scheme_type     as string) ?? '',
+        scheme_category: (meta.scheme_category as string) ?? '',
+        nav:             history[history.length - 1].nav,
+        nav_date:        history[history.length - 1].date,
+        inception_date:  history[0].date,
       },
-      metrics: {
-        cagr_inception,
-        total_return:  ((latestNav - inceptionNav) / inceptionNav) * 100,
-        return_1y:     nav1y ? cagrPct(nav1y.nav, latestNav, 1) : null,
-        return_3y:     nav3y ? cagrPct(nav3y.nav, latestNav, 3) : null,
-        return_5y:     nav5y ? cagrPct(nav5y.nav, latestNav, 5) : null,
-        volatility,
-        max_drawdown:  maxDrawdown,
-        sharpe,
-      },
+      metrics,
       fy_data,
       nav_history: history,
-    }, {
-      headers: { 'Cache-Control': 'no-store' },
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    return NextResponse.json({ error: `Failed to fetch fund data: ${msg}` }, { status: 500 })
+    return NextResponse.json(
+      { error: `Failed to fetch fund data: ${msg}` },
+      { status: 500 },
+    )
   }
 }
