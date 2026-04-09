@@ -189,6 +189,9 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid scheme code' }, { status: 400 })
   }
 
+  // Declared outside try so the catch block can include it in error messages
+  const supabaseSkipReason: string[] = []
+
   try {
     // ── Path A: Supabase — normalised NAV, pre-computed metrics ───────────────
     //
@@ -230,11 +233,21 @@ export async function GET(
       // Always preserve metadata for use in Path B
       savedMeta = (metaResult.data ?? null) as Record<string, unknown> | null
 
+      if (histErr) {
+        supabaseSkipReason.push(`mf_nav_data query error: ${histErr.message}`)
+      } else if (!rawHistory?.length) {
+        supabaseSkipReason.push(`mf_nav_data has no rows for scheme ${schemeCode}`)
+      }
+
       if (!histErr && rawHistory?.length) {
         const latestHistDate = rawHistory[rawHistory.length - 1].date as string
         const cutoff = new Date()
         cutoff.setDate(cutoff.getDate() - 7)  // 7 days: covers weekends + public holidays
         const isStale = latestHistDate < cutoff.toISOString().slice(0, 10)
+
+        if (isStale) {
+          supabaseSkipReason.push(`mf_nav_data is stale (latest: ${latestHistDate})`)
+        }
 
         if (!isStale) {
           // Supabase data is fresh — normalise splits and return
@@ -274,6 +287,10 @@ export async function GET(
     // Fetches complete NAV history directly from AMFI's official portal —
     // the same canonical source that populates mf_nav_data via the mf-backfill
     // cron. No mfapi.in involved.
+    //
+    // supabaseSkipReason explains why we reached here (useful for debugging).
+    void supabaseSkipReason  // logged in error if AMFI also fails
+
     const { rows: amfiRows, schemeName: amfiSchemeName } =
       await fetchAmfiHistory(schemeCode)
 
@@ -307,8 +324,11 @@ export async function GET(
 
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    const debug = supabaseSkipReason?.length
+      ? ` [Supabase skipped: ${supabaseSkipReason.join('; ')}]`
+      : ''
     return NextResponse.json(
-      { error: `Failed to fetch fund data: ${msg}` },
+      { error: `Failed to fetch fund data: ${msg}${debug}` },
       { status: 500 },
     )
   }
