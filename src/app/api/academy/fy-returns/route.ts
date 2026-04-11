@@ -1,6 +1,7 @@
 export const revalidate = 3600 // Re-compute at most once per hour
 
 import { NextResponse } from 'next/server'
+import postgres from 'postgres'
 import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-server'
 
 /* ─────────────────────────────────────────────────────────
@@ -149,10 +150,41 @@ export async function GET() {
   /* ── Fetch NAV data for internal indices ── */
   const internalCodes = HEATMAP_INDICES.filter(i => !i.external).map(i => i.code)
 
-  let navByCode: Record<string, { date: string; nav: number }[]> = {}
+  const navByCode: Record<string, { date: string; nav: number }[]> = {}
+  const fromISO = '2009-01-01' // a bit before first FY boundary
 
-  if (isSupabaseConfigured()) {
-    // Look up fund IDs for our codes
+  const dbUrl = process.env.SUPABASE_DB_URL
+  if (dbUrl) {
+    // ── Path A: direct Postgres — no PostgREST 1000-row limit ──────────────
+    const sql = postgres(dbUrl, { ssl: 'require', max: 1, idle_timeout: 20, connect_timeout: 10 })
+    try {
+      const fundRows = await sql<{ id: number; code: string }[]>`
+        SELECT id, code FROM funds WHERE code = ANY(${internalCodes})
+      `
+      if (fundRows.length > 0) {
+        const idToCode = Object.fromEntries(fundRows.map(f => [String(f.id), f.code]))
+        const fundIds  = fundRows.map(f => f.id)
+
+        // ORDER BY fund_id, date so each code's sub-array is already sorted asc
+        const navRows = await sql<{ fund_id: number; date: string; nav: number }[]>`
+          SELECT fund_id, date::text AS date, nav_value::float8 AS nav
+          FROM nav_data
+          WHERE fund_id = ANY(${fundIds})
+            AND date >= ${fromISO}
+          ORDER BY fund_id, date ASC
+        `
+        for (const r of navRows) {
+          const code = idToCode[String(r.fund_id)]
+          if (!code) continue
+          if (!navByCode[code]) navByCode[code] = []
+          navByCode[code].push({ date: r.date, nav: r.nav })
+        }
+      }
+    } finally {
+      await sql.end()
+    }
+  } else if (isSupabaseConfigured()) {
+    // ── Path B: paginated PostgREST fallback (when SUPABASE_DB_URL not set) ─
     const { data: fundRows } = await supabaseAdmin
       .from('funds')
       .select('id, code')
@@ -162,23 +194,29 @@ export async function GET() {
       const idToCode = Object.fromEntries(fundRows.map(f => [f.id as number, f.code as string]))
       const fundIds  = fundRows.map(f => f.id as number)
 
-      // Fetch all nav_data rows for these funds in the date range
-      const fromISO = '2009-01-01' // a bit before first boundary
-      const { data: navRows } = await supabaseAdmin
-        .from('nav_data')
-        .select('fund_id, date, nav_value')
-        .in('fund_id', fundIds)
-        .gte('date', fromISO)
-        .lte('date', todayISO)
-        .order('date', { ascending: true })
+      const PAGE_SIZE = 1000
+      let offset = 0
+      while (true) {
+        const { data: navRows } = await supabaseAdmin
+          .from('nav_data')
+          .select('fund_id, date, nav_value')
+          .in('fund_id', fundIds)
+          .gte('date', fromISO)
+          .lte('date', todayISO)
+          .order('date', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1)
 
-      if (navRows) {
+        if (!navRows || navRows.length === 0) break
+
         for (const r of navRows) {
           const code = idToCode[r.fund_id as number]
           if (!code) continue
           if (!navByCode[code]) navByCode[code] = []
           navByCode[code].push({ date: r.date as string, nav: Number(r.nav_value) })
         }
+
+        if (navRows.length < PAGE_SIZE) break
+        offset += PAGE_SIZE
       }
     }
   }
