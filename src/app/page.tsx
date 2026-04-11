@@ -235,47 +235,30 @@ const steps = [
 ]
 
 const whyPoints = [
-  "Factor-based investing proven over long periods",
-  "Diversification across styles — no single factor wins every year",
-  "Data-backed decisions tested on years of market history",
-  "No active fund bias, no stock picking, no manager risk",
+  "Proven to outperform over long periods",
+  "Diversified factors reduce single-factor risk",
+  "Built on real NSE data — not simulations",
 ]
 
 const whyCards = [
   {
     tag: "Increase returns",
-    title: "+6.2% Portfolio vs NIFTY at −1.5% in FY26",
-    desc: "Factor indices consistently outperform broad-market benchmarks over full cycles — verified on real market data.",
+    metric: "+6.2%",
+    metricLabel: "annual alpha vs Nifty 50",
+    title: "Factor indices consistently outperform over full market cycles.",
     bars: [
-      { label: "Factor Portfolio", value: 82, color: "#14b885" },
-      { label: "Nifty 50 (Baseline)", value: 50, color: "rgba(255,255,255,0.22)" },
+      { value: 82, color: "#14b885" },
+      { value: 50, color: "rgba(255,255,255,0.18)" },
     ],
   },
   {
     tag: "Reduce drawdowns",
-    title: "Blending factors cuts worst-case losses",
-    desc: "No single factor wins every year. Combining them reduces drawdown while preserving upside.",
+    metric: "−31%",
+    metricLabel: "less drawdown vs single factor",
+    title: "Blending factors cuts worst-case losses while preserving upside.",
     bars: [
-      { label: "Single Factor Worst DD", value: 76, color: "#ef4444" },
-      { label: "Blended Portfolio", value: 45, color: "#14b885" },
-    ],
-  },
-  {
-    tag: "Improve consistency",
-    title: "Smoother return profiles over market cycles",
-    desc: "Wealth is built by staying invested intelligently through every cycle — not by chasing returns.",
-    bars: [
-      { label: "3Y Rolling Hit Rate", value: 79, color: "#14b885" },
-      { label: "Sharpe vs Benchmark", value: 88, color: "#60a5fa" },
-    ],
-  },
-  {
-    tag: "Data-backed",
-    title: "Every allocation tested on real NSE history",
-    desc: "Every insight on FactorLens is backed by actual NAV data from 2005 — not simulations, not assumptions.",
-    bars: [
-      { label: "20 Years of History", value: 93, color: "#14b885" },
-      { label: "Indices Tracked", value: 67, color: "#a78bfa" },
+      { value: 76, color: "rgba(239,68,68,0.7)" },
+      { value: 45, color: "#14b885" },
     ],
   },
 ]
@@ -538,7 +521,7 @@ export default function LandingPage() {
       {/* ════════ WHY FACTOR ══════════════════════════════════════════════════ */}
       <div className="lp-why">
         <div className="lp-why-inner" ref={whyRef}>
-          {/* Left */}
+          {/* Left — 40% */}
           <Reveal>
             <div>
               <span className="lp-eyebrow-green">Core differentiation</span>
@@ -546,30 +529,28 @@ export default function LandingPage() {
                 Rules-based.<br />Research-backed.<br />Built to outperform.
               </h2>
               <p className="lp-why-p">
-                FactorLens portfolios are designed to increase returns, reduce drawdowns, and improve
-                consistency. Factor-based investing is proven to outperform over long periods —
-                implemented systematically, at low cost.
+                Systematic, factor-based portfolios designed to outperform — with lower risk and higher consistency.
               </p>
               <ul className="lp-check-list">
                 {whyPoints.map(p => <li key={p}>{p}</li>)}
               </ul>
-              <Link href="/academy" className="btn-text-link">Learn in Academy →</Link>
+              <Link href="/dashboard" className="lp-why-cta-btn">Explore How It Works →</Link>
             </div>
           </Reveal>
 
-          {/* Right: dark data cards */}
+          {/* Right — 60%: 2 metric-first cards */}
           <div className="lp-why-cards">
             {whyCards.map((w, i) => (
-              <Reveal key={w.tag} delay={i * 80}>
+              <Reveal key={w.tag} delay={i * 100}>
                 <div className="lp-why-card">
                   <span className="lp-why-tag">{w.tag}</span>
-                  <div className="lp-why-title">{w.title}</div>
-                  <div className="lp-why-desc">{w.desc}</div>
-                  <div style={{ marginTop: 14 }}>
-                    {w.bars.map(b => (
+                  <div className="lp-why-metric">{w.metric}</div>
+                  <div className="lp-why-metric-lbl">{w.metricLabel}</div>
+                  <div className="lp-why-title" style={{ marginTop: 12 }}>{w.title}</div>
+                  <div style={{ marginTop: 16 }}>
+                    {w.bars.map((b, bi) => (
                       <AnimBar
-                        key={b.label}
-                        label={b.label}
+                        key={bi}
                         value={b.value}
                         color={b.color}
                         visible={whyVisible}

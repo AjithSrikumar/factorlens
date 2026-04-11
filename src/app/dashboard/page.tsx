@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Info, TrendingUp } from "lucide-react"
 import { RiskQuestionnaire, RiskProfile } from "@/components/risk-questionnaire"
 import { InvestNow } from "@/components/invest-now"
-import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES, TRACKED_INDEX_CODES } from "@/lib/risk-engine"
+import { RISK_CATEGORY_META, RiskCategory, MF_ELIGIBLE_CODES, TRACKED_INDEX_CODES, GOLD_CODE } from "@/lib/risk-engine"
 import { amcLogoUrl } from "@/lib/amc"
 import { SiteFooter } from "@/components/site-footer"
 import { useAuth } from "@/components/auth-provider"
@@ -543,13 +543,6 @@ function RiskBanner({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: meta.color }}>{profile.category}</span>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
-                padding: '2px 8px', borderRadius: 5,
-                background: 'rgba(255,255,255,.6)', color: meta.color,
-              }}>
-                Score {profile.score}/100
-              </span>
             </div>
             <div style={{ fontSize: 12.5, color: 'rgba(12,14,19,.5)', marginTop: 2 }}>
               {meta.description.split('.')[0]}.
@@ -602,24 +595,34 @@ function RiskBanner({
                   alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
                 }}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as const }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13' }}>{toTitleCase(f.name)}</span>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: meta.color,
-                    }}>{f.weight.toFixed(0)}%</span>
-                  </div>
-                  {/* MF tracker — AMC logo + scheme name */}
-                  {mfTrackers?.[f.id]?.schemeName && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      {mfTrackers[f.id].amcLogo && (
-                        <img
-                          src={mfTrackers[f.id].amcLogo!}
-                          alt=""
-                          style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4, flexShrink: 0 }}
-                        />
-                      )}
-                      <span style={{ fontSize: 11, color: 'rgba(12,14,19,.55)', lineHeight: 1.3 }}>
-                        {mfTrackers[f.id].schemeName}
+                  {mfTrackers?.[f.id]?.schemeName ? (
+                    <>
+                      {/* Fund name + bigger AMC logo on top */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 3 }}>
+                        {mfTrackers[f.id].amcLogo && (
+                          <img
+                            src={mfTrackers[f.id].amcLogo!}
+                            alt=""
+                            style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, flexShrink: 0, background: '#fff', padding: 2 }}
+                          />
+                        )}
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13', lineHeight: 1.3, flex: 1, minWidth: 0 }}>
+                          {mfTrackers[f.id].schemeName}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: meta.color, flexShrink: 0 }}>
+                          {f.weight.toFixed(0)}%
+                        </span>
+                      </div>
+                      {/* Index name beneath */}
+                      <div style={{ fontSize: 11, color: 'rgba(12,14,19,.38)', marginBottom: 2, paddingLeft: 37 }}>
+                        Tracks: {toTitleCase(f.name)}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as const, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#0C0E13' }}>{toTitleCase(f.name)}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: meta.color }}>
+                        {f.weight.toFixed(0)}%
                       </span>
                     </div>
                   )}
@@ -752,7 +755,8 @@ export default function DashboardPage() {
         // Only expose ranked funds that have a tracking mutual fund — keeps the portfolio
         // builder free of indices with no investable vehicle or insufficient history.
         const data = allFunds.filter(f =>
-          f.final_rank != null && MF_ELIGIBLE_CODES.has(f.code) && TRACKED_INDEX_CODES.has(f.code)
+          MF_ELIGIBLE_CODES.has(f.code) && TRACKED_INDEX_CODES.has(f.code) &&
+          (f.final_rank != null || f.code === GOLD_CODE)
         )
         setFunds(data)
         setFundsLoading(false)

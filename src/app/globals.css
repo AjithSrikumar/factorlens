@@ -1074,48 +1074,64 @@ nav.nav-scrolled { box-shadow: var(--shadow-md); }
 @media (max-width: 900px) { .lp-why { padding: 72px 20px; } }
 
 .lp-why-inner {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start;
+  display: grid; grid-template-columns: 2fr 3fr; gap: 72px; align-items: start;
   max-width: 1200px; margin: 0 auto;
 }
 @media (max-width: 900px) { .lp-why-inner { grid-template-columns: 1fr; gap: 48px; } }
 
 .lp-why-h2 {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 3.5vw, 3.2rem);
+  font-size: clamp(2rem, 3.5vw, 3rem);
   line-height: 1.08; letter-spacing: -0.035em; font-weight: 400;
   color: var(--text-raw); margin-bottom: 18px;
 }
 .lp-why-p {
-  font-size: 0.93rem; color: rgba(26,26,26,0.44); line-height: 1.8; margin-bottom: 28px;
+  font-size: 0.93rem; color: rgba(26,26,26,0.44); line-height: 1.75; margin-bottom: 24px;
+  max-width: 340px;
 }
 
-.lp-why-cards {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+.lp-why-cta-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 11px 22px; border-radius: 10px;
+  background: #0C0E13; color: #ffffff;
+  font-size: 0.88rem; font-weight: 600; text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+  margin-top: 4px;
 }
-@media (max-width: 500px) { .lp-why-cards { grid-template-columns: 1fr; } }
+.lp-why-cta-btn:hover { opacity: 0.82; transform: translateY(-1px); }
+
+.lp-why-cards {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+}
+@media (max-width: 640px) { .lp-why-cards { grid-template-columns: 1fr; } }
 
 .lp-why-card {
   background: #0D1117; border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 18px; padding: 24px 20px;
+  border-radius: 20px; padding: 28px 24px;
   transition: background 0.25s, border-color 0.25s, transform 0.25s, box-shadow 0.25s;
 }
 .lp-why-card:hover {
   background: #111a24;
-  border-color: rgba(20,184,133,0.20);
+  border-color: rgba(20,184,133,0.22);
   transform: translateY(-3px);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.22);
 }
 .lp-why-tag {
-  font-size: 0.63rem; font-weight: 700; letter-spacing: 0.11em;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--accent);
-  display: block; margin-bottom: 8px;
+  display: block; margin-bottom: 10px;
+}
+.lp-why-metric {
+  font-size: 2.6rem; font-weight: 800; color: #ffffff;
+  letter-spacing: -0.03em; line-height: 1; margin-bottom: 4px;
+}
+.lp-why-metric-lbl {
+  font-size: 0.74rem; color: rgba(255,255,255,0.40); font-weight: 500;
+  margin-bottom: 2px;
 }
 .lp-why-title {
-  font-size: 0.87rem; font-weight: 600; color: #fff;
-  margin-bottom: 8px; line-height: 1.35;
-}
-.lp-why-desc {
-  font-size: 0.78rem; color: rgba(255,255,255,0.38); line-height: 1.65; margin-bottom: 14px;
+  font-size: 0.84rem; font-weight: 500; color: rgba(255,255,255,0.72);
+  line-height: 1.5;
 }
 
 /* ── Risk & Return ───────────────────────────────── */
