@@ -322,10 +322,10 @@ function FundsPageInner() {
             fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 400,
             color: "#ffffff", margin: "0 0 14px", letterSpacing: "-.02em", lineHeight: 1.1,
           }}>
-            Mutual Funds
+            Index Mutual Funds
           </h1>
           <p style={{ color: "rgba(255,255,255,.55)", fontSize: 15, lineHeight: 1.65, margin: 0 }}>
-            Browse 1,000+ mutual funds with live NAV data, 1Y, 3Y, and 5Y returns —
+            Browse index mutual funds with live NAV data, 1Y, 3Y, and 5Y returns —
             filter by strategy, search by name, and link to index rankings.
           </p>
         </div>
@@ -336,7 +336,7 @@ function FundsPageInner() {
         {/* ── Header ── */}
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontSize: 26, fontWeight: 700, color: "var(--foreground)", margin: "0 0 4px", letterSpacing: "-.02em" }}>
-            Mutual Funds
+            Index Mutual Funds
           </h1>
           <p style={{ color: "var(--muted-foreground)", fontSize: 13.5, margin: "0 0 8px" }}>
             {loading

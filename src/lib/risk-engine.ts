@@ -122,6 +122,8 @@ export const RISK_CATEGORY_META: Record<RiskCategory, {
 // ─── MF-eligible index codes ──────────────────────────────────────────────────
 // Only indices where at least one Indian mutual fund actively tracks them.
 export const MF_ELIGIBLE_CODES = new Set([
+  // Commodity (Gold ETF FoFs exist across multiple AMCs)
+  'GOLD',
   // Broad Market (all have many MFs)
   'N50', 'NN50', 'N100', 'N200', 'N500',
   'NMC150', 'NMC100', 'NMC50',
@@ -133,11 +135,13 @@ export const MF_ELIGIBLE_CODES = new Set([
   // Quality factor
   'N100Q30', 'MC150Q50', 'N200Q30', 'N500Q50',
   // Low-Volatility / Alpha-LowVol / Quality-LowVol
-  'N500LV50', 'NALV30', 'NQLV30', 'NLV50',
+  'N100LV30', 'N500LV50', 'NALV30', 'NQLV30', 'NLV50',
   // Alpha factor
   'NALPHA50', 'N100A30',
   // Value factor
   'N50V20', 'N200V30', 'N500V50',
+  // Equal Weight
+  'N50EW', 'N100EW',
 ])
 
 /** Code for the Gold commodity fund (Yahoo Finance: GC=F) */
