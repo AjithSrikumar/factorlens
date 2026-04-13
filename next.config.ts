@@ -4,7 +4,17 @@ import type { NextConfig } from "next";
 const loaderPath = require.resolve('orchids-visual-edits/loader.js');
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['postgres'],
+  serverExternalPackages: ['postgres', 'undici'],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Prevent undici from being bundled (it uses node: URIs that webpack can't handle)
+      config.externals = config.externals || []
+      if (Array.isArray(config.externals)) {
+        config.externals.push('undici')
+      }
+    }
+    return config
+  },
   images: {
     remotePatterns: [
       {
